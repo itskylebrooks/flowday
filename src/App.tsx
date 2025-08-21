@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry, Page } from './lib/types';
-import { todayISO, addDays, canEdit } from './lib/utils';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
+import AuraBlock from './components/AuraBlock';
 
 export default function App() {
   const [page, setPage] = useState<Page>('today');
@@ -19,6 +20,21 @@ export default function App() {
   }, [entries, activeDate]);
 
   const editable = canEdit(activeDate);
+
+  // Color slider & aura state
+  const sliderRef = useRef<HTMLDivElement | null>(null);
+  const [showAura, setShowAura] = useState<boolean>(!!entry.hue);
+  useEffect(() => { setShowAura(!!entry.hue); }, [entry.hue]);
+
+  function handleSliderPointer(e: React.PointerEvent) {
+    if (!editable) return; if (!sliderRef.current) return;
+    const rect = sliderRef.current.getBoundingClientRect();
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const hue = Math.round((x / rect.width) * 360);
+    const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
+    setShowAura(true); // touching slider enables aura
+    setEntries((old) => upsertEntry(old, next));
+  }
 
   // which slot is being edited
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
@@ -84,14 +100,48 @@ export default function App() {
       {/* TODAY page with triangle & quick picker */}
       {page === 'today' && (
         <div className="mx-auto flex max-w-sm flex-col px-4 pb-28">
-          <div className="h-[260px] w-full flex items-center justify-center">
-            <EmojiTriangle
-              emojis={entry.emojis}
-              onPick={(slot) => openPicker(slot)}
-              onRemove={removeEmojiAt}
-              editable={editable}
-            />
+          {/* Fixed visual area so slider never jumps */}
+          <div className="h-[320px] w-full flex items-center justify-center">
+            {!showAura ? (
+              <EmojiTriangle
+                emojis={entry.emojis}
+                onPick={(slot) => openPicker(slot)}
+                onRemove={removeEmojiAt}
+                editable={editable}
+              />
+            ) : (
+              <div onClick={() => setShowAura(false)} className="cursor-pointer">
+                <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} />
+              </div>
+            )}
           </div>
+
+          {/* Label above slider */}
+          <div className="mt-2 text-center text-sm text-white/75">{showAura ? 'Saved 🌈' : 'Pick your vibe'}</div>
+
+          {/* Thicker color slider (stays in place) */}
+          <div
+            ref={sliderRef}
+            onPointerDown={(e) => {
+              if (entry.emojis.length === 0) return;
+              (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+              handleSliderPointer(e);
+            }}
+            onPointerMove={(e) => {
+              if (e.buttons !== 1) return;
+              if (entry.emojis.length === 0) return;
+              handleSliderPointer(e);
+            }}
+            className={
+              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full ' +
+              (entry.emojis.length === 0 ? 'h-8 bg-white/10' : 'h-8 ring-1 ring-white/10')
+            }
+            style={{
+              background: entry.emojis.length === 0 ? undefined : rainbowGradientCSS(),
+              boxShadow: entry.emojis.length === 0 ? undefined : '0 0 20px 2px rgba(255,255,255,0.07)',
+            }}
+            aria-disabled={entry.emojis.length === 0}
+          />
         </div>
       )}
 
