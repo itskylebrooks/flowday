@@ -1,3 +1,5 @@
+import { APP_VERSION_LABEL } from '../lib/version';
+
 export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null;
   return (
@@ -11,6 +13,8 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
               strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </div>
+
+  <div className="mb-3 text-xs text-white/60">{APP_VERSION_LABEL}</div>
 
         <div className="divide-y divide-white/10">
           <div className="py-3">
