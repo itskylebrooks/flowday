@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Poster typography */
+/* Legacy poster font utility (kept for backward compatibility) */
+.font-poster { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; letter-spacing: .5px; }
+/* Elongated uppercase display for poster captions using tall condensed font */
+.poster-label { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; font-weight:700; text-transform:uppercase; letter-spacing:.12em; transform:scaleY(1.06); transform-origin:center; }
+/* Subheading under poster date */
+.poster-sub { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; font-weight:400; letter-spacing:.18em; font-size:12px; opacity:.75; text-transform:uppercase; }
+
+/* Poster meta fade/slide */
+.poster-meta { opacity:0; transform:translateY(6px) scale(.97); max-height:0; overflow:hidden; transition: opacity .38s cubic-bezier(.4,0,.2,1), transform .42s cubic-bezier(.4,0,.2,1), max-height .45s ease; }
+.poster-meta.active { opacity:1; transform:translateY(0) scale(1); max-height:220px; }
+
+/* Camera flash effect */
+
 /* App shell sizing */
 html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { margin: 0; position: fixed; inset: 0; width: 100%; }
