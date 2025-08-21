@@ -99,9 +99,9 @@ export default function App() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#0E0E0E] text-white">
+    <div className="app-viewport grid grid-rows-[auto,1fr,auto] w-full bg-[#0E0E0E] text-white overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 grid grid-cols-3 items-center px-3 py-3 text-sm text-white/90">
+      <div className="grid grid-cols-3 items-center px-3 py-3 text-sm text-white/90">
         <button aria-label="Go to yesterday" onClick={() => setActiveDate(addDays(activeDate, -1))}
           className="justify-self-start rounded-full p-2 text-white/70 hover:text-white">
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
@@ -116,9 +116,11 @@ export default function App() {
         </button>
       </div>
 
+      {/* Content area (no scroll) */}
+      <div className="h-full overflow-hidden">
       {/* TODAY PAGE */}
       {page === 'today' && (
-        <div className="mx-auto flex max-w-sm flex-col px-4 pb-28">
+        <div className="mx-auto flex max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
             {!showAura ? (
@@ -171,14 +173,15 @@ export default function App() {
         </div>
       )}
 
-      {/* FLOWS PAGE */}
-      {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} />)}
+  {/* FLOWS PAGE */}
+  {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} />)}
 
-      {/* CONSTELLATIONS PAGE */}
-      {page === 'constellations' && (<ConstellationsPage entries={entries} />)}
+  {/* CONSTELLATIONS PAGE */}
+  {page === 'constellations' && (<ConstellationsPage entries={entries} />)}
+  </div>
 
-      {/* Bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/5 bg-black/40 backdrop-blur-md">
+  {/* Bottom nav */}
+  <nav className="border-t border-white/5 bg-black/40 backdrop-blur-md">
         <div className="mx-auto flex max-w-sm items-center justify-between px-10 py-3 text-white/80">
           <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')}>
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">

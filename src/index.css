@@ -2,4 +2,9 @@
 
 /* App shell sizing */
 html, body, #root { height: 100%; }
-body { margin: 0; }
+body { margin: 0; overflow: hidden; }
+
+/* Ensure the app grid uses full safe viewport height (iOS friendly) */
+.app-viewport {
+	min-height: 100dvh;
+}

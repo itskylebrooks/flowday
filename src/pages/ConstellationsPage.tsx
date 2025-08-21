@@ -41,7 +41,7 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   const width = 360, height = 360;
 
   return (
-    <div className="mx-auto max-w-sm px-4 pb-28">
+    <div className="mx-auto max-w-sm px-4">
       <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
       <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
 
