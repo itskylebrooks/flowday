@@ -3,7 +3,12 @@
 
 // The package exports an object keyed by emoji with metadata including `group` & `subgroup`.
 // We type it loosely to avoid overfitting to package internals.
-type EmojiInfo = { group?: string; subgroup?: string };
+type EmojiInfo = {
+  name?: string;
+  group?: string;
+  subgroup?: string;
+  shortcodes?: string[] | Record<string, string[]>;
+};
 
 // Using default import as most versions export the mapping as default
 // If this changes, adjust the import accordingly.
@@ -49,4 +54,38 @@ export function getEmojiCategories(): Record<string, string[]> {
 
 export function getAllEmojis(): string[] {
   return Object.keys(emojiData);
+}
+
+export function searchEmojis(query: string, limit = 200): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const results: Array<{ e: string; w: number }> = [];
+  for (const [emoji, info] of Object.entries(emojiData)) {
+    const name = (info.name || '').toLowerCase();
+    const group = (info.group || '').toLowerCase();
+    const subgroup = (info.subgroup || '').toLowerCase();
+    let codes: string[] = [];
+    if (Array.isArray((info as EmojiInfo).shortcodes)) {
+      codes = ((info as EmojiInfo).shortcodes as string[]);
+    } else if (typeof (info as EmojiInfo).shortcodes === 'object' && (info as EmojiInfo).shortcodes) {
+      // Flatten platform-specific shortcodes
+      codes = Object.values((info as EmojiInfo).shortcodes as Record<string, string[]>).flat();
+    }
+    const codeStr = codes.join(' ').toLowerCase();
+
+    const hay = `${name} ${group} ${subgroup} ${codeStr}`;
+    if (!hay) continue;
+    if (hay.includes(q)) {
+      // Weight: startsWith higher, then contains
+      let weight = 0;
+      if (name.startsWith(q)) weight += 3;
+      if (codeStr.includes(q)) weight += 2;
+      if (group.includes(q) || subgroup.includes(q)) weight += 1;
+      results.push({ e: emoji, w: weight });
+    }
+  }
+
+  results.sort((a, b) => b.w - a.w);
+  return results.slice(0, limit).map(r => r.e);
 }
