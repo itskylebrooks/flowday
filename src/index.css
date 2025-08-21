@@ -7,6 +7,20 @@
 .poster-label { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; font-weight:700; text-transform:uppercase; letter-spacing:.12em; transform:scaleY(1.06); transform-origin:center; }
 /* Subheading under poster date */
 .poster-sub { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; font-weight:400; letter-spacing:.18em; font-size:12px; opacity:.75; text-transform:uppercase; }
+/* Monospace bold font for cassette text */
+.font-tape { font-family: 'IBM Plex Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-weight:600; letter-spacing:0.5px; }
+/* Song input styling */
+.song-input { background:transparent; border:0; border-bottom:1px solid rgba(255,255,255,0.15); padding:6px 0 8px; width:100%; font-size:13px; color:rgba(255,255,255,0.75); outline:none; }
+.song-input:focus { border-color:rgba(255,255,255,0.4); }
+.song-input::placeholder { color:rgba(255,255,255,0.35); }
+.song-input[disabled] { opacity:.4; cursor:not-allowed; }
+.song-inputs { animation: fadeSlide .35s ease; }
+@keyframes fadeSlide { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+/* Cassette sticker (paper label) */
+.cassette-sticker { background:linear-gradient(135deg,#fdfdfd,#ececec); border:1px solid rgba(0,0,0,0.28); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.4); }
+.cassette-sticker:before { content:''; position:absolute; inset:0; pointer-events:none; border-radius:4px; background:linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0)); mix-blend-mode:overlay; opacity:0.6; }
+.cassette-sticker { position:relative; }
 
 /* Poster meta fade/slide */
 .poster-meta { opacity:0; transform:translateY(6px) scale(.97); max-height:0; overflow:hidden; transition: opacity .38s cubic-bezier(.4,0,.2,1), transform .42s cubic-bezier(.4,0,.2,1), max-height .45s ease; }

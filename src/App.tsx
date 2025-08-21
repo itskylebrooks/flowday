@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import type { Entry, Page } from './lib/types';
+import type { Entry, Page, Song } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
+import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
@@ -20,10 +21,14 @@ export default function App() {
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
-    return found || { date: activeDate, emojis: [], updatedAt: Date.now() };
+  return found || { date: activeDate, emojis: [], updatedAt: Date.now() };
   }, [entries, activeDate]);
 
   const editable = canEdit(activeDate);
+  // Song inputs reveal state
+  const [showSong, setShowSong] = useState(false);
+  // Reset song inputs collapsed when changing the active date
+  useEffect(()=> { setShowSong(false); }, [activeDate]);
 
   // Color slider & aura state
   const sliderRef = useRef<HTMLDivElement | null>(null);
@@ -89,6 +94,7 @@ export default function App() {
     if (page==='today') return formatActiveDate();
     if (page==='flows') return flowsMode==='week' ? relativeLabel('week', weekOffset) : relativeLabel('month', monthOffset);
     if (page==='constellations') return relativeLabel('year', yearOffset);
+    if (page==='echoes') return 'Echoes';
     return '';
   }
 
@@ -101,13 +107,15 @@ export default function App() {
       if (flowsMode==='week') { setWeekOffset(o=>o+1); return; }
       setMonthOffset(o=>o+1); return;
     }
-    if (page==='constellations') { setYearOffset(o=>o+1); return; }
+  if (page==='constellations') { setYearOffset(o=>o+1); return; }
+  if (page==='echoes') { return; }
   }
 
   function canReset(): boolean {
     if (page==='today') return activeDate !== todayISO();
     if (page==='flows') return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
-    if (page==='constellations') return yearOffset>0;
+  if (page==='constellations') return yearOffset>0;
+  if (page==='echoes') return false;
     return false;
   }
   function handleReset() {
@@ -117,7 +125,7 @@ export default function App() {
       if (flowsMode==='week') setWeekOffset(0); else setMonthOffset(0); 
       return; 
     }
-    if (page==='constellations') { setYearOffset(0); return; }
+  if (page==='constellations') { setYearOffset(0); return; }
   }
 
   function handleSliderPointer(e: React.PointerEvent) {
@@ -169,6 +177,21 @@ export default function App() {
     if (arr.length === 0) {
       delete (next as Partial<Entry>).hue; // clear saved hue when no emojis
       setShowAura(false);
+    }
+    next.updatedAt = Date.now();
+    setEntries(old => upsertEntry(old, next));
+  }
+
+  function updateSong(partial: Partial<Song>) {
+    if (!editable) return;
+    const next = { ...entry } as Entry;
+    const prev = next.song || {}; 
+    const merged: Song = { ...prev, ...partial };
+    // If empty remove song
+    if (!merged.title && !merged.artist) {
+      if ('song' in next) { delete (next as { song?: Song }).song; }
+    } else {
+      next.song = merged;
     }
     next.updatedAt = Date.now();
     setEntries(old => upsertEntry(old, next));
@@ -272,6 +295,43 @@ export default function App() {
               Read-only · you can edit today or yesterday
             </div>
           )}
+
+          {/* Song of the day reveal */}
+          {!showSong && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={()=> setShowSong(true)}
+                className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/20 text-sm font-medium text-white/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30"
+              >
+                Song of the day
+              </button>
+            </div>
+          )}
+          {showSong && (
+            <div className="mt-6 space-y-3 song-inputs">
+              <input
+                type="text"
+                className="song-input"
+                placeholder="Artist"
+                disabled={!editable}
+                value={entry.song?.artist || ''}
+                maxLength={48}
+                onChange={(e)=> updateSong({ artist: e.target.value })}
+                onBlur={(e)=> updateSong({ artist: e.target.value.trim() })}
+              />
+              <input
+                type="text"
+                className="song-input"
+                placeholder="Song title"
+                disabled={!editable}
+                value={entry.song?.title || ''}
+                maxLength={60}
+                onChange={(e)=> updateSong({ title: e.target.value })}
+                onBlur={(e)=> updateSong({ title: e.target.value.trim() })}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -289,11 +349,18 @@ export default function App() {
           </div>
         )}
       </div>
+      <div className="page-view" data-active={page==='echoes'}>
+        {page==='echoes' && (
+          <div className="h-full animate-fadeSwap">
+            <EchoesPage entries={entries} />
+          </div>
+        )}
+      </div>
     </div>
 
   {/* Bottom nav (fixed) */}
   <nav className="fixed bottom-0 left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md">
-        <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-12 px-6 text-white/80 h-full">
+  <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
           <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')}>
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
               <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>
@@ -310,6 +377,9 @@ export default function App() {
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
               <path d="M10.6144 17.7956C10.277 18.5682 9.20776 18.5682 8.8704 17.7956L7.99275 15.7854C7.21171 13.9966 5.80589 12.5726 4.0523 11.7942L1.63658 10.7219C.868536 10.381.868537 9.26368 1.63658 8.92276L3.97685 7.88394C5.77553 7.08552 7.20657 5.60881 7.97427 3.75892L8.8633 1.61673C9.19319 .821767 10.2916 .821765 10.6215 1.61673L11.5105 3.75894C12.2782 5.60881 13.7092 7.08552 15.5079 7.88394L17.8482 8.92276C18.6162 9.26368 18.6162 10.381 17.8482 10.7219L15.4325 11.7942C13.6789 12.5726 12.2731 13.9966 11.492 15.7854L10.6144 17.7956ZM4.53956 9.82234C6.8254 10.837 8.68402 12.5048 9.74238 14.7996 10.8008 12.5048 12.6594 10.837 14.9452 9.82234 12.6321 8.79557 10.7676 7.04647 9.74239 4.71088 8.71719 7.04648 6.85267 8.79557 4.53956 9.82234ZM19.4014 22.6899 19.6482 22.1242C20.0882 21.1156 20.8807 20.3125 21.8695 19.8732L22.6299 19.5353C23.0412 19.3526 23.0412 18.7549 22.6299 18.5722L21.9121 18.2532C20.8978 17.8026 20.0911 16.9698 19.6586 15.9269L19.4052 15.3156C19.2285 14.8896 18.6395 14.8896 18.4628 15.3156L18.2094 15.9269C17.777 16.9698 16.9703 17.8026 15.956 18.2532L15.2381 18.5722C14.8269 18.7549 14.8269 19.3526 15.2381 19.5353L15.9985 19.8732C16.9874 20.3125 17.7798 21.1156 18.2198 22.1242L18.4667 22.6899C18.6473 23.104 19.2207 23.104 19.4014 22.6899ZM18.3745 19.0469 18.937 18.4883 19.4878 19.0469 18.937 19.5898 18.3745 19.0469Z"></path>
             </svg>
+          </IconButton>
+          <IconButton label="Echoes" active={page==='echoes'} onClick={() => setPage('echoes')}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor"><path d="M15 4.58152V12C15 13.6569 13.6569 15 12 15C10.3431 15 9 13.6569 9 12C9 10.3431 10.3431 9 12 9C12.3506 9 12.6872 9.06016 13 9.17071V2.04938C18.0533 2.5511 22 6.81465 22 12C22 17.5229 17.5228 22 12 22C6.47715 22 2 17.5229 2 12C2 6.81465 5.94668 2.5511 11 2.04938V4.0619C7.05369 4.55399 4 7.92038 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 8.64262 17.9318 5.76829 15 4.58152Z"/></svg>
           </IconButton>
   </div>
       </nav>

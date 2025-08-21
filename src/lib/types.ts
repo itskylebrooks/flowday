@@ -11,7 +11,7 @@ export interface Entry {
   updatedAt: number;
 }
 
-export type Page = 'today' | 'flows' | 'constellations';
+export type Page = 'today' | 'flows' | 'constellations' | 'echoes';
 
 // Basic user profile (local-only for now; future backend can extend)
 export interface UserProfile {
