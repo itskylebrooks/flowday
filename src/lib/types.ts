@@ -12,3 +12,10 @@ export interface Entry {
 }
 
 export type Page = 'today' | 'flows' | 'constellations';
+
+// Basic user profile (local-only for now; future backend can extend)
+export interface UserProfile {
+  username: string; // display / handle
+  createdAt: number;
+  updatedAt: number;
+}
