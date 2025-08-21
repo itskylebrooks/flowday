@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry, Page } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
+import SettingsModal from './components/SettingsModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyStops } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
@@ -11,6 +12,7 @@ import AuraBlock from './components/AuraBlock';
 
 export default function App() {
   const [page, setPage] = useState<Page>('today');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeDate, setActiveDate] = useState<string>(todayISO());
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
@@ -95,7 +97,7 @@ export default function App() {
           </svg>
         </button>
         <div className="justify-self-center font-medium">{formatActiveDate()}</div>
-        <button aria-label="Open settings" onClick={() => {}} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
+        <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
           <svg viewBox="0 0 24 24" className="h-5 w-5">
             <path fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
               d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.5-3.5a7.5 7.5 0 0 1-.18 1.62l2.06 1.6-2 3.46-2.46-1a7.6 7.6 0 0 1-2.8 1.62l-.38 2.6H10.3l-.38-2.6a7.6 7.6 0 0 1-2.8-1.62l-2.46 1-2-3.46 2.06-1.6c.12.53.18 1.07.18 1.62Z" />
@@ -179,6 +181,7 @@ export default function App() {
         onClose={closePicker}
         onPick={handlePick}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
