@@ -104,8 +104,8 @@ export default function App() {
       <div className="sticky top-0 z-10 grid grid-cols-3 items-center px-3 py-3 text-sm text-white/90">
         <button aria-label="Go to yesterday" onClick={() => setActiveDate(addDays(activeDate, -1))}
           className="justify-self-start rounded-full p-2 text-white/70 hover:text-white">
-          <svg viewBox="0 0 24 24" className="h-5 w-5">
-            <path fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6"/>
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+            <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
           </svg>
         </button>
         <div className="justify-self-center font-medium">{formatActiveDate()}</div>
