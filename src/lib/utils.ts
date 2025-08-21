@@ -47,3 +47,22 @@ export function auraBackground(hue: number): React.CSSProperties {
        radial-gradient(220px 220px at 50% 50%, ${hsl(h3,80,48,0.5)}, transparent 60%)`,
   };
 }
+
+import type { Entry } from './types';
+export function last7(entries: Entry[]): Entry[] {
+  const sorted = [...entries].sort((a,b)=>b.date.localeCompare(a.date));
+  return sorted.slice(0,7).reverse();
+}
+export function monthlyStops(entries: Entry[]): number[] {
+  const ym = todayISO().slice(0,7);
+  const byMonth = entries.filter((e)=>e.date.slice(0,7)===ym);
+  if (!byMonth.length) return [220,300,40];
+  const freq = new Map<number,number>();
+  for (const e of byMonth) {
+    if (typeof e.hue!=='number') continue;
+    const bucket = Math.round(e.hue/15)*15;
+    freq.set(bucket, (freq.get(bucket)||0)+1);
+  }
+  const top = [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([h])=>h);
+  return top.length ? top : [220,300,40];
+}

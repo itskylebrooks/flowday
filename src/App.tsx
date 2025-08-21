@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry, Page } from './lib/types';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS } from './lib/utils';
+import FlowsPage from './pages/FlowsPage';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyStops, hsl } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -25,6 +26,10 @@ export default function App() {
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const [showAura, setShowAura] = useState<boolean>(!!entry.hue);
   useEffect(() => { setShowAura(!!entry.hue); }, [entry.hue]);
+
+  // Flow page
+  const recent7 = useMemo(()=> last7(entries), [entries]);
+  const monthHues = useMemo(()=> monthlyStops(entries), [entries]);
 
   function handleSliderPointer(e: React.PointerEvent) {
     if (!editable) return; if (!sliderRef.current) return;
@@ -146,11 +151,8 @@ export default function App() {
       )}
 
       {/* Placeholders for other pages (I'll build later) */}
-      {page === 'flows' && (
-        <div className="mx-auto max-w-sm px-4 pb-28">
-          <div className="mt-10 text-center text-white/70">Flows page (next steps)</div>
-        </div>
-      )}
+      
+      {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} />)}
       {page === 'constellations' && (
         <div className="mx-auto max-w-sm px-4 pb-28">
           <div className="mt-10 text-center text-white/70">Constellations page (later)</div>
