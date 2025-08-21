@@ -1,3 +1,5 @@
+import type { Entry } from './types';
+
 export function todayISO(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -48,7 +50,7 @@ export function auraBackground(hue: number): React.CSSProperties {
   };
 }
 
-import type { Entry } from './types';
+
 export function last7(entries: Entry[]): Entry[] {
   const sorted = [...entries].sort((a,b)=>b.date.localeCompare(a.date));
   return sorted.slice(0,7).reverse();
@@ -65,4 +67,20 @@ export function monthlyStops(entries: Entry[]): number[] {
   }
   const top = [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([h])=>h);
   return top.length ? top : [220,300,40];
+}
+
+export function emojiStats(entries: Entry[]) {
+  const freq = new Map<string, number>();
+  const pair = new Map<string, number>();
+  for (const e of entries) {
+    const set = Array.from(new Set(e.emojis));
+    for (const emo of set) freq.set(emo, (freq.get(emo) || 0) + 1);
+    for (let i = 0; i < set.length; i++) {
+      for (let j = i + 1; j < set.length; j++) {
+        const key = `${set[i]}__${set[j]}`;
+        pair.set(key, (pair.get(key) || 0) + 1);
+      }
+    }
+  }
+  return { freq, pair };
 }

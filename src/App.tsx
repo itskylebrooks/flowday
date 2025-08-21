@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry, Page } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyStops, hsl } from './lib/utils';
+import ConstellationsPage from './pages/ConstellationsPage';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyStops } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -102,7 +103,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* TODAY page with triangle & quick picker */}
+      {/* TODAY PAGE */}
       {page === 'today' && (
         <div className="mx-auto flex max-w-sm flex-col px-4 pb-28">
           {/* Fixed visual area so slider never jumps */}
@@ -150,14 +151,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Placeholders for other pages (I'll build later) */}
-      
+      {/* FLOWS PAGE */}
       {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} />)}
-      {page === 'constellations' && (
-        <div className="mx-auto max-w-sm px-4 pb-28">
-          <div className="mt-10 text-center text-white/70">Constellations page (later)</div>
-        </div>
-      )}
+
+      {/* CONSTELLATIONS PAGE */}
+      {page === 'constellations' && (<ConstellationsPage entries={entries} />)}
 
       {/* Bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/5 bg-black/40 backdrop-blur-md">
