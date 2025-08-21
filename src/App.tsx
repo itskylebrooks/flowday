@@ -99,7 +99,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-viewport relative w-full bg-[#0E0E0E] text-white overflow-hidden">
+    <div className="app-viewport fixed inset-0 w-full bg-[#0E0E0E] text-white overflow-hidden">
       {/* Header (fixed) */}
       <div className="fixed top-0 left-0 right-0 z-20 box-border h-14 grid grid-cols-3 items-center px-4 text-sm text-white/90">
         <button aria-label="Go to yesterday" onClick={() => setActiveDate(addDays(activeDate, -1))}
@@ -116,8 +116,8 @@ export default function App() {
         </button>
       </div>
 
-      {/* Content area sized between fixed bars */}
-      <div className="box-border h-[100dvh] pt-14 pb-14 overflow-hidden">
+  {/* Content area sized between fixed bars (no scroll) */}
+  <div className="absolute inset-x-0 top-14 bottom-14 overflow-hidden">
       {/* TODAY PAGE */}
       {page === 'today' && (
         <div className="mx-auto flex max-w-sm flex-col px-4">
@@ -182,7 +182,7 @@ export default function App() {
 
   {/* Bottom nav (fixed) */}
   <nav className="fixed bottom-0 left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md">
-        <div className="mx-auto w-full max-w-sm flex items-center justify-between px-4 text-white/80 h-full">
+        <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-12 px-6 text-white/80 h-full">
           <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')}>
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
               <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>

@@ -1,10 +1,14 @@
 @import "tailwindcss";
 
 /* App shell sizing */
-html, body, #root { height: 100%; }
-body { margin: 0; overflow: hidden; }
+html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body { margin: 0; position: fixed; inset: 0; width: 100%; }
+/* Anchor the React root to the viewport to eliminate page scrolling */
+#root { position: fixed; inset: 0; }
 
 /* Ensure the app grid uses full safe viewport height (iOS friendly) */
 .app-viewport {
-	height: 100dvh; /* fixed safe viewport height to lock header/footer positions */
+	height: 100svh; /* use small viewport height to avoid iOS address bar expand */
+	overflow: hidden;
+	touch-action: none; /* prevent scroll and pull-to-refresh */
 }
