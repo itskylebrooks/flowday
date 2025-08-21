@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { hsl } from '../lib/utils';
 
-export default function MonthFlow({ hues, className = '' }: { hues: number[]; className?: string }) {
+export default function MonthFlow({ hues, empty=false, className = '' }: { hues: number[]; empty?: boolean; className?: string }) {
   const width = 320, height = 150;
   const pathRef = useRef<SVGPathElement | null>(null);
   const glowRef = useRef<SVGPathElement | null>(null);
@@ -89,9 +89,16 @@ export default function MonthFlow({ hues, className = '' }: { hues: number[]; cl
          shapeRendering="geometricPrecision">
       <defs>
         <linearGradient id="monthFlowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          {stops.map((s, i) => (
-            <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} />
-          ))}
+          {empty ? (
+            <>
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="100%" stopColor="#ffffff" />
+            </>
+          ) : (
+            stops.map((s, i) => (
+              <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} />
+            ))
+          )}
         </linearGradient>
         {/* Soft glow to avoid strict borders */}
         <filter id="flowGlow" x="-20%" y="-50%" width="140%" height="200%">
@@ -110,18 +117,18 @@ export default function MonthFlow({ hues, className = '' }: { hues: number[]; cl
         </mask>
       </defs>
       {/* Glow underlay */}
-      <path ref={glowRef} fill="url(#monthFlowGrad)" opacity={0.35} filter="url(#flowGlow)" />
+  <path ref={glowRef} fill={empty ? '#ffffff' : 'url(#monthFlowGrad)'} opacity={empty ? 0.15 : 0.35} filter="url(#flowGlow)" />
       {/* Main band */}
-      <path ref={pathRef} fill="url(#monthFlowGrad)" opacity={0.96} />
+  <path ref={pathRef} fill={empty ? '#ffffff' : 'url(#monthFlowGrad)'} opacity={empty ? 0.9 : 0.96} />
       {/* Glitter layer */}
-      <g style={{ mixBlendMode: 'screen' }} mask="url(#monthMask)">
+  <g style={{ mixBlendMode: 'screen' }} mask="url(#monthMask)">
         {Array.from({ length: seedsRef.current!.length }).map((_, i) => (
           <circle
             key={i}
             ref={(el) => { if (el) glitterRefs.current[i] = el; }}
             r={seedsRef.current![i].r}
-            fill="url(#glitterGrad)"
-            opacity={0.5}
+    fill={empty ? '#ffffff' : 'url(#glitterGrad)'}
+    opacity={empty ? 0.25 : 0.5}
           />
         ))}
       </g>

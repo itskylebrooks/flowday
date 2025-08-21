@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Entry } from '../lib/types';
 import { emojiStats, clamp } from '../lib/utils';
 
@@ -33,6 +33,8 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   }, [pair, nodePositions]);
 
   const [focus, setFocus] = useState<string | null>(null);
+  // Reset focus when dataset changes (e.g., year navigation)
+  useEffect(()=>{ setFocus(null); }, [entries]);
   function edgeStyle(a: string, b: string, w: number) {
     // Only show edges when focused; weight subtly affects thickness
     const connected = focus != null && (focus === a || focus === b);

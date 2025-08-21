@@ -1,4 +1,4 @@
-import { APP_VERSION_LABEL, APP_NAME } from '../lib/version';
+import { APP_VERSION_LABEL } from '../lib/version';
 
 export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null;

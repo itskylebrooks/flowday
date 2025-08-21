@@ -32,9 +32,77 @@ export default function App() {
     setShowAura(!!entry.hue && entry.emojis.length > 0);
   }, [entry.hue, entry.emojis.length]);
 
-  // Flow page
-  const recent7 = useMemo(()=> last7(entries), [entries]);
-  const monthHues = useMemo(()=> monthlyTop3(entries), [entries]);
+  // Offsets for contextual navigation
+  const [weekOffset, setWeekOffset] = useState(0); // 0=this week, 1=last week, etc.
+  const [monthOffset, setMonthOffset] = useState(0); // 0=this month
+  const [yearOffset, setYearOffset] = useState(0); // 0=this year
+  const [flowsMode, setFlowsMode] = useState<'week'|'month'>('week');
+
+  // Reset offsets when switching to today page
+  useEffect(()=>{ if(page==='today'){ setWeekOffset(0); setMonthOffset(0); setYearOffset(0);} }, [page]);
+
+  // Derive week date range for weekOffset (Monday reference)
+  function weekDates(offset: number): string[] {
+    const today = new Date(todayISO() + 'T00:00:00');
+    today.setDate(today.getDate() - offset * 7); // go back offset weeks
+    const dowSun0 = today.getDay();
+    const monOffset = (dowSun0 + 6) % 7;
+    const monday = addDays(todayISO(), -(monOffset + offset*7));
+    return Array.from({length:7}, (_,i)=> addDays(monday, i));
+  }
+  const recent7 = useMemo(()=> {
+    if (weekOffset===0) return last7(entries);
+    const dates = weekDates(weekOffset);
+    const map = new Map(entries.map(e=>[e.date,e] as const));
+    return dates.map(d=> map.get(d) || { date:d, emojis:[], updatedAt:0 });
+  }, [entries, weekOffset]);
+
+  // Month hues for monthOffset
+  const { monthHues, monthEmpty } = useMemo(()=> {
+    const base = todayISO().slice(0,7); // YYYY-MM
+    const year = parseInt(base.slice(0,4),10);
+    const m = parseInt(base.slice(5,7),10);
+    const targetDate = new Date(year, m-1, 1); // first of current month
+    targetDate.setMonth(targetDate.getMonth() - monthOffset);
+    const ym = targetDate.getFullYear() + '-' + String(targetDate.getMonth()+1).padStart(2,'0');
+    const has = entries.some(e => e.date.startsWith(ym) && typeof e.hue === 'number');
+    const hues = has ? monthlyTop3(entries, ym) : [];
+    return { monthHues: hues, monthEmpty: !has };
+  }, [entries, monthOffset]);
+
+  // Entries filtered by year for constellations (respect yearOffset)
+  const constellationEntries = useMemo(()=>{
+    if (yearOffset===0) return entries;
+    const baseYear = parseInt(todayISO().slice(0,4),10);
+    const targetYear = baseYear - yearOffset;
+    return entries.filter(e => parseInt(e.date.slice(0,4),10) === targetYear);
+  }, [entries, yearOffset]);
+
+  // Title logic
+  function relativeLabel(unit: 'week'|'month'|'year', offset: number): string {
+    if (offset===0) return unit==='week' ? 'This week' : unit==='month' ? 'This month' : 'This year';
+    if (offset===1) return unit==='week' ? 'Last week' : unit==='month' ? 'Last month' : 'Last year';
+    return `${offset} ${unit}s ago`;
+  }
+
+  function headerCenterText(): string {
+    if (page==='today') return formatActiveDate();
+    if (page==='flows') return flowsMode==='week' ? relativeLabel('week', weekOffset) : relativeLabel('month', monthOffset);
+    if (page==='constellations') return relativeLabel('year', yearOffset);
+    return '';
+  }
+
+  function handleBack() {
+    if (page==='today') {
+      setActiveDate(addDays(activeDate, -1));
+      return;
+    }
+    if (page==='flows') {
+      if (flowsMode==='week') { setWeekOffset(o=>o+1); return; }
+      setMonthOffset(o=>o+1); return;
+    }
+    if (page==='constellations') { setYearOffset(o=>o+1); return; }
+  }
 
   function handleSliderPointer(e: React.PointerEvent) {
     if (!editable) return; if (!sliderRef.current) return;
@@ -98,18 +166,21 @@ export default function App() {
       .replace(',', ' ·');
   }
 
+  // Dynamic center title based on page and (internal) flows mode (week/month) -> we read localStorage flowsMode? Simpler: show weekOffset or monthOffset not accessible here; keep flows page title inside flows component? We'll compute here for header.
+  // We store flows mode locally in child; replicate via lifting if needed. For now we expose via a ref pattern not present. Simpler: manage flows mode here instead of FlowsPage internal state.
+
   return (
     <div className="app-viewport fixed inset-0 w-full bg-[#0E0E0E] text-white overflow-hidden">
       {/* Header (fixed) */}
       <div className="fixed top-0 left-0 right-0 z-20 box-border h-14 text-sm text-white/90">
         <div className="mx-auto w-full max-w-[425px] grid grid-cols-3 items-center px-4">
-          <button aria-label="Go to yesterday" onClick={() => setActiveDate(addDays(activeDate, -1))}
+          <button aria-label="Navigate back" onClick={handleBack}
             className="justify-self-start rounded-full p-2 text-white/70 hover:text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
               <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
             </svg>
           </button>
-          <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">{formatActiveDate()}</div>
+          <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">{headerCenterText()}</div>
           <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
               <path d="M8.68637 4.00008L11.293 1.39348C11.6835 1.00295 12.3167 1.00295 12.7072 1.39348L15.3138 4.00008H19.0001C19.5524 4.00008 20.0001 4.4478 20.0001 5.00008V8.68637L22.6067 11.293C22.9972 11.6835 22.9972 12.3167 22.6067 12.7072L20.0001 15.3138V19.0001C20.0001 19.5524 19.5524 20.0001 19.0001 20.0001H15.3138L12.7072 22.6067C12.3167 22.9972 11.6835 22.9972 11.293 22.6067L8.68637 20.0001H5.00008C4.4478 20.0001 4.00008 19.5524 4.00008 19.0001V15.3138L1.39348 12.7072C1.00295 12.3167 1.00295 11.6835 1.39348 11.293L4.00008 8.68637V5.00008C4.00008 4.4478 4.4478 4.00008 5.00008 4.00008H8.68637ZM6.00008 6.00008V9.5148L3.5148 12.0001L6.00008 14.4854V18.0001H9.5148L12.0001 20.4854L14.4854 18.0001H18.0001V14.4854L20.4854 12.0001L18.0001 9.5148V6.00008H14.4854L12.0001 3.5148L9.5148 6.00008H6.00008ZM12.0001 16.0001C9.79094 16.0001 8.00008 14.2092 8.00008 12.0001C8.00008 9.79094 9.79094 8.00008 12.0001 8.00008C14.2092 8.00008 16.0001 9.79094 16.0001 12.0001C16.0001 14.2092 14.2092 16.0001 12.0001 16.0001ZM12.0001 14.0001C13.1047 14.0001 14.0001 13.1047 14.0001 12.0001C14.0001 10.8955 13.1047 10.0001 12.0001 10.0001C10.8955 10.0001 10.0001 10.8955 10.0001 12.0001C10.0001 13.1047 10.8955 14.0001 12.0001 14.0001Z"></path>
@@ -176,10 +247,10 @@ export default function App() {
       )}
 
   {/* FLOWS PAGE */}
-  {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} />)}
+  {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} monthEmpty={monthEmpty} mode={flowsMode} onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')} />)}
 
   {/* CONSTELLATIONS PAGE */}
-  {page === 'constellations' && (<ConstellationsPage entries={entries} />)}
+  {page === 'constellations' && (<ConstellationsPage entries={constellationEntries} />)}
   </div>
 
   {/* Bottom nav (fixed) */}

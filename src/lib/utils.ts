@@ -70,9 +70,9 @@ export function monthlyStops(entries: Entry[]): number[] {
 }
 
 // Cluster monthly hues into up to 3 color families and return representative hues (circular mean).
-export function monthlyTop3(entries: Entry[]): number[] {
-  const ym = todayISO().slice(0,7);
-  const byMonth = entries.filter((e)=>e.date.slice(0,7)===ym && typeof e.hue === 'number');
+export function monthlyTop3(entries: Entry[], ym?: string): number[] {
+  const month = ym ?? todayISO().slice(0,7);
+  const byMonth = entries.filter((e)=>e.date.slice(0,7)===month && typeof e.hue === 'number');
   if (!byMonth.length) return [220,300,40];
 
   // Coarse bins to merge nearby hues (12 bins ~30° each)
