@@ -1,12 +1,10 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Entry, Page } from './lib/types';
 import { todayISO, addDays, canEdit } from './lib/utils';
-import { loadEntries, saveEntries, upsertEntry } from './lib/storage';
+import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
-
-// A tiny inline picker for now
-const QUICK_PICK = '😀 🙂 😍 😂 😎 🤔 😴 😡 😭 🥳 🫶 💫 🌈 🍕 ☕️ 🎶'.split(' ');
+import EmojiPickerModal from './components/EmojiPickerModal';
 
 export default function App() {
   const [page, setPage] = useState<Page>('today');
@@ -24,6 +22,18 @@ export default function App() {
 
   // which slot is being edited
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
+  const [recents, setRecents] = useState<string[]>(getRecents());
+  const pickerOpen = pickerSlot != null;
+
+  function openPicker(slot: number) { if (!editable) return; setPickerSlot(slot); }
+  function closePicker() { setPickerSlot(null); }
+  function handlePick(emoji: string) {
+    if (pickerSlot == null) return;
+    setEmojiAt(pickerSlot, emoji);
+    pushRecent(emoji);
+    setRecents(getRecents());
+    setPickerSlot(null);
+  }
 
   function setEmojiAt(index: number, emoji: string) {
     if (!editable) return;
@@ -77,32 +87,11 @@ export default function App() {
           <div className="h-[260px] w-full flex items-center justify-center">
             <EmojiTriangle
               emojis={entry.emojis}
-              onPick={(slot) => setPickerSlot(slot)}
+              onPick={(slot) => openPicker(slot)}
               onRemove={removeEmojiAt}
               editable={editable}
             />
           </div>
-
-          {/* Quick inline picker (temporary) */}
-          {pickerSlot != null && editable && (
-            <div className="mx-auto mt-2 w-full max-w-xs rounded-xl border border-white/10 bg-black/30 p-2">
-              <div className="mb-1 text-center text-xs text-white/60">Pick an emoji</div>
-              <div className="grid grid-cols-8 gap-2">
-                {QUICK_PICK.map((emo) => (
-                  <button
-                    key={emo}
-                    onClick={() => { setEmojiAt(pickerSlot, emo); setPickerSlot(null); }}
-                    className="flex h-10 w-10 items-center justify-center rounded-md bg-white/5 text-2xl hover:bg-white/10"
-                  >
-                    {emo}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 flex justify-end">
-                <button onClick={() => setPickerSlot(null)} className="rounded-md px-2 py-1 text-xs text-white/70 ring-1 ring-white/15 hover:bg-white/5">Cancel</button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -134,6 +123,12 @@ export default function App() {
           </IconButton>
         </div>
       </nav>
+      <EmojiPickerModal
+        open={pickerOpen}
+        recents={recents}
+        onClose={closePicker}
+        onPick={handlePick}
+      />
     </div>
   );
 }
