@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { EMOJI_SETS } from '../lib/emojiData';
+import { getEmojiCategories } from '../lib/emojiAll';
 
 export default function EmojiPickerModal({
   open, onClose, onPick, recents,
@@ -10,9 +10,12 @@ export default function EmojiPickerModal({
   recents: string[];
 }) {
   const [tab, setTab] = useState<string>('Recent');
+  const full = useMemo(() => getEmojiCategories(), []);
   const categories = useMemo(() => {
-    return { ...EMOJI_SETS, Recent: recents.length ? recents : EMOJI_SETS.Faces.slice(0, 18) } as Record<string,string[]>;
-  }, [recents]);
+    const firstGroup = Object.keys(full)[0] ?? 'Smileys & Emotion';
+    const fallbackList = full[firstGroup]?.slice(0, 24) ?? [];
+    return { Recent: recents.length ? recents : fallbackList, ...full } as Record<string, string[]>;
+  }, [recents, full]);
 
   if (!open) return null;
   const list = categories[tab] || [];
