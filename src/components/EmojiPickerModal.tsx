@@ -31,7 +31,7 @@ export default function EmojiPickerModal({
   return (
     <div className={"fixed inset-0 z-50 flex items-end justify-center picker-overlay sm:items-center " + (closing ? 'closing bg-black/60' : 'bg-black/60')} onClick={beginClose}>
       <div className={"w-full max-w-sm rounded-t-2xl bg-[#111] p-3 ring-1 ring-white/10 sm:rounded-2xl picker-panel " + (closing ? 'closing':'' )} onClick={(e)=>e.stopPropagation()}>
-        <div className="mb-2 flex gap-2 overflow-x-auto">
+  <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar">
           {Object.keys(categories).map((name) => (
             <button key={name} onClick={()=>{ setTab(name); setQ(''); }} className={'rounded-full px-3 py-1 text-sm ' + (tab===name? 'bg-white/10 text-white' : 'text-white/70 hover:text-white')}>
               {name}

@@ -15,11 +15,11 @@ type EmojiInfo = {
 const emojiData = (await import('unicode-emoji-json')).default as Record<string, EmojiInfo>;
 
 const GROUP_ORDER = [
-  'Smileys & Emotion',
-  'People & Body',
-  'Animals & Nature',
-  'Food & Drink',
-  'Travel & Places',
+  'Emotions',
+  'People',
+  'Nature',
+  'Nutrition',
+  'Travel',
   'Activities',
   'Objects',
   'Symbols',
@@ -30,8 +30,17 @@ const GROUP_ORDER = [
 export function getEmojiCategories(): Record<string, string[]> {
   const groups: Record<string, string[]> = {};
 
+  const rename: Record<string,string> = {
+    'Smileys & Emotion': 'Emotions',
+    'People & Body': 'People',
+    'Animals & Nature': 'Nature',
+    'Food & Drink': 'Nutrition',
+    'Travel & Places': "Travel"
+  };
+
   for (const [emoji, info] of Object.entries(emojiData)) {
-    const group = info?.group || 'Other';
+    const raw = info?.group || 'Other';
+    const group = rename[raw] || raw;
     if (!groups[group]) groups[group] = [];
     groups[group].push(emoji);
   }

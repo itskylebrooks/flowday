@@ -67,3 +67,7 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 /* Constellations interactions (edges only) */
 .edge-line { transition: opacity .4s ease, stroke-width .4s ease; opacity:0; }
 .edge-line[data-connected='true'] { opacity:.5; }
+
+/* Utility: hide scrollbars (used for emoji picker category row) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
