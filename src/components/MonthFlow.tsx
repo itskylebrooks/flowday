@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { hsl } from '../lib/utils';
 
 export default function MonthFlow({ hues, empty=false, className = '' }: { hues: number[]; empty?: boolean; className?: string }) {
-  const width = 320, height = 150;
+  const width = 320, height = 200;
   const pathRef = useRef<SVGPathElement | null>(null);
   const glowRef = useRef<SVGPathElement | null>(null);
   const maskPathRef = useRef<SVGPathElement | null>(null);
@@ -101,8 +101,8 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
           )}
         </linearGradient>
         {/* Soft glow to avoid strict borders */}
-        <filter id="flowGlow" x="-20%" y="-50%" width="140%" height="200%">
-          <feGaussianBlur stdDeviation="10" result="blur" />
+        <filter id="flowGlow" x="-25%" y="-60%" width="150%" height="220%">
+          <feGaussianBlur stdDeviation="14" result="blur" />
         </filter>
         {/* Glitter appearance */}
         <radialGradient id="glitterGrad" cx="50%" cy="50%" r="50%">
@@ -115,6 +115,17 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
           <rect x="0" y="0" width={width} height={height} fill="black" />
           <path ref={maskPathRef} fill="white" />
         </mask>
+        {/* Edge fade overlays (used as simple fills, not masks) */}
+        <linearGradient id="fadeLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#0E0E0E" stopOpacity="1" />
+          <stop offset="35%" stopColor="#0E0E0E" stopOpacity="1" />
+          <stop offset="100%" stopColor="#0E0E0E" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="fadeRight" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#0E0E0E" stopOpacity="0" />
+          <stop offset="65%" stopColor="#0E0E0E" stopOpacity="1" />
+          <stop offset="100%" stopColor="#0E0E0E" stopOpacity="1" />
+        </linearGradient>
       </defs>
       {/* Glow underlay */}
   <path ref={glowRef} fill={empty ? '#ffffff' : 'url(#monthFlowGrad)'} opacity={empty ? 0.15 : 0.35} filter="url(#flowGlow)" />
@@ -131,6 +142,15 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
     opacity={empty ? 0.25 : 0.5}
           />
         ))}
+      </g>
+      {/* Edge fade overlays (above wave). Using rectangles keeps existing glitter mask logic untouched. */}
+      <g pointerEvents="none" opacity={empty ? 0.75 : 1}>
+        {/* Hard cut rectangles to guarantee vertical edge */}
+        <rect x={0} y={0} width={4} height={height} fill="#0E0E0E" />
+        <rect x={width-4} y={0} width={4} height={height} fill="#0E0E0E" />
+        {/* Fading depth overlays */}
+        <rect x={0} y={0} width={95} height={height} fill="url(#fadeLeft)" />
+        <rect x={width-95} y={0} width={95} height={height} fill="url(#fadeRight)" />
       </g>
     </svg>
   );

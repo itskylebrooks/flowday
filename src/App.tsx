@@ -36,7 +36,7 @@ export default function App() {
   const [weekOffset, setWeekOffset] = useState(0); // 0=this week, 1=last week, etc.
   const [monthOffset, setMonthOffset] = useState(0); // 0=this month
   const [yearOffset, setYearOffset] = useState(0); // 0=this year
-  const [flowsMode, setFlowsMode] = useState<'week'|'month'>('week');
+  const [flowsMode, setFlowsMode] = useState<'week'|'month'>('month');
 
   // Reset offsets when switching to today page
   useEffect(()=>{ if(page==='today'){ setWeekOffset(0); setMonthOffset(0); setYearOffset(0);} }, [page]);
