@@ -104,6 +104,22 @@ export default function App() {
     if (page==='constellations') { setYearOffset(o=>o+1); return; }
   }
 
+  function canReset(): boolean {
+    if (page==='today') return activeDate !== todayISO();
+    if (page==='flows') return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
+    if (page==='constellations') return yearOffset>0;
+    return false;
+  }
+  function handleReset() {
+    if (!canReset()) return;
+    if (page==='today') { setActiveDate(todayISO()); return; }
+    if (page==='flows') { 
+      if (flowsMode==='week') setWeekOffset(0); else setMonthOffset(0); 
+      return; 
+    }
+    if (page==='constellations') { setYearOffset(0); return; }
+  }
+
   function handleSliderPointer(e: React.PointerEvent) {
     if (!editable) return; if (!sliderRef.current) return;
     if (entry.emojis.length === 0) return; // require at least one emoji
@@ -174,12 +190,21 @@ export default function App() {
       {/* Header (fixed) */}
       <div className="fixed top-0 left-0 right-0 z-20 box-border h-14 text-sm text-white/90">
         <div className="mx-auto w-full max-w-[425px] grid grid-cols-3 items-center px-4">
-          <button aria-label="Navigate back" onClick={handleBack}
-            className="justify-self-start rounded-full p-2 text-white/70 hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-              <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
-            </svg>
-          </button>
+          <div className="justify-self-start flex items-center gap-1">
+            <button aria-label="Navigate back" onClick={handleBack}
+              className="rounded-full p-2 text-white/70 hover:text-white">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
+              </svg>
+            </button>
+            {canReset() && (
+              <button aria-label="Go to current" onClick={handleReset} className="rounded-full p-2 text-white/70 hover:text-white">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                  <path d="M15.874 13C15.4299 14.7252 13.8638 16 12 16C10.1362 16 8.57006 14.7252 8.12602 13H3V11H8.12602C8.57006 9.27477 10.1362 8 12 8C13.8638 8 15.4299 9.27477 15.874 11H21V13H15.874ZM12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z"></path>
+                </svg>
+              </button>
+            )}
+          </div>
           <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">{headerCenterText()}</div>
           <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
