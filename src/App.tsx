@@ -143,7 +143,6 @@ export default function App() {
     setEmojiAt(pickerSlot, emoji);
     pushRecent(emoji);
     setRecents(getRecents());
-    setPickerSlot(null);
   }
 
   function setEmojiAt(index: number, emoji: string) {
@@ -205,7 +204,9 @@ export default function App() {
               </button>
             )}
           </div>
-          <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">{headerCenterText()}</div>
+          <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">
+            <span key={headerCenterText()} className="inline-block animate-fadeSwap">{headerCenterText()}</span>
+          </div>
           <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
               <path d="M8.68637 4.00008L11.293 1.39348C11.6835 1.00295 12.3167 1.00295 12.7072 1.39348L15.3138 4.00008H19.0001C19.5524 4.00008 20.0001 4.4478 20.0001 5.00008V8.68637L22.6067 11.293C22.9972 11.6835 22.9972 12.3167 22.6067 12.7072L20.0001 15.3138V19.0001C20.0001 19.5524 19.5524 20.0001 19.0001 20.0001H15.3138L12.7072 22.6067C12.3167 22.9972 11.6835 22.9972 11.293 22.6067L8.68637 20.0001H5.00008C4.4478 20.0001 4.00008 19.5524 4.00008 19.0001V15.3138L1.39348 12.7072C1.00295 12.3167 1.00295 11.6835 1.39348 11.293L4.00008 8.68637V5.00008C4.00008 4.4478 4.4478 4.00008 5.00008 4.00008H8.68637ZM6.00008 6.00008V9.5148L3.5148 12.0001L6.00008 14.4854V18.0001H9.5148L12.0001 20.4854L14.4854 18.0001H18.0001V14.4854L20.4854 12.0001L18.0001 9.5148V6.00008H14.4854L12.0001 3.5148L9.5148 6.00008H6.00008ZM12.0001 16.0001C9.79094 16.0001 8.00008 14.2092 8.00008 12.0001C8.00008 9.79094 9.79094 8.00008 12.0001 8.00008C14.2092 8.00008 16.0001 9.79094 16.0001 12.0001C16.0001 14.2092 14.2092 16.0001 12.0001 16.0001ZM12.0001 14.0001C13.1047 14.0001 14.0001 13.1047 14.0001 12.0001C14.0001 10.8955 13.1047 10.0001 12.0001 10.0001C10.8955 10.0001 10.0001 10.8955 10.0001 12.0001C10.0001 13.1047 10.8955 14.0001 12.0001 14.0001Z"></path>
@@ -215,28 +216,31 @@ export default function App() {
       </div>
 
   {/* Content area sized between fixed bars (no scroll) */}
-  <div className="absolute inset-x-0 top-14 bottom-14 overflow-hidden">
-      {/* TODAY PAGE */}
-      {page === 'today' && (
-        <div className="mx-auto flex max-w-sm flex-col px-4">
+  <div className="absolute inset-x-0 top-14 bottom-14 overflow-hidden page-stack">
+      <div className="page-view" data-active={page==='today'}>
+        <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
-            {!showAura ? (
-              <EmojiTriangle
-                emojis={entry.emojis}
-                onPick={(slot) => openPicker(slot)}
-                onRemove={removeEmojiAt}
-                editable={editable}
-              />
-            ) : (
-              <div onClick={() => setShowAura(false)} className="cursor-pointer">
+            <div className={"emoji-trans-container w-full flex items-center justify-center " + (showAura ? 'aura-active':'')}
+                 style={{maxWidth:280}}>
+              <div className="triangle-view flex items-center justify-center w-full" onClick={()=>{ if(entry.emojis.length>0 && editable){ /* maybe future */ }}}>
+                <EmojiTriangle
+                  emojis={entry.emojis}
+                  onPick={(slot) => openPicker(slot)}
+                  onRemove={removeEmojiAt}
+                  editable={editable}
+                />
+              </div>
+              <div className="aura-view cursor-pointer" onClick={() => setShowAura(false)}>
                 <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} />
               </div>
-            )}
+            </div>
           </div>
 
           {/* Label above slider */}
-          <div className="mt-2 text-center text-sm text-white/75">{showAura ? 'Saved 🌈' : 'Pick your vibe'}</div>
+          <div className="mt-2 text-center text-sm text-white/75">
+            {showAura ? 'Saved 🌈 (tap aura to edit)' : 'Pick your vibe'}
+          </div>
 
           {/* Thicker color slider (stays in place) */}
           <div
@@ -256,8 +260,8 @@ export default function App() {
             onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); handleSliderPointer(e); }}
             onPointerMove={(e)=>{ if(e.buttons!==1) return; if(!editable || entry.emojis.length===0) return; handleSliderPointer(e); }}
             className={
-              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 ' +
-              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10' : 'bg-white/10 cursor-not-allowed')
+              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 ' +
+              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed')
             }
             style={{ background: (editable && entry.emojis.length>0) ? rainbowGradientCSS() : undefined,
                     boxShadow: (editable && entry.emojis.length>0) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
@@ -269,14 +273,23 @@ export default function App() {
             </div>
           )}
         </div>
-      )}
+      </div>
 
-  {/* FLOWS PAGE */}
-  {page==='flows' && (<FlowsPage recent7={recent7} monthHues={monthHues} monthEmpty={monthEmpty} mode={flowsMode} onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')} />)}
-
-  {/* CONSTELLATIONS PAGE */}
-  {page === 'constellations' && (<ConstellationsPage entries={constellationEntries} />)}
-  </div>
+      <div className="page-view" data-active={page==='flows'}>
+        {page==='flows' && (
+          <div className="h-full animate-fadeSwap">
+            <FlowsPage recent7={recent7} monthHues={monthHues} monthEmpty={monthEmpty} mode={flowsMode} onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')} />
+          </div>
+        )}
+      </div>
+      <div className="page-view" data-active={page==='constellations'}>
+        {page==='constellations' && (
+          <div className="h-full animate-fadeSwap">
+            <ConstellationsPage entries={constellationEntries} />
+          </div>
+        )}
+      </div>
+    </div>
 
   {/* Bottom nav (fixed) */}
   <nav className="fixed bottom-0 left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md">

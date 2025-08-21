@@ -12,3 +12,58 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 	overflow: hidden;
 	touch-action: none; /* prevent scroll and pull-to-refresh */
 }
+
+/* Page & element transition helpers */
+@keyframes fadeInMove {
+	from { opacity: 0; transform: translateY(8px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSwap {
+	from { opacity: 0; transform: translateX(6px); }
+	to { opacity: 1; transform: translateX(0); }
+}
+.animate-fadeInMove { animation: fadeInMove .35s ease both; }
+.animate-fadeSwap { animation: fadeSwap .28s ease both; }
+
+.page-stack { position: relative; width:100%; height:100%; }
+.page-view { position:absolute; inset:0; opacity:0; pointer-events:none; transform:translateX(14px); transition: opacity .32s ease, transform .38s ease; }
+.page-view[data-active='true'] { opacity:1; pointer-events:auto; transform:translateX(0); }
+
+/* Aura <-> Emoji triangle smooth morph */
+.emoji-trans-container { position:relative; }
+.emoji-trans-container .triangle-view,
+.emoji-trans-container .aura-view { will-change: transform, opacity; }
+.emoji-trans-container .triangle-view { transition: transform .55s cubic-bezier(.4,0,.2,1), opacity .5s ease; transform-origin:50% 50%; }
+.emoji-trans-container .aura-view { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition: transform .6s cubic-bezier(.4,0,.2,1), opacity .55s ease; transform-origin:50% 50%; }
+.emoji-trans-container .triangle-view { opacity:1; transform:scale(1); }
+.emoji-trans-container .aura-view { opacity:0; transform:scale(.2); pointer-events:none; }
+.emoji-trans-container.aura-active .triangle-view { opacity:0; transform:scale(.3); pointer-events:none; }
+.emoji-trans-container.aura-active .aura-view { opacity:1; transform:scale(1); pointer-events:auto; }
+
+/* Emoji picker modal animations */
+@keyframes pickerIn { from { opacity:0; transform: translateY(30px) scale(.96); } to { opacity:1; transform: translateY(0) scale(1); } }
+@keyframes pickerOut { from { opacity:1; transform: translateY(0) scale(1); } to { opacity:0; transform: translateY(28px) scale(.95); } }
+.picker-panel { animation: pickerIn .38s cubic-bezier(.4,0,.2,1); }
+.picker-overlay { animation: fadeInMove .3s ease; }
+.picker-panel.closing { animation: pickerOut .28s cubic-bezier(.4,0,.6,1) forwards; }
+.picker-overlay.closing { animation: fadeOut .22s ease forwards; }
+
+@keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+@keyframes catIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.cat-swap { animation: catIn .28s ease; }
+
+/* Flow visualization cross-fade */
+@keyframes flowSwapIn { from { opacity:0; transform: translateY(12px) scale(.98); } to { opacity:1; transform: translateY(0) scale(1); } }
+.flow-anim { animation: flowSwapIn .45s cubic-bezier(.4,0,.25,1); }
+
+/* Settings modal exit */
+@keyframes settingsIn { from { opacity:0; transform:translateY(24px) scale(.96);} to { opacity:1; transform:translateY(0) scale(1);} }
+@keyframes settingsOut { from { opacity:1; transform:translateY(0) scale(1);} to { opacity:0; transform:translateY(26px) scale(.95);} }
+.settings-overlay { animation: fadeInMove .32s ease; }
+.settings-overlay.closing { animation: fadeOut .2s ease forwards; }
+.settings-panel { animation: settingsIn .42s cubic-bezier(.4,0,.2,1); }
+.settings-panel.closing { animation: settingsOut .28s cubic-bezier(.4,0,.6,1) forwards; }
+
+/* Constellations interactions (edges only) */
+.edge-line { transition: opacity .4s ease, stroke-width .4s ease; opacity:0; }
+.edge-line[data-connected='true'] { opacity:.5; }

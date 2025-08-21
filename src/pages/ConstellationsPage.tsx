@@ -56,17 +56,17 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
             const A = nodePositions.find(n => n.emo === e.a)!;
             const B = nodePositions.find(n => n.emo === e.b)!;
             const { op, sw } = edgeStyle(e.a, e.b, e.w);
-            if (op === 0) return null;
-            return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="white" strokeWidth={sw} opacity={op} />;
+            return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="white" strokeWidth={sw} opacity={op}
+              className="edge-line" data-connected={op>0} />;
           })}
 
-          {nodePositions.map((n) => {
+      {nodePositions.map((n) => {
             const count = freq.get(n.emo) || 1;
             const size = clamp(24 + count * 6, 24, 64); // visibly bigger and scales with mentions
             const active = focus === n.emo;
             return (
-              <g key={n.emo} transform={`translate(${n.x}, ${n.y})`} onClick={() => setFocus(active ? null : n.emo)}
-                 style={{ cursor: 'pointer' }}>
+          <g key={n.emo} transform={`translate(${n.x}, ${n.y})`} onClick={() => setFocus(active ? null : n.emo)}
+            style={{ cursor: 'pointer' }}>
                 {/* Remove gray circle; render emoji larger with subtle outline for contrast */}
                 <text textAnchor="middle" dominantBaseline="central" fontSize={size}
                       stroke="black" strokeWidth={0.6} strokeOpacity={0.25}>{n.emo}</text>
