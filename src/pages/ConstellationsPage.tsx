@@ -44,13 +44,13 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   const width = 360, height = 360;
 
   return (
-    <div className="mx-auto max-w-sm px-4 h-full overflow-y-auto overscroll-contain touch-pan-y">
+    <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
       <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
       <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
 
-      <div className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3">
+      <div className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3" style={{touchAction:'none'}}>
         <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}
-             shapeRendering="geometricPrecision" textRendering="geometricPrecision">
+             shapeRendering="geometricPrecision" textRendering="geometricPrecision" style={{pointerEvents:'none', userSelect:'none'}}>
           {/* Edges: only render when focused, and only those connected to focus */}
           {edges.map((e, idx) => {
             const A = nodePositions.find(n => n.emo === e.a)!;
@@ -66,7 +66,7 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
             const active = focus === n.emo;
             return (
           <g key={n.emo} transform={`translate(${n.x}, ${n.y})`} onClick={() => setFocus(active ? null : n.emo)}
-            style={{ cursor: 'pointer' }}>
+            style={{ cursor: 'pointer', pointerEvents:'auto' }}>
                 {/* Remove gray circle; render emoji larger with subtle outline for contrast */}
                 <text textAnchor="middle" dominantBaseline="central" fontSize={size}
                       stroke="black" strokeWidth={0.6} strokeOpacity={0.25}>{n.emo}</text>
