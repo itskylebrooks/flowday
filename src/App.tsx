@@ -3,7 +3,7 @@ import type { Entry, Page } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
 import SettingsModal from './components/SettingsModal';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyStops } from './lib/utils';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -34,7 +34,7 @@ export default function App() {
 
   // Flow page
   const recent7 = useMemo(()=> last7(entries), [entries]);
-  const monthHues = useMemo(()=> monthlyStops(entries), [entries]);
+  const monthHues = useMemo(()=> monthlyTop3(entries), [entries]);
 
   function handleSliderPointer(e: React.PointerEvent) {
     if (!editable) return; if (!sliderRef.current) return;

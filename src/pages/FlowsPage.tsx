@@ -1,18 +1,34 @@
+import { useState } from 'react';
 import type { Entry } from '../lib/types';
-import { hsl } from '../lib/utils';
-import WaveRibbon from '../components/WaveRibbon';
-import MonthlyMix from '../components/MonthlyMix';
+import WeekTimeline from '../components/WeekTimeline';
+import MonthFlow from '../components/MonthFlow';
 
 export default function FlowsPage({ recent7, monthHues }: { recent7: Entry[]; monthHues: number[] }) {
-  const weekColors = recent7.map((e)=> hsl(e.hue ?? 220));
+  const [mode, setMode] = useState<'week' | 'month'>('week');
+
   return (
-    <div className="mx-auto max-w-sm px-4">
-      <div className="mt-4 text-center text-sm text-white/80">This week’s vibe</div>
-      <WaveRibbon colors={weekColors} height={56} amplitude={22} className="mt-4" />
-      <div className="mt-10 text-center text-sm text-white/80">This month in color</div>
-      <MonthlyMix hues={monthHues} className="mt-4" />
-      <div className="mt-6 flex justify-end">
-        <button className="rounded-md px-3 py-1 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5">Save as poster</button>
+    <div className="mx-auto flex h-full max-w-sm flex-col px-4">
+      {/* Title */}
+      <div className="mt-4 text-center text-sm text-white/80">{mode === 'week' ? 'This week' : 'This month'}</div>
+
+      {/* Visualization area */}
+      <div className="mt-3 flex flex-1 items-center justify-center">
+        {mode === 'week' ? (
+          <WeekTimeline entries={recent7} />
+        ) : (
+          <MonthFlow hues={monthHues} />
+        )}
+      </div>
+
+      {/* Bottom actions */}
+      <div className="mb-2 mt-4 grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setMode((m) => (m === 'week' ? 'month' : 'week'))}
+          className="rounded-md px-3 py-2 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5"
+        >
+          {mode === 'week' ? 'Switch to month' : 'Switch to week'}
+        </button>
+        <button className="rounded-md px-3 py-2 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5">Save as poster</button>
       </div>
     </div>
   );

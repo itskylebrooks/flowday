@@ -69,6 +69,48 @@ export function monthlyStops(entries: Entry[]): number[] {
   return top.length ? top : [220,300,40];
 }
 
+// Cluster monthly hues into up to 3 color families and return representative hues (circular mean).
+export function monthlyTop3(entries: Entry[]): number[] {
+  const ym = todayISO().slice(0,7);
+  const byMonth = entries.filter((e)=>e.date.slice(0,7)===ym && typeof e.hue === 'number');
+  if (!byMonth.length) return [220,300,40];
+
+  // Coarse bins to merge nearby hues (12 bins ~30° each)
+  const BIN_SIZE = 30;
+  const bins: { count: number; hues: number[] }[] = Array.from({ length: Math.floor(360 / BIN_SIZE) }, () => ({ count: 0, hues: [] }));
+  for (const e of byMonth) {
+    const h = (e.hue as number + 360) % 360;
+    const idx = Math.floor(h / BIN_SIZE) % bins.length;
+    bins[idx].count++;
+    bins[idx].hues.push(h);
+  }
+  // Pick top 3 bins by count
+  const ranked = bins
+    .map((b, i) => ({ i, count: b.count, hues: b.hues }))
+    .filter(b => b.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
+  if (!ranked.length) return [220,300,40];
+
+  // Circular mean per selected bin
+  function circMean(hues: number[]): number {
+    if (hues.length === 1) return hues[0];
+    let x = 0, y = 0;
+    for (const h of hues) {
+      const r = (h * Math.PI) / 180;
+      x += Math.cos(r);
+      y += Math.sin(r);
+    }
+    const ang = Math.atan2(y, x) * (180 / Math.PI);
+    return (ang + 360) % 360;
+  }
+
+  const reps = ranked.map(b => ({ hue: circMean(b.hues), count: b.count }));
+  reps.sort((a, b) => b.count - a.count);
+  return reps.map(r => r.hue);
+}
+
 export function emojiStats(entries: Entry[]) {
   const freq = new Map<string, number>();
   const pair = new Map<string, number>();
