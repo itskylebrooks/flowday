@@ -13,7 +13,7 @@ export default function IconButton({
       aria-label={label}
       onClick={onClick}
       className={
-        'flex h-10 w-10 items-center justify-center rounded-full ' +
+  'flex h-11 w-15 items-center justify-center rounded-full ' +
         (active ? 'text-white' : 'text-white/60 hover:text-white/90')
       }
     >
