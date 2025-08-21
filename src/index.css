@@ -59,9 +59,12 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 /* Settings modal exit */
 @keyframes settingsIn { from { opacity:0; transform:translateY(24px) scale(.96);} to { opacity:1; transform:translateY(0) scale(1);} }
 @keyframes settingsOut { from { opacity:1; transform:translateY(0) scale(1);} to { opacity:0; transform:translateY(26px) scale(.95);} }
-.settings-overlay { animation: fadeInMove .32s ease; }
-.settings-overlay.closing { animation: fadeOut .2s ease forwards; }
+/* Settings modal animations (tuned for smoother symmetric close) */
+.settings-overlay { animation: fadeInMove .32s ease both; }
+/* Match overlay fade duration to panel so it doesn't disappear early */
+.settings-overlay.closing { animation: fadeOut .28s cubic-bezier(.4,0,.6,1) forwards; }
 .settings-panel { animation: settingsIn .42s cubic-bezier(.4,0,.2,1); }
+/* Use same easing as overlay for cohesive exit */
 .settings-panel.closing { animation: settingsOut .28s cubic-bezier(.4,0,.6,1) forwards; }
 
 /* Constellations interactions (edges only) */

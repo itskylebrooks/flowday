@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 
 export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [closing, setClosing] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
-  function beginClose(){ setClosing(true); setTimeout(()=> onClose(), 230); }
+  useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
+  const CLOSE_DURATION = 280; // ms (match CSS .28s)
+  function beginClose(){
+    if (closing) return; // prevent double trigger
+    setClosing(true);
+    timeoutRef.current = window.setTimeout(()=> onClose(), CLOSE_DURATION + 40); // slight buffer to avoid cut-off
+  }
   if (!open && !closing) return null;
   return (
     <div className={"fixed inset-0 z-50 flex items-end justify-center settings-overlay backdrop-blur-sm sm:items-center " + (closing? 'closing':'')} onClick={beginClose}>
