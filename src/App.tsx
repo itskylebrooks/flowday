@@ -27,8 +27,10 @@ export default function App() {
 
   // Color slider & aura state
   const sliderRef = useRef<HTMLDivElement | null>(null);
-  const [showAura, setShowAura] = useState<boolean>(!!entry.hue);
-  useEffect(() => { setShowAura(!!entry.hue); }, [entry.hue]);
+  const [showAura, setShowAura] = useState<boolean>(!!entry.hue && entry.emojis.length > 0);
+  useEffect(() => {
+    setShowAura(!!entry.hue && entry.emojis.length > 0);
+  }, [entry.hue, entry.emojis.length]);
 
   // Flow page
   const recent7 = useMemo(()=> last7(entries), [entries]);
@@ -36,11 +38,12 @@ export default function App() {
 
   function handleSliderPointer(e: React.PointerEvent) {
     if (!editable) return; if (!sliderRef.current) return;
+    if (entry.emojis.length === 0) return; // require at least one emoji
     const rect = sliderRef.current.getBoundingClientRect();
     const x = clamp(e.clientX - rect.left, 0, rect.width);
     const hue = Math.round((x / rect.width) * 360);
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
-    setShowAura(true); // touching slider enables aura
+    setShowAura(true);
     setEntries((old) => upsertEntry(old, next));
   }
 
@@ -64,7 +67,12 @@ export default function App() {
     const clean = emoji.trim(); if (!clean) return;
     const next = { ...entry } as Entry;
     const arr = [...next.emojis]; arr[index] = clean;
-    next.emojis = Array.from(new Set(arr.filter(Boolean))).slice(0, 3);
+    const unique = Array.from(new Set(arr.filter(Boolean))).slice(0, 3);
+    next.emojis = unique;
+    if (unique.length === 0) {
+      delete (next as Partial<Entry>).hue;
+      setShowAura(false);
+    }
     next.updatedAt = Date.now();
     setEntries(old => upsertEntry(old, next));
   }
@@ -75,6 +83,10 @@ export default function App() {
     const arr = [...next.emojis];
     arr.splice(index, 1);
     next.emojis = arr;
+    if (arr.length === 0) {
+      delete (next as Partial<Entry>).hue; // clear saved hue when no emojis
+      setShowAura(false);
+    }
     next.updatedAt = Date.now();
     setEntries(old => upsertEntry(old, next));
   }
@@ -130,26 +142,33 @@ export default function App() {
           {/* Thicker color slider (stays in place) */}
           <div
             ref={sliderRef}
-            onPointerDown={(e) => {
-              if (entry.emojis.length === 0) return;
-              (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-              handleSliderPointer(e);
+            tabIndex={editable && entry.emojis.length>0 ? 0 : -1}
+            onKeyDown={(e) => {
+              if (!editable || entry.emojis.length===0) return;
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                const delta = e.key === 'ArrowLeft' ? -5 : 5;
+                const hue = (((entry.hue ?? 0) + delta + 360) % 360);
+                const next = { ...entry, hue, updatedAt: Date.now() };
+                setShowAura(true);
+                setEntries(old => upsertEntry(old, next));
+                e.preventDefault();
+              }
             }}
-            onPointerMove={(e) => {
-              if (e.buttons !== 1) return;
-              if (entry.emojis.length === 0) return;
-              handleSliderPointer(e);
-            }}
+            onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); handleSliderPointer(e); }}
+            onPointerMove={(e)=>{ if(e.buttons!==1) return; if(!editable || entry.emojis.length===0) return; handleSliderPointer(e); }}
             className={
-              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full ' +
-              (entry.emojis.length === 0 ? 'h-8 bg-white/10' : 'h-8 ring-1 ring-white/10')
+              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 ' +
+              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10' : 'bg-white/10 cursor-not-allowed')
             }
-            style={{
-              background: entry.emojis.length === 0 ? undefined : rainbowGradientCSS(),
-              boxShadow: entry.emojis.length === 0 ? undefined : '0 0 20px 2px rgba(255,255,255,0.07)',
-            }}
-            aria-disabled={entry.emojis.length === 0}
+            style={{ background: (editable && entry.emojis.length>0) ? rainbowGradientCSS() : undefined,
+                    boxShadow: (editable && entry.emojis.length>0) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
+            aria-disabled={!(editable && entry.emojis.length>0)}
           />
+          {!editable && (
+            <div className="mt-1 text-center text-xs text-white/40">
+              Read-only · you can edit today or yesterday
+            </div>
+          )}
         </div>
       )}
 
