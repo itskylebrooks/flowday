@@ -142,12 +142,8 @@ export default function App() {
     }
   if (page==='constellations' || page==='echoes') { setYearOffset(o=>o+1); return; }
   }, [page, activeDate, flowsMode]);
-  const stepBackInTime = useCallback(()=> { handleBack(); }, [handleBack]);
-  // Telegram BackButton mapping (must be after callbacks defined)
-  useEffect(()=> {
-    if (!isTG) return;
-    setBackButton(true, stepBackInTime);
-  }, [isTG, stepBackInTime]);
+  // Telegram BackButton disabled per requirement (always hidden)
+  useEffect(()=> { if (isTG) setBackButton(false); }, [isTG]);
 
   // Prevent Telegram swipe-to-close while interacting with Constellations (pan/zoom)
   useEffect(()=> {
