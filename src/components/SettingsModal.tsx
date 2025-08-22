@@ -125,38 +125,43 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   <div className={"w-full h-full sm:h-auto max-w-none sm:max-w-sm rounded-none sm:rounded-2xl bg-[#111] p-6 pt-7 pb-8 ring-1 ring-white/10 overflow-y-auto settings-panel " + (closing? 'closing':'')}
        style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
        onClick={(e)=>e.stopPropagation()}>
-  <div className="mb-8 relative">
-          {onShowGuide && (
-            <button
-              type="button"
-              aria-label="Open guide"
-              onClick={onShowGuide}
-              className="absolute top-0 left-0 w-12 h-12 flex items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 text-white/60 hover:text-white hover:bg-white/10 transition"
-            >
-              <span className="text-xl font-semibold">?</span>
-            </button>
-          )}
-          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center flex flex-col items-center justify-center">
-            <span>Settings</span>
-            {isTG && (
-              <span className="mt-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG Version</span>
-            )}
-          </div>
-          {/* Auto Avatar */}
-          <div className="absolute top-0 right-0" title="Your Flowday avatar (auto-generated)">
-            <div className="relative group" style={{ width:48, height:48 }}>
-              <div
-                className="w-full h-full rounded-full ring-1 ring-white/15 shadow-inner overflow-hidden"
-                style={{ backgroundImage: gradientCSS, backgroundSize:'cover', backgroundPosition:'center', transition:'filter 0.6s', filter:'saturate(1.05)' }}
-              >
-                <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), rgba(255,255,255,0) 60%)'}} />
-                <div className="flex items-center justify-center w-full h-full text-[24px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none">
-                  {topEmoji}
-                </div>
+        <div className="mb-8">
+          <div className="relative h-12 flex items-center justify-center">
+            {onShowGuide && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2" style={{ width:48, height:48 }}>
+                <button
+                  type="button"
+                  aria-label="Open guide"
+                  onClick={onShowGuide}
+                  className="w-12 h-12 flex items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 text-white/60 hover:text-white hover:bg-white/10 transition"
+                >
+                  <span className="text-xl font-semibold">?</span>
+                </button>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">App guide</div>
               </div>
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">Your month</div>
+            )}
+            <span className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Settings</span>
+            {/* Avatar */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2" title="Your Flowday avatar (auto-generated)">
+              <div className="relative group" style={{ width:48, height:48 }}>
+                <div
+                  className="w-full h-full rounded-full ring-1 ring-white/15 shadow-inner overflow-hidden"
+                  style={{ backgroundImage: gradientCSS, backgroundSize:'cover', backgroundPosition:'center', transition:'filter 0.6s', filter:'saturate(1.05)' }}
+                >
+                  <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), rgba(255,255,255,0) 60%)'}} />
+                  <div className="flex items-center justify-center w-full h-full text-[24px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none">
+                    {topEmoji}
+                  </div>
+                </div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">Your month</div>
+              </div>
             </div>
           </div>
+          {isTG && (
+            <div className="mt-2 flex justify-center">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG Version</span>
+            </div>
+          )}
         </div>
 
         <div className="divide-y divide-white/10">
