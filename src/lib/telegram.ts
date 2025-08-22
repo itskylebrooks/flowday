@@ -12,6 +12,7 @@ interface TelegramWebAppLike {
   HapticFeedback?: TelegramHaptics;
   disableVerticalSwipes?: () => void; // optional newer API
   enableVerticalSwipes?: () => void;  // complementary (if provided)
+  themeParams?: { button_color?: string; button_text_color?: string; accent_text_color?: string; hint_color?: string };
 }
 export const tg = (): TelegramWebAppLike | undefined => (window as unknown as { Telegram?: { WebApp?: TelegramWebAppLike }}).Telegram?.WebApp;
 
@@ -78,4 +79,14 @@ export function isTelegram(): boolean {
     const hasUser = !!anyW.initDataUnsafe?.user?.id;
     return hasQuery || hasUser;
   } catch { return false; }
+}
+
+export function telegramAccentColor(): string | undefined {
+  try {
+    const w = tg();
+    if (!w) return undefined;
+    const tp: { accent_text_color?: string; button_color?: string } | undefined = (w as { themeParams?: { accent_text_color?: string; button_color?: string } }).themeParams;
+    if (!tp) return undefined;
+    return tp.accent_text_color || tp.button_color || undefined;
+  } catch { return undefined; }
 }
