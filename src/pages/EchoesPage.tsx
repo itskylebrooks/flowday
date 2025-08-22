@@ -125,14 +125,16 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
                   // Heuristic: if length suggests wrap to 2 lines, nudge upward
                   const multiLine = len > 18; // width-based heuristic
                   const style = multiLine ? { marginTop: '-8px' } : undefined;
-                  return <div className={cls + ' text-black/85 break-words leading-snug mb-1'} style={style}>{title}</div>;
+                  // Use same ink color intensity as small sticker (title row ~60%)
+                  return <div className={cls + ' text-black/60 break-words leading-snug mb-1'} style={style}>{title}</div>;
                 })()}
                 <div className="flex-1" />
                 {active.song?.artist && (()=>{
                   const artist = active.song?.artist || '';
                   const multiArtist = artist.length > 18; // heuristic
                   const style = multiArtist ? { marginBottom: '-6px' } : undefined;
-                  return <div className="text-xs md:text-sm text-black/70 break-words leading-snug mt-1" style={style}>{artist}</div>;
+                  // Match sticker artist row tint (~50%) for consistency
+                  return <div className="text-xs md:text-sm text-black/50 break-words leading-snug mt-1" style={style}>{artist}</div>;
                 })()}
               </div>
             </div>
