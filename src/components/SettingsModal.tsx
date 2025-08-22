@@ -4,7 +4,7 @@ import { loadUser, saveUser } from '../lib/storage';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
-export default function SettingsModal({ open, onClose, entries }: { open: boolean; onClose: () => void; entries: Entry[] }) {
+export default function SettingsModal({ open, onClose, entries, onShowGuide }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -86,6 +86,16 @@ export default function SettingsModal({ open, onClose, entries }: { open: boolea
   <div className={"w-full max-w-sm rounded-t-2xl bg-[#111] p-6 pt-7 ring-1 ring-white/10 sm:rounded-2xl settings-panel " + (closing? 'closing':'')}
        onClick={(e)=>e.stopPropagation()}>
         <div className="mb-4 relative">
+          {onShowGuide && (
+            <button
+              type="button"
+              aria-label="Open guide"
+              onClick={onShowGuide}
+              className="absolute top-0 left-0 w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition"
+            >
+              <span className="text-lg font-semibold">?</span>
+            </button>
+          )}
           <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center">
             Settings
           </div>

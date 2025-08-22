@@ -4,6 +4,7 @@ import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
 import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
+import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
@@ -17,6 +18,14 @@ export default function App() {
   const MAX_ARTIST = 40;
   const [page, setPage] = useState<Page>('today');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(()=> {
+    try { return localStorage.getItem('flowday_seen_guide_v1') ? false : true; } catch { return true; }
+  });
+  useEffect(()=>{
+    if (guideOpen === false) {
+      try { localStorage.setItem('flowday_seen_guide_v1','1'); } catch { /* ignore */ }
+    }
+  }, [guideOpen]);
   const [activeDate, setActiveDate] = useState<string>(todayISO());
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
@@ -407,7 +416,8 @@ export default function App() {
         onClose={closePicker}
         onPick={handlePick}
       />
-  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} />
+  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} />
+  <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
     </div>
   );
 }
