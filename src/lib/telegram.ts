@@ -65,3 +65,17 @@ export function disableVerticalSwipes(){
 export function enableVerticalSwipes(){
   try { tg()?.enableVerticalSwipes?.(); } catch { /* ignore */ }
 }
+
+// Robust environment detection: ensures we're actually inside Telegram mini app
+// rather than just having the SDK script loaded in a normal browser tab.
+export function isTelegram(): boolean {
+  try {
+    const w = tg();
+    if (!w) return false;
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const hasQuery = /tgWebAppPlatform=/.test(search) || /tgWebAppVersion=/.test(search);
+    const anyW = w as unknown as { initDataUnsafe?: { user?: { id?: number|string } } };
+    const hasUser = !!anyW.initDataUnsafe?.user?.id;
+    return hasQuery || hasUser;
+  } catch { return false; }
+}

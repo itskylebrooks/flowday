@@ -6,7 +6,7 @@ import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
-import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes } from './lib/telegram';
+import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -16,12 +16,9 @@ import AuraBlock from './components/AuraBlock';
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   useEffect(()=> {
-    function check(){
-      const present = !!(window as unknown as { Telegram?: { WebApp?: unknown }}).Telegram?.WebApp;
-      setIsTG(present);
-    }
-    check();
-    const id = setInterval(check, 300);
+    function poll(){ setIsTG(isTelegram()); }
+    poll();
+    const id = setInterval(poll, 500);
     return ()=> clearInterval(id);
   }, []);
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
