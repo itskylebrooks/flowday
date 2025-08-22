@@ -125,7 +125,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   <div className={"w-full h-full sm:h-auto max-w-none sm:max-w-sm rounded-none sm:rounded-2xl bg-[#111] p-6 pt-7 pb-8 ring-1 ring-white/10 overflow-y-auto settings-panel " + (closing? 'closing':'')}
        style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
        onClick={(e)=>e.stopPropagation()}>
-        <div className="mb-4 relative">
+  <div className="mb-8 relative">
           {onShowGuide && (
             <button
               type="button"
@@ -136,10 +136,10 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <span className="text-xl font-semibold">?</span>
             </button>
           )}
-          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center flex items-center justify-center gap-2">
+          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center flex flex-col items-center justify-center">
             <span>Settings</span>
             {isTG && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG</span>
+              <span className="mt-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG Version</span>
             )}
           </div>
           {/* Auto Avatar */}
