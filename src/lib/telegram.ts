@@ -90,3 +90,10 @@ export function telegramAccentColor(): string | undefined {
     return tp.accent_text_color || tp.button_color || undefined;
   } catch { return undefined; }
 }
+
+// Prepared inline message share helper (Bot API 8.0+)
+export function sharePreparedMessage(id: string) {
+  try {
+    (window as unknown as { Telegram?: { WebApp?: { shareMessage?: (id:string)=>void } } }).Telegram?.WebApp?.shareMessage?.(id);
+  } catch { /* ignore */ }
+}

@@ -4,6 +4,7 @@ import MonthFlow from '../components/MonthFlow';
 import { loadUser } from '../lib/storage';
 import { todayISO } from '../lib/utils';
 import { useRef, useState } from 'react';
+import { sharePreparedMessage } from '../lib/telegram';
 import { toPng } from 'html-to-image';
 
 export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode, animKey }:
@@ -37,37 +38,59 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           backgroundColor: '#0E0E0E'
         });
         const stamp = todayISO();
-        const isTG = !!(window as unknown as { Telegram?: { WebApp?: unknown }}).Telegram?.WebApp;
+        const tgWebApp = (window as unknown as { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void; shareMessage?: (id:string)=>void } } }).Telegram?.WebApp;
+        const isTG = !!tgWebApp;
         if (isTG) {
-          // Attempt Web Share with file (best UX)
-          try {
-            const res = await fetch(dataUrl);
-            const blob = await res.blob();
-            const file = new File([blob], `flowday-${mode}-${stamp}.png`, { type: 'image/png' });
-            interface ShareCap { share?: (data: { files?: File[]; title?: string; text?: string; url?: string })=>Promise<void>; canShare?: (data:{ files?: File[] })=>boolean }
-            const navShare = navigator as ShareCap;
-            if (navShare.share && navShare.canShare && navShare.canShare({ files: [file] })) {
-              await navShare.share({ files: [file], title: 'Flowday', text: 'My flowday poster' });
-            } else if (navShare.share && !navShare.canShare) { // some browsers allow share without canShare
-              await navShare.share({ title: 'Flowday', text: 'My flowday poster', url: dataUrl });
-            } else {
-              // Fallback: show Telegram popup instruction + open image in new window
-              interface TGPopup { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void } } }
-              try { (window as unknown as TGPopup).Telegram?.WebApp?.showPopup?.({ message: 'Poster ready – tap and hold image to save/share.', buttons:[{id:'ok', text:'OK'}] }); } catch {/* ignore */}
-              const w = window.open('', '_blank');
-              if (w) {
-                w.document.write('<!doctype html><title>Flowday Poster</title><body style="margin:0;background:#0E0E0E;display:flex;align-items:center;justify-content:center;"><img style="width:100%;height:auto;image-rendering:-webkit-optimize-contrast;" src="'+dataUrl+'"/></body>');
+          const ua = (navigator.userAgent || navigator.vendor || '').toLowerCase();
+          const isAndroid = ua.includes('android');
+          if (isAndroid) {
+            // Android Telegram: feature not implemented yet
+            try { tgWebApp?.showPopup?.({ message: 'Poster sharing not available on Android yet.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
+          } else {
+            // iOS / Desktop Telegram: attempt prepared inline message share first
+            try {
+              const res = await fetch(dataUrl);
+              const blob = await res.blob();
+              const filename = `flowday-${mode}-${stamp}.png`;
+              let shared = false;
+              // Attempt backend prepared message (requires server endpoint)
+              try {
+                const form = new FormData();
+                form.append('file', new File([blob], filename, { type: 'image/png' }));
+                const resp = await fetch('/api/tg/save-prepared', { method: 'POST', body: form });
+                if (resp.ok) {
+                  const json = await resp.json();
+                  if (json && json.id) {
+                    sharePreparedMessage(json.id as string);
+                    shared = true;
+                  }
+                }
+              } catch { /* swallow and fallback */ }
+              if (!shared) {
+                // Fallback to Web Share API inside Telegram if available
+                interface ShareCap { share?: (data: { files?: File[]; title?: string; text?: string })=>Promise<void>; canShare?: (data:{ files?: File[] })=>boolean }
+                const file = new File([blob], filename, { type: 'image/png' });
+                const navShare = navigator as ShareCap;
+                try {
+                  if (navShare.share) {
+                    if (!navShare.canShare || navShare.canShare({ files: [file] })) {
+                      await navShare.share({ files: [file], title: 'Flowday', text: 'My Flowday poster' });
+                      shared = true;
+                    }
+                  }
+                } catch { /* ignore */ }
               }
-            }
-          } catch (shareErr) {
-            console.error('Share failed, fallback to popup', shareErr);
-            interface TGPopup { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void } } }
-            try { (window as unknown as TGPopup).Telegram?.WebApp?.showPopup?.({ message: 'Could not invoke share. Poster displayed in new tab.', buttons:[{id:'ok', text:'OK'}] }); } catch {/* ignore */}
-            const w = window.open(dataUrl, '_blank');
-            if (!w) {
-              // ultimate fallback: inject a temporary img so user can screenshot
-              const img = new Image(); img.src = dataUrl; img.style.position='fixed'; img.style.top='0'; img.style.left='0'; img.style.width='100%'; img.style.zIndex='9999'; document.body.appendChild(img);
-              setTimeout(()=> { img.remove(); }, 6000);
+              if (!shared) {
+                // Graceful final fallback: download so user still gets asset
+                const a = document.createElement('a');
+                a.download = filename;
+                a.href = dataUrl;
+                a.click();
+                try { tgWebApp?.showPopup?.({ message: 'Direct share unavailable. Poster downloaded instead.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
+              }
+            } catch (innerErr) {
+              console.error('Share preparation failed', innerErr);
+              try { tgWebApp?.showPopup?.({ message: 'Could not generate poster for sharing.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
             }
           }
         } else {
