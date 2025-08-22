@@ -130,9 +130,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               type="button"
               aria-label="Open guide"
               onClick={onShowGuide}
-              className="absolute top-0 left-0 w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition"
+              className="absolute top-0 left-0 w-12 h-12 flex items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 text-white/60 hover:text-white hover:bg-white/10 transition"
             >
-              <span className="text-lg font-semibold">?</span>
+              <span className="text-xl font-semibold">?</span>
             </button>
           )}
           <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center flex items-center justify-center gap-2">
