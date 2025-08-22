@@ -1,69 +1,174 @@
-# React + TypeScript + Vite
+<div align="center">
+  <img src="public/Flowday.png" alt="Flowday" width="120" />
+  <h1>Flowday</h1>
+  <p><strong>Your day distilled into color, emojis, and a vibe.</strong></p>
+  <p>A 20-second ritual that turns feelings into flowing visuals worth keeping and sharing.</p>
+</div>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+---
 
-Currently, two official plugins are available:
+## Why Flowday?
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Most journals want essays. Habit trackers reduce mood to numbers.  
+**Flowday captures a visual memory thread in seconds:**
 
-## Expanding the ESLint configuration
+- Pick up to three emojis  
+- Slide to a color  
+- (Optional) Add a song title + artist  
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+From these tiny inputs, Flowday creates:
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Weekly flowing ribbons  
+- Monthly continuous color mixes  
+- Emoji constellations (your emotional sky)  
+- Song Echoes (cassette-style snapshots)
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+No calendars. No streaks. Just ambient reflection.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+---
+
+## Principles
+
+1. **Frictionless** – quicker than replying to a text.  
+2. **Feels like art** – outputs look poster-ready by default.  
+3. **Local-first** – entries stay on your device unless you opt in later.  
+4. **Human tone** – playful, not clinical or gamified.
+
+---
+
+## Daily Flow
+
+| Step | Action | Feedback |
+|------|--------|----------|
+| 1 | Tap 1–3 emojis (triangle layout) | Empty slots invite filling |
+| 2 | Drag rainbow slider (unlocked after first emoji) | Aura appears; label flips to “Saved 🌈” |
+| 3 | (Optional) Add song | Becomes part of Echoes as a cassette |
+
+Edits allowed for today & yesterday only. Earlier entries are snapshots.
+
+---
+
+## Visual Surfaces
+
+**Today** – Emoji triangle + aura gradient, calm when saved, inviting when empty.  
+**Flows** –  
+- Week Flow: 7 blended bands in a soft wave  
+- Month Mix: a luminous ribbon, continuous color without ticks  
+Both exportable as minimal posters.  
+
+**Constellations** – Top emojis become nodes; co-occurrences connect them. Motion suggests a night sky.  
+
+**Echoes** – Days with songs show as cassette cards. Open one for spinning reels, date stamp, title & artist.
+
+---
+
+## Sharing & Posters
+
+Export weekly or monthly flows (PNG).  
+In Telegram: share directly.  
+Future: collaborative “blends” with friends — never a scrolling feed.
+
+---
+
+## Settings
+
+- Username (auto from Telegram when inside mini app)  
+- Reminders (placeholder for now)  
+- Local data wipe  
+
+---
+
+## Privacy
+
+- Entries stored locally with versioned schema  
+- Invalid data sanitized  
+- No network required for core use  
+- Future sync (e.g. Supabase) will be optional  
+
+```ts
+// Entry structure (v2)
+{
+  date: 'YYYY-MM-DD',
+  emojis: string[],       // max 3
+  hue?: number,           // only if emojis present
+  song?: { title?: string; artist?: string },
+  updatedAt: number
+}
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Tech Stack
+
+* React + TypeScript + Vite
+* Tailwind CSS
+* LocalStorage with migrations
+* Vitest + Testing Library
+* html-to-image for exports
+* Telegram Mini App wrappers (haptics, safe area, share)
+
+---
+
+## Telegram Mini App
+
+Inside Telegram:
+
+* SDK detection + init
+* Haptics on slider hue changes
+* Share posters through Telegram sheet
+
+Outside Telegram: all enhancements no-op.
+
+---
+
+## Development
+
+Run tests:
+
+```bash
+npm test
 ```
+
+Dev server:
+
+```bash
+npm run dev
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+---
+
+## Roadmap
+
+* More poster themes
+* Optional cloud sync
+* Collaborative blends
+* Lightweight reactions
+* PWA packaging
+
+Always under 20 seconds to capture.
+
+---
+
+## Contributing
+
+PRs welcome — keep UI minimal, add tests for changes, avoid heavy deps.
+
+---
+
+## License
+
+This code is provided for **personal viewing and inspiration only**.  
+All rights reserved © 2025 Kyle Brooks.  
+
+You may **not** copy, modify, redistribute, or use this project for commercial purposes without explicit permission.  
+
+---
+
+> Flowday is a daily glance inward — memory carried forward in color.
