@@ -4,6 +4,33 @@ import cassetteEject from '../assets/audio/cassette-eject.mp3';
 import type { Entry } from '../lib/types';
 import { hsl } from '../lib/utils';
 
+// Compute a contrasting reel (dot) color based on hue brightness so bright hues (e.g. yellows)
+// get darker reels instead of even brighter, improving legibility of reel shapes.
+function reelColor(hue: number): string {
+  // Approximate perceived luminance of the cassette background (s=80,l=50)
+  // Convert HSL -> RGB (simplified implementation) then compute WCAG luminance.
+  function hslToRgb(h: number, s: number, l: number): [number,number,number] {
+    s/=100; l/=100;
+    const k = (n: number) => (n + h/30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+    return [f(0), f(8), f(4)];
+  }
+  const [r,g,b] = hslToRgb(hue,80,50).map(v=> {
+    // gamma expansion
+    return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4);
+  });
+  const luminance = 0.2126*r + 0.7152*g + 0.0722*b; // 0..1
+  // If luminance high (bright background), choose darker reel; else a lighter one.
+  if (luminance > 0.55) {
+    return hsl(hue,70,38); // darker for bright cassette (e.g. yellow)
+  }
+  if (luminance < 0.25) {
+    return hsl(hue,65,62); // slightly lighter for very dark hues
+  }
+  return hsl(hue,75,55);
+}
+
 interface EchoesPageProps { entries: Entry[]; yearOffset: number; }
 
 export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
@@ -105,10 +132,14 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
       {active && (
         <div className={"fixed inset-0 z-50 flex items-center justify-center settings-overlay " + (closing ? 'closing':'')} onClick={beginClose}>
           <div className={"settings-panel bg-[#111] w-full max-w-sm mx-auto rounded-2xl p-6 relative " + (closing ? 'closing':'')} onClick={e=>e.stopPropagation()}>
-            <div className="text-center mb-3 text-sm font-medium tracking-wide text-white/85">{active.date}</div>
+            {(() => {
+              const d = new Date(active.date);
+              const weekday = d.toLocaleDateString(undefined, { weekday: 'long' });
+              return <div className="text-center mb-3 text-sm font-medium tracking-wide text-white/85">{weekday}</div>;
+            })()}
             <div className="rounded-xl mb-4 relative overflow-hidden h-[200px] px-6 py-4 flex flex-col cassette-preview" style={{
               background: typeof active.hue==='number'? hsl(active.hue,80,50): '#3a3a3a',
-              ['--reel-color' as unknown as string]: typeof active.hue==='number'? hsl(active.hue,75,60): '#bbb'
+              ['--reel-color' as unknown as string]: typeof active.hue==='number'? reelColor(active.hue): '#bbb'
             }}>
               {/* Animated SVG reels */}
               <div className="pointer-events-none absolute inset-0">
@@ -122,18 +153,24 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
                   let cls = 'text-base md:text-lg';
                   if (len > 34) cls = 'text-sm md:text-base';
                   else if (len > 26) cls = 'text-[15px] md:text-[17px]';
-                  // Heuristic: if length suggests wrap to 2 lines, nudge upward
-                  const multiLine = len > 18; // width-based heuristic
+                  const multiLine = len > 18;
                   const style = multiLine ? { marginTop: '-8px' } : undefined;
-                  // Use same ink color intensity as small sticker (title row ~60%)
                   return <div className={cls + ' text-black/60 break-words leading-snug mb-1'} style={style}>{title}</div>;
+                })()}
+                <div className="flex-1" />
+                {(() => {
+                  const d = new Date(active.date);
+                  const month = d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
+                  const day = d.getDate();
+                  const yr = ('' + d.getFullYear()).slice(-2);
+                  const formatted = `${month} ${day} \u2019${yr}`; // e.g. AUG 22 ’25
+                  return <div className="text-[11px] tracking-wide leading-tight mb-1" style={{ color: 'rgba(0,0,0,0.55)' }}>{formatted}</div>;
                 })()}
                 <div className="flex-1" />
                 {active.song?.artist && (()=>{
                   const artist = active.song?.artist || '';
-                  const multiArtist = artist.length > 18; // heuristic
+                  const multiArtist = artist.length > 18;
                   const style = multiArtist ? { marginBottom: '-6px' } : undefined;
-                  // Match sticker artist row tint (~50%) for consistency
                   return <div className="text-xs md:text-sm text-black/50 break-words leading-snug mt-1" style={style}>{artist}</div>;
                 })()}
               </div>

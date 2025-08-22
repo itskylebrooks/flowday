@@ -32,8 +32,8 @@
 .cassette-preview:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04)_0_6px,rgba(0,0,0,0.04)_6px_12px); mix-blend-mode:overlay; opacity:.35; pointer-events:none; }
 @keyframes reelSpin { from { transform:translate(-50%, -50%) rotate(0deg); } to { transform:translate(-50%, -50%) rotate(360deg); } }
 .reel-spin { position:absolute; width:96px; height:96px; top:50%; transform:translate(-50%, -50%) rotate(0deg); animation: reelSpin 18s linear infinite; will-change:transform; }
-.reel-left { left:25%; }
-.reel-right { left:75%; }
+.reel-left { left:22%; }
+.reel-right { left:78%; }
 .reel-right.reel-spin { animation-duration:22s; }
 .reel-svg { width:96px; height:96px; display:block; }
 
