@@ -12,6 +12,9 @@ import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
 
 export default function App() {
+  // Song length constraints
+  const MAX_TITLE = 48;
+  const MAX_ARTIST = 40;
   const [page, setPage] = useState<Page>('today');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeDate, setActiveDate] = useState<string>(todayISO());
@@ -94,7 +97,7 @@ export default function App() {
     if (page==='today') return formatActiveDate();
     if (page==='flows') return flowsMode==='week' ? relativeLabel('week', weekOffset) : relativeLabel('month', monthOffset);
     if (page==='constellations') return relativeLabel('year', yearOffset);
-    if (page==='echoes') return 'Echoes';
+  if (page==='echoes') return relativeLabel('year', yearOffset);
     return '';
   }
 
@@ -107,15 +110,13 @@ export default function App() {
       if (flowsMode==='week') { setWeekOffset(o=>o+1); return; }
       setMonthOffset(o=>o+1); return;
     }
-  if (page==='constellations') { setYearOffset(o=>o+1); return; }
-  if (page==='echoes') { return; }
+  if (page==='constellations' || page==='echoes') { setYearOffset(o=>o+1); return; }
   }
 
   function canReset(): boolean {
     if (page==='today') return activeDate !== todayISO();
     if (page==='flows') return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
-  if (page==='constellations') return yearOffset>0;
-  if (page==='echoes') return false;
+  if (page==='constellations' || page==='echoes') return yearOffset>0;
     return false;
   }
   function handleReset() {
@@ -125,7 +126,7 @@ export default function App() {
       if (flowsMode==='week') setWeekOffset(0); else setMonthOffset(0); 
       return; 
     }
-  if (page==='constellations') { setYearOffset(0); return; }
+  if (page==='constellations' || page==='echoes') { setYearOffset(0); return; }
   }
 
   function handleSliderPointer(e: React.PointerEvent) {
@@ -309,26 +310,26 @@ export default function App() {
             </div>
           )}
           {showSong && (
-            <div className="mt-6 space-y-3 song-inputs">
+      <div className="mt-6 space-y-3 song-inputs">
               <input
                 type="text"
                 className="song-input"
                 placeholder="Artist"
                 disabled={!editable}
-                value={entry.song?.artist || ''}
-                maxLength={48}
-                onChange={(e)=> updateSong({ artist: e.target.value })}
-                onBlur={(e)=> updateSong({ artist: e.target.value.trim() })}
+        value={entry.song?.artist || ''}
+        maxLength={MAX_ARTIST}
+        onChange={(e)=> updateSong({ artist: e.target.value.slice(0, MAX_ARTIST) })}
+        onBlur={(e)=> updateSong({ artist: e.target.value.trim().slice(0, MAX_ARTIST) })}
               />
               <input
                 type="text"
                 className="song-input"
                 placeholder="Song title"
                 disabled={!editable}
-                value={entry.song?.title || ''}
-                maxLength={60}
-                onChange={(e)=> updateSong({ title: e.target.value })}
-                onBlur={(e)=> updateSong({ title: e.target.value.trim() })}
+        value={entry.song?.title || ''}
+        maxLength={MAX_TITLE}
+        onChange={(e)=> updateSong({ title: e.target.value.slice(0, MAX_TITLE) })}
+        onBlur={(e)=> updateSong({ title: e.target.value.trim().slice(0, MAX_TITLE) })}
               />
             </div>
           )}
@@ -359,7 +360,7 @@ export default function App() {
       <div className="page-view" data-active={page==='echoes'}>
         {page==='echoes' && (
           <div className="h-full animate-fadeSwap">
-            <EchoesPage entries={entries} />
+            <EchoesPage entries={entries} yearOffset={yearOffset} />
           </div>
         )}
       </div>

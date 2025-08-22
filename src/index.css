@@ -18,9 +18,24 @@
 @keyframes fadeSlide { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 
 /* Cassette sticker (paper label) */
-.cassette-sticker { background:linear-gradient(135deg,#fdfdfd,#ececec); border:1px solid rgba(0,0,0,0.28); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.4); }
-.cassette-sticker:before { content:''; position:absolute; inset:0; pointer-events:none; border-radius:4px; background:linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0)); mix-blend-mode:overlay; opacity:0.6; }
+.cassette-sticker { background:linear-gradient(135deg,#f9f3e5,#ead9b9); border:1px solid rgba(140,110,60,0.35); border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,245,0.5); }
+.cassette-sticker:before { content:''; position:absolute; inset:0; pointer-events:none; border-radius:4px; background:linear-gradient(180deg,rgba(255,250,240,0.75),rgba(255,250,240,0.05)); mix-blend-mode:overlay; opacity:0.65; }
 .cassette-sticker { position:relative; }
+/* Cassette sticker writing lines */
+.cassette-sticker .cassette-row { position:relative; padding-bottom:3px; }
+.cassette-sticker .cassette-row:after { content:''; position:absolute; left:0; right:0; bottom:0; height:1px; background:rgba(0,0,0,0.32); }
+.cassette-sticker .cassette-row.artist-row:after { background:rgba(0,0,0,0.28); }
+/* Echoes year transition */
+@keyframes echoesYearIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.echoes-year-anim { animation: echoesYearIn .45s cubic-bezier(.4,0,.25,1); }
+/* Cassette preview reels */
+.cassette-preview:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04)_0_6px,rgba(0,0,0,0.04)_6px_12px); mix-blend-mode:overlay; opacity:.35; pointer-events:none; }
+@keyframes reelSpin { from { transform:translate(-50%, -50%) rotate(0deg); } to { transform:translate(-50%, -50%) rotate(360deg); } }
+.reel-spin { position:absolute; width:96px; height:96px; top:50%; transform:translate(-50%, -50%) rotate(0deg); animation: reelSpin 18s linear infinite; will-change:transform; }
+.reel-left { left:25%; }
+.reel-right { left:75%; }
+.reel-right.reel-spin { animation-duration:22s; }
+.reel-svg { width:96px; height:96px; display:block; }
 
 /* Poster meta fade/slide */
 .poster-meta { opacity:0; transform:translateY(6px) scale(.97); max-height:0; overflow:hidden; transition: opacity .38s cubic-bezier(.4,0,.2,1), transform .42s cubic-bezier(.4,0,.2,1), max-height .45s ease; }
