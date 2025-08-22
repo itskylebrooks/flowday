@@ -1,4 +1,6 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import cassetteInsert from '../assets/audio/cassette-insert.mp3';
+import cassetteEject from '../assets/audio/cassette-eject.mp3';
 import type { Entry } from '../lib/types';
 import { hsl } from '../lib/utils';
 
@@ -32,16 +34,31 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
   const [active, setActive] = useState<Entry | null>(null);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<number | null>(null);
+  // Audio elements managed imperatively (constructed once)
+  const openAudioRef = useRef<HTMLAudioElement | null>(null);
+  const closeAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(()=> {
+    openAudioRef.current = new Audio(cassetteInsert);
+    closeAudioRef.current = new Audio(cassetteEject);
+    if (openAudioRef.current) openAudioRef.current.volume = 0.55;
+    if (closeAudioRef.current) closeAudioRef.current.volume = 0.55;
+  }, []);
 
   function openModal(e: Entry) {
     if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
     setClosing(false);
     setActive(e);
+  // Play open (insert) sound
+  const a = openAudioRef.current;
+  if (a) { try { a.currentTime = 0; a.play(); } catch { /* ignore play interruption */ } }
   }
 
   function beginClose() {
     if (!active || closing) return;
     setClosing(true);
+  // Play close (eject) sound
+  const a = closeAudioRef.current;
+  if (a) { try { a.currentTime = 0; a.play(); } catch { /* ignore play interruption */ } }
     // Match settingsOut duration (.28s) + small buffer
     closeTimer.current = window.setTimeout(()=>{ setActive(null); setClosing(false); }, 300);
   }
@@ -54,6 +71,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
 
   return (
     <div className="h-full flex flex-col">
+  {/* Audio handled via imported mp3 modules */}
       <div key={"year-"+yearOffset} className="flex-1 overflow-y-auto px-4 pb-10 space-y-10 echoes-year-anim">
         {byMonth.map(([ym, list]) => (
           <div key={ym} className="space-y-4">
