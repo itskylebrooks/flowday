@@ -4,7 +4,7 @@ import { loadUser, saveUser, loadReminders, saveReminders } from '../lib/storage
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
-export default function SettingsModal({ open, onClose, entries, onShowGuide }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void }) {
+export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -135,8 +135,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
               <span className="text-lg font-semibold">?</span>
             </button>
           )}
-          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center">
-            Settings
+          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center flex items-center justify-center gap-2">
+            <span>Settings</span>
+            {isTG && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG</span>
+            )}
           </div>
           {/* Auto Avatar */}
           <div className="absolute top-0 right-0" title="Your Flowday avatar (auto-generated)">

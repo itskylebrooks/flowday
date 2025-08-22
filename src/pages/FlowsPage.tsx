@@ -36,11 +36,47 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           pixelRatio: 2,
           backgroundColor: '#0E0E0E'
         });
-        const a = document.createElement('a');
         const stamp = todayISO();
-        a.download = `flowday-${mode}-${stamp}.png`;
-        a.href = dataUrl;
-        a.click();
+        const isTG = !!(window as unknown as { Telegram?: { WebApp?: unknown }}).Telegram?.WebApp;
+        if (isTG) {
+          // Attempt Web Share with file (best UX)
+          try {
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const file = new File([blob], `flowday-${mode}-${stamp}.png`, { type: 'image/png' });
+            interface ShareCap { share?: (data: { files?: File[]; title?: string; text?: string; url?: string })=>Promise<void>; canShare?: (data:{ files?: File[] })=>boolean }
+            const navShare = navigator as ShareCap;
+            if (navShare.share && navShare.canShare && navShare.canShare({ files: [file] })) {
+              await navShare.share({ files: [file], title: 'Flowday', text: 'My flowday poster' });
+            } else if (navShare.share && !navShare.canShare) { // some browsers allow share without canShare
+              await navShare.share({ title: 'Flowday', text: 'My flowday poster', url: dataUrl });
+            } else {
+              // Fallback: show Telegram popup instruction + open image in new window
+              interface TGPopup { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void } } }
+              try { (window as unknown as TGPopup).Telegram?.WebApp?.showPopup?.({ message: 'Poster ready – tap and hold image to save/share.', buttons:[{id:'ok', text:'OK'}] }); } catch {/* ignore */}
+              const w = window.open('', '_blank');
+              if (w) {
+                w.document.write('<!doctype html><title>Flowday Poster</title><body style="margin:0;background:#0E0E0E;display:flex;align-items:center;justify-content:center;"><img style="width:100%;height:auto;image-rendering:-webkit-optimize-contrast;" src="'+dataUrl+'"/></body>');
+              }
+            }
+          } catch (shareErr) {
+            console.error('Share failed, fallback to popup', shareErr);
+            interface TGPopup { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void } } }
+            try { (window as unknown as TGPopup).Telegram?.WebApp?.showPopup?.({ message: 'Could not invoke share. Poster displayed in new tab.', buttons:[{id:'ok', text:'OK'}] }); } catch {/* ignore */}
+            const w = window.open(dataUrl, '_blank');
+            if (!w) {
+              // ultimate fallback: inject a temporary img so user can screenshot
+              const img = new Image(); img.src = dataUrl; img.style.position='fixed'; img.style.top='0'; img.style.left='0'; img.style.width='100%'; img.style.zIndex='9999'; document.body.appendChild(img);
+              setTimeout(()=> { img.remove(); }, 6000);
+            }
+          }
+        } else {
+          // Standard browser download
+          const a = document.createElement('a');
+          a.download = `flowday-${mode}-${stamp}.png`;
+          a.href = dataUrl;
+          a.click();
+        }
   // Hide meta immediately after capture
   setPosterMode(false);
       } catch (err) {

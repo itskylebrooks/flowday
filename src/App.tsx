@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import type { Entry, Page, Song } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
@@ -6,6 +6,7 @@ import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
+import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -13,6 +14,23 @@ import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
 
 export default function App() {
+  const [isTG, setIsTG] = useState<boolean>(false);
+  useEffect(()=> {
+    function check(){
+      const present = !!(window as unknown as { Telegram?: { WebApp?: unknown }}).Telegram?.WebApp;
+      setIsTG(present);
+    }
+    check();
+    const id = setInterval(check, 300);
+    return ()=> clearInterval(id);
+  }, []);
+  // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
+  const HEADER_H = 56; // tailwind h-14
+  const FOOTER_H = 56; // tailwind h-14
+  const headerTopOffset = isTG ? 8 : 0;      // px push-down for top nav
+  const footerBottomOffset = isTG ? 20 : 0;  // px raise-up for bottom nav
+  const contentTop = HEADER_H + headerTopOffset;
+  const contentBottom = FOOTER_H + footerBottomOffset;
   // Song length constraints
   const MAX_TITLE = 48;
   const MAX_ARTIST = 40;
@@ -43,17 +61,23 @@ export default function App() {
   useEffect(()=> { setShowSong(false); }, [activeDate]);
 
   // Color slider & aura state
-  const sliderRef = useRef<HTMLDivElement | null>(null);
+  interface SliderEl extends HTMLDivElement { _wheelTO?: ReturnType<typeof setTimeout>; }
+  const sliderRef = useRef<SliderEl | null>(null);
+  const lastHapticRef = useRef<{t:number; hue:number}>({ t:0, hue: -999 });
   const [showAura, setShowAura] = useState<boolean>(!!entry.hue && entry.emojis.length > 0);
   useEffect(() => {
     setShowAura(!!entry.hue && entry.emojis.length > 0);
   }, [entry.hue, entry.emojis.length]);
+
 
   // Offsets for contextual navigation
   const [weekOffset, setWeekOffset] = useState(0); // 0=this week, 1=last week, etc.
   const [monthOffset, setMonthOffset] = useState(0); // 0=this month
   const [yearOffset, setYearOffset] = useState(0); // 0=this year
   const [flowsMode, setFlowsMode] = useState<'week'|'month'>('month');
+
+
+  // (Removed Telegram MainButton 'Done' — no longer shown)
 
   // Reset offsets when switching to today page
   useEffect(()=>{ if(page==='today'){ setWeekOffset(0); setMonthOffset(0); setYearOffset(0);} }, [page]);
@@ -110,7 +134,7 @@ export default function App() {
     return '';
   }
 
-  function handleBack() {
+  const handleBack = useCallback(() => {
     if (page==='today') {
       setActiveDate(addDays(activeDate, -1));
       return;
@@ -120,7 +144,24 @@ export default function App() {
       setMonthOffset(o=>o+1); return;
     }
   if (page==='constellations' || page==='echoes') { setYearOffset(o=>o+1); return; }
-  }
+  }, [page, activeDate, flowsMode]);
+  const stepBackInTime = useCallback(()=> { handleBack(); }, [handleBack]);
+  // Telegram BackButton mapping (must be after callbacks defined)
+  useEffect(()=> {
+    if (!isTG) return;
+    setBackButton(true, stepBackInTime);
+  }, [isTG, stepBackInTime]);
+
+  // Prevent Telegram swipe-to-close while interacting with Constellations (pan/zoom)
+  useEffect(()=> {
+    if (!isTG) return;
+    if (page === 'constellations') {
+      disableVerticalSwipes();
+      return () => { enableVerticalSwipes(); };
+    } else {
+      enableVerticalSwipes();
+    }
+  }, [isTG, page]);
 
   function canReset(): boolean {
     if (page==='today') return activeDate !== todayISO();
@@ -147,6 +188,15 @@ export default function App() {
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
     setShowAura(true);
     setEntries((old) => upsertEntry(old, next));
+    if (isTG) {
+      // Throttle haptics: only fire if >140ms since last or hue moved >=12 degrees
+      const now = performance.now();
+      const last = lastHapticRef.current;
+      if (now - last.t > 140 || Math.abs(hue - last.hue) >= 12) {
+        hapticLight();
+        lastHapticRef.current = { t: now, hue };
+      }
+    }
   }
 
   // which slot is being edited
@@ -220,7 +270,7 @@ export default function App() {
   return (
     <div className="app-viewport fixed inset-0 w-full bg-[#0E0E0E] text-white overflow-hidden">
       {/* Header (fixed) */}
-      <div className="fixed top-0 left-0 right-0 z-20 box-border h-14 text-sm text-white/90">
+  <div className="fixed left-0 right-0 z-20 box-border h-14 text-sm text-white/90" style={{ top: headerTopOffset }}>
         <div className="mx-auto w-full max-w-[425px] grid grid-cols-3 items-center px-4">
           <div className="justify-self-start flex items-center gap-1">
             <button aria-label="Navigate back" onClick={handleBack}
@@ -252,7 +302,7 @@ export default function App() {
       </div>
 
   {/* Content area sized between fixed bars (no scroll) */}
-  <div className="absolute inset-x-0 top-14 bottom-14 overflow-hidden page-stack">
+  <div className="absolute inset-x-0 overflow-hidden page-stack" style={{ top: contentTop, bottom: contentBottom }}>
       <div className="page-view" data-active={page==='today'}>
         <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
@@ -290,11 +340,22 @@ export default function App() {
                 const next = { ...entry, hue, updatedAt: Date.now() };
                 setShowAura(true);
                 setEntries(old => upsertEntry(old, next));
+                if (isTG) {
+                  const now = performance.now();
+                  const last = lastHapticRef.current;
+                  if (now - last.t > 140 || Math.abs(hue - last.hue) >= 12) {
+                    hapticLight();
+                    lastHapticRef.current = { t: now, hue };
+                  }
+                }
                 e.preventDefault();
               }
             }}
-            onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); handleSliderPointer(e); }}
+            onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); if(isTG) disableVerticalSwipes(); handleSliderPointer(e); }}
             onPointerMove={(e)=>{ if(e.buttons!==1) return; if(!editable || entry.emojis.length===0) return; handleSliderPointer(e); }}
+            onPointerUp={()=>{ if(isTG) { enableVerticalSwipes(); } }}
+            onPointerCancel={()=>{ if(isTG) { enableVerticalSwipes(); } }}
+            onWheel={()=> { if(isTG && sliderRef.current) { disableVerticalSwipes(); if (sliderRef.current._wheelTO) clearTimeout(sliderRef.current._wheelTO); sliderRef.current._wheelTO = setTimeout(()=> enableVerticalSwipes(), 260); } }}
             className={
               'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 ' +
               (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed')
@@ -379,7 +440,7 @@ export default function App() {
     </div>
 
   {/* Bottom nav (fixed) */}
-  <nav className="fixed bottom-0 left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md">
+  <nav className="fixed left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md" style={{ bottom: footerBottomOffset }}>
   <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
           <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')}>
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
@@ -403,13 +464,20 @@ export default function App() {
           </IconButton>
   </div>
       </nav>
+      {isTG && footerBottomOffset > 0 && (
+        <div
+          aria-hidden="true"
+          className="fixed left-0 right-0 bg-black/40 backdrop-blur-md pointer-events-none z-10"
+          style={{ height: footerBottomOffset, bottom: 0 }}
+        />
+      )}
   <EmojiPickerModal
         open={pickerOpen}
         recents={recents}
         onClose={closePicker}
         onPick={handlePick}
       />
-  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} />
+  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} />
   <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
     </div>
   );
