@@ -93,38 +93,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
     }
   }, [open, reminders]);
 
-  // Lightweight in-tab scheduler (not push notifications)
-  useEffect(()=>{
-    // Check every minute
-    let timer: number | null = null;
-    function check() {
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2,'0');
-      const mm = String(now.getMinutes()).padStart(2,'0');
-      const timeStr = `${hh}:${mm}`;
-      const r = reminders;
-      // Daily
-      if (r.dailyEnabled && r.dailyTime === timeStr) {
-        // Only trigger if page visible
-        if (document.visibilityState === 'visible') {
-          console.log('[Flowday] Daily reminder');
-        }
-      }
-      // Weekly
-      if (r.weeklyEnabled && r.weeklyTime === timeStr && now.getDay() === r.weeklyDay) {
-        if (document.visibilityState === 'visible') {
-          console.log('[Flowday] Weekly recap reminder');
-        }
-      }
-    }
-    // align to next minute
-    const ms = 60000 - (Date.now() % 60000) + 50;
-    const start = window.setTimeout(()=>{
-      check();
-      timer = window.setInterval(check, 60000) as unknown as number;
-    }, ms);
-    return ()=> { window.clearTimeout(start); if(timer) window.clearInterval(timer); };
-  }, [reminders]);
+  // Reminder execution logic removed (placeholder) — only settings & persistence remain for now.
 
   // ---- Time helpers (stored internally always as 24h HH:MM) ----
   function parse24(str: string): { h: number; m: number } {
@@ -347,7 +316,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
                 )})()}
               </div>
               <p className="text-[11px] text-white/35 leading-relaxed">
-                Reminders run only while Flowday is open (local device).
+                Reminders don't work for now and will be implemented in a future update.
               </p>
             </div>
           </div>
