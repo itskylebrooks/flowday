@@ -59,8 +59,10 @@ export default function App() {
   const editable = canEdit(activeDate);
   // Song inputs reveal state
   const [showSong, setShowSong] = useState(false);
+  // Telegram full-screen song editor state
+  const [songEditorOpen, setSongEditorOpen] = useState(false);
   // Reset song inputs collapsed when changing the active date
-  useEffect(()=> { setShowSong(false); }, [activeDate]);
+  useEffect(()=> { setShowSong(false); setSongEditorOpen(false); }, [activeDate]);
 
   // Color slider & aura state
   interface SliderEl extends HTMLDivElement { _wheelTO?: ReturnType<typeof setTimeout>; }
@@ -368,40 +370,52 @@ export default function App() {
             </div>
           )}
 
-          {/* Song of the day reveal */}
-          {!showSong && (
+          {/* Song of the day (inline web / overlay in Telegram) */}
+          {(!isTG && !showSong) && (
             <div className="mt-6 flex justify-center">
               <button
                 type="button"
                 onClick={()=> setShowSong(true)}
                 className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/20 text-sm font-medium text-white/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30"
               >
-                Song of the day
+                {entry.song ? 'Edit song' : 'Song of the day'}
               </button>
             </div>
           )}
-          {showSong && (
-      <div className="mt-6 space-y-3 song-inputs">
+          {(!isTG && showSong) && (
+            <div className="mt-6 space-y-3 song-inputs">
               <input
                 type="text"
                 className="song-input"
                 placeholder="Artist"
                 disabled={!editable}
-        value={entry.song?.artist || ''}
-        maxLength={MAX_ARTIST}
-        onChange={(e)=> updateSong({ artist: e.target.value.slice(0, MAX_ARTIST) })}
-        onBlur={(e)=> updateSong({ artist: e.target.value.trim().slice(0, MAX_ARTIST) })}
+                value={entry.song?.artist || ''}
+                maxLength={MAX_ARTIST}
+                onChange={(e)=> updateSong({ artist: e.target.value.slice(0, MAX_ARTIST) })}
+                onBlur={(e)=> updateSong({ artist: e.target.value.trim().slice(0, MAX_ARTIST) })}
               />
               <input
                 type="text"
                 className="song-input"
                 placeholder="Song title"
                 disabled={!editable}
-        value={entry.song?.title || ''}
-        maxLength={MAX_TITLE}
-        onChange={(e)=> updateSong({ title: e.target.value.slice(0, MAX_TITLE) })}
-        onBlur={(e)=> updateSong({ title: e.target.value.trim().slice(0, MAX_TITLE) })}
+                value={entry.song?.title || ''}
+                maxLength={MAX_TITLE}
+                onChange={(e)=> updateSong({ title: e.target.value.slice(0, MAX_TITLE) })}
+                onBlur={(e)=> updateSong({ title: e.target.value.trim().slice(0, MAX_TITLE) })}
               />
+            </div>
+          )}
+          {isTG && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={()=> editable && setSongEditorOpen(true)}
+                className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/20 text-sm font-medium text-white/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={!editable}
+              >
+                {entry.song ? 'Edit song' : 'Song of the day'}
+              </button>
             </div>
           )}
         </div>
@@ -438,6 +452,7 @@ export default function App() {
     </div>
 
   {/* Bottom nav (fixed) */}
+  {!songEditorOpen && (
   <nav className="fixed left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md" style={{ bottom: footerBottomOffset }}>
   <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
           <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')} accent={isTG ? tgAccent : undefined}>
@@ -461,8 +476,9 @@ export default function App() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor"><path d="M15 4.58152V12C15 13.6569 13.6569 15 12 15C10.3431 15 9 13.6569 9 12C9 10.3431 10.3431 9 12 9C12.3506 9 12.6872 9.06016 13 9.17071V2.04938C18.0533 2.5511 22 6.81465 22 12C22 17.5229 17.5228 22 12 22C6.47715 22 2 17.5229 2 12C2 6.81465 5.94668 2.5511 11 2.04938V4.0619C7.05369 4.55399 4 7.92038 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 8.64262 17.9318 5.76829 15 4.58152Z"/></svg>
           </IconButton>
   </div>
-      </nav>
-      {isTG && footerBottomOffset > 0 && (
+    </nav>
+  )}
+    {isTG && footerBottomOffset > 0 && !songEditorOpen && (
         <div
           aria-hidden="true"
           className="fixed left-0 right-0 bg-black/40 backdrop-blur-md pointer-events-none z-10"
@@ -477,6 +493,72 @@ export default function App() {
       />
   <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} />
   <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
+  {/* Telegram full-screen song editor overlay */}
+  {isTG && songEditorOpen && (
+    <SongEditorOverlay
+      artist={entry.song?.artist || ''}
+      title={entry.song?.title || ''}
+      maxArtist={MAX_ARTIST}
+      maxTitle={MAX_TITLE}
+      onChange={(p)=> updateSong(p)}
+  onClose={()=> setSongEditorOpen(false)}
+      editable={editable}
+    />
+  )}
+    </div>
+  );
+}
+
+interface SongEditorOverlayProps {
+  artist: string; title: string; maxArtist: number; maxTitle: number;
+  onChange: (p: Partial<Song>) => void;
+  onClose: () => void;
+  editable: boolean;
+}
+
+function SongEditorOverlay({ artist, title, maxArtist, maxTitle, onChange, onClose, editable }: SongEditorOverlayProps) {
+  const artistRef = useRef<HTMLInputElement | null>(null);
+  const [closing, setClosing] = useState(false);
+  useEffect(()=> { artistRef.current?.focus(); }, []);
+  function handleDone() {
+    if (closing) return;
+    setClosing(true);
+    // match songEditorOut duration (.32s) + small buffer
+    setTimeout(()=> onClose(), 340);
+  }
+  return (
+    <div className={"fixed inset-0 z-[200] bg-[#0b0b0b] flex flex-col px-6 pt-12 pb-10 song-editor-overlay " + (closing ? 'closing':'') }>
+      <div className="flex items-center justify-between mb-8">
+        <button onClick={handleDone} className="px-4 py-2 rounded-full bg-white/10 text-sm font-medium text-white/85 hover:bg-white/15 active:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/30">Done</button>
+        <div className="text-sm text-white/50 tracking-wide">Song of the day</div>
+        <div className="w-[72px]" />
+      </div>
+      <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-start gap-5">
+        <input
+          ref={artistRef}
+          type="text"
+          placeholder="Artist"
+          className="song-input text-base"
+          disabled={!editable}
+          value={artist}
+          maxLength={maxArtist}
+          onChange={(e)=> onChange({ artist: e.target.value.slice(0, maxArtist) })}
+          onBlur={(e)=> onChange({ artist: e.target.value.trim().slice(0, maxArtist) })}
+        />
+        <input
+          type="text"
+          placeholder="Song title"
+          className="song-input text-base"
+          disabled={!editable}
+          value={title}
+          maxLength={maxTitle}
+          onChange={(e)=> onChange({ title: e.target.value.slice(0, maxTitle) })}
+          onBlur={(e)=> onChange({ title: e.target.value.trim().slice(0, maxTitle) })}
+        />
+        <div className="mt-4 text-xs text-white/35 leading-relaxed">
+          Saved automatically. Leave fields blank to clear.
+        </div>
+      </div>
     </div>
   );
 }
