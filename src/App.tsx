@@ -238,7 +238,10 @@ export default function App() {
             )}
           </div>
           <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">
-            <span key={headerCenterText()} className="inline-block animate-fadeSwap">{headerCenterText()}</span>
+            <span
+              key={page==='constellations' ? 'constellations-static' : headerCenterText()}
+              className={page==='constellations' ? 'inline-block' : 'inline-block animate-fadeSwap'}
+            >{headerCenterText()}</span>
           </div>
           <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
@@ -371,8 +374,8 @@ export default function App() {
       </div>
       <div className="page-view" data-active={page==='constellations'}>
         {page==='constellations' && (
-          <div className="h-full animate-fadeSwap">
-            <ConstellationsPage entries={constellationEntries} />
+          <div className="h-full">
+            <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
           </div>
         )}
       </div>

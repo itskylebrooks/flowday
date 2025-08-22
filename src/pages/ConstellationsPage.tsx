@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry } from '../lib/types';
 import { emojiStats, clamp } from '../lib/utils';
 
-export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
+export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
 
   const MAX_NODES = 14;
@@ -51,7 +51,7 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     const R = Math.max(10, Math.min(width, height) / 2 - maxRadius - NODE_PADDING);
     const cx = width / 2, cy = height / 2;
     const nodes: SimNode[] = sized.map((s, i, arr) => {
-      const angle = (i / arr.length) * Math.PI * 2;
+      const angle = (i / Math.max(1, arr.length)) * Math.PI * 2; // protect divide by 0
       const x = cx + R * Math.cos(angle);
       const y = cy + R * Math.sin(angle);
       return { emo: s.emo, x, y, vx: 0, vy: 0, r: s.size / 2 };
@@ -67,7 +67,17 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     }
     nodesRef.current = nodes;
     edgesRef.current = edges;
+    // Force immediate render so stale nodes disappear (important when becoming empty)
+    setTick(t=>t+1);
   }, [topEmojis, pair, freq, width, height]);
+
+  // Reset view transform when entries dataset changes (year navigation)
+  useEffect(()=> {
+    const v = viewRef.current;
+    v.tx = 0; v.ty = 0; v.scale = 1;
+    v.targetTx = 0; v.targetTy = 0; v.targetScale = 1;
+    momentumRef.current.active = false;
+  }, [entries]);
 
   // Drag handling
   const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean } | null>(null);
@@ -116,7 +126,10 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   useEffect(() => {
     let last = performance.now();
     const nodes = nodesRef.current;
-    if (!nodes.length) return;
+    if (!nodes.length) { // still trigger a repaint for empty state, but no loop
+      setTick(t=>t+1);
+      return;
+    }
     function step(now: number) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -344,8 +357,8 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
       <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
       <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
-
-  <div className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3" style={{touchAction:'none'}}>
+      {/* Animated canvas wrapper only */}
+  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap" style={{touchAction:'none'}}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           width={width}
@@ -385,6 +398,11 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
       })}
       </g>
         </svg>
+        {nodes.length===0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-label="No data yet">
+            <div className="font-poster text-white/18" style={{ fontSize: 170, lineHeight: 1 }}>?</div>
+          </div>
+        )}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-xs font-medium select-none" style={{minHeight:'14px'}}>
           {focus ? (
