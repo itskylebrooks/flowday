@@ -23,8 +23,12 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   const frameRef = useRef<number | null>(null);
   const [, setTick] = useState(0); // trigger rerender without reading value
   // View transform (pan + zoom)
-  const viewRef = useRef({ tx: 0, ty: 0, scale: 1 });
+  // View transform + animation targets
+  const viewRef = useRef({ tx: 0, ty: 0, scale: 1, targetTx: 0, targetTy: 0, targetScale: 1 });
   const panDragRef = useRef<{startX:number; startY:number; startTx:number; startTy:number; active:boolean} | null>(null);
+  const momentumRef = useRef<{vx:number; vy:number; active:boolean}>({ vx:0, vy:0, active:false });
+  const lastPanSampleRef = useRef<{x:number; y:number; t:number} | null>(null);
+  const svgElRef = useRef<SVGSVGElement | null>(null);
   // Multi-touch pinch state
   const touchesRef = useRef<Map<number, {x:number; y:number}>>(new Map());
   const pinchRef = useRef<{
@@ -84,6 +88,8 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     const { x, y } = svgToWorld(e.clientX, e.clientY, svg);
     draggingRef.current = { index, px: x, py: y, moved: false };
     (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
+  // Cancel momentum when grabbing a node
+  momentumRef.current.active = false;
   }
   function onPointerMove(e: React.PointerEvent<SVGGElement>) {
     if (!draggingRef.current) return;
@@ -116,6 +122,7 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
       last = now;
       const nodes = nodesRef.current;
       const edges = edgesRef.current;
+      const view = viewRef.current;
       // Skip physics while dragging to keep node under pointer
       if (!draggingRef.current) {
         // Reset small accumulative force (implicit in velocity updates)
@@ -162,6 +169,33 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
           if (n.y > maxY) { n.y = maxY; n.vy *= -0.4; }
         }
       }
+      // View interpolation for smooth zoom / pan
+      const lerp = (a:number,b:number,t:number)=> a + (b-a)*t;
+      // If user directly changed scale/tx/ty (wheel/pinch), sync targets
+      if (Math.abs(view.scale - view.targetScale) < 0.0001) view.targetScale = view.scale;
+      if (Math.abs(view.tx - view.targetTx) < 0.0001) view.targetTx = view.tx;
+      if (Math.abs(view.ty - view.targetTy) < 0.0001) view.targetTy = view.ty;
+
+      // Momentum (in px/ms) -> integrate to target positions
+      if (momentumRef.current.active) {
+        // convert px/ms to px/frame using dt (sec) *1000
+        view.targetTx += momentumRef.current.vx * dt * 1000;
+        view.targetTy += momentumRef.current.vy * dt * 1000;
+        // Decay velocity
+        const decay = Math.pow(0.05, dt); // fast-ish decay
+        momentumRef.current.vx *= decay;
+        momentumRef.current.vy *= decay;
+        if (Math.hypot(momentumRef.current.vx, momentumRef.current.vy) < 0.005) {
+          momentumRef.current.active = false;
+        }
+      }
+
+      // Smooth approach
+      const ease = 1 - Math.pow(0.001, dt); // time-scale invariant smoothing
+      view.scale = lerp(view.scale, view.targetScale, ease*0.9);
+      view.tx = lerp(view.tx, view.targetTx, ease);
+      view.ty = lerp(view.ty, view.targetTy, ease);
+
       // Update view (throttle - every frame for smoothness with small node count)
       setTick(t => t + 1);
       frameRef.current = requestAnimationFrame(step);
@@ -198,6 +232,10 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
   v.tx = e.clientX - svg.getBoundingClientRect().left - world.x * newScale;
   v.ty = e.clientY - svg.getBoundingClientRect().top - world.y * newScale;
     v.scale = newScale;
+  // Keep targets in sync so animation loop doesn't fight wheel zoom
+  v.targetScale = v.scale;
+  v.targetTx = v.tx;
+  v.targetTy = v.ty;
     setTick(t=>t+1);
   }
 
@@ -227,6 +265,8 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
       if (draggingRef.current) return;
       const v = viewRef.current;
       panDragRef.current = { startX: e.clientX, startY: e.clientY, startTx: v.tx, startTy: v.ty, active: true };
+      momentumRef.current.active = false; // cancel existing inertia
+      lastPanSampleRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
     }
     svg.setPointerCapture(e.pointerId);
   }
@@ -248,14 +288,28 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
       const rect = svg.getBoundingClientRect();
       v.tx = pinch.anchorScreen.x - rect.left - pinch.anchorWorld.x * scale;
       v.ty = pinch.anchorScreen.y - rect.top - pinch.anchorWorld.y * scale;
+  // Sync targets to avoid interpolation snapping back
+  v.targetScale = v.scale;
+  v.targetTx = v.tx;
+  v.targetTy = v.ty;
       setTick(t=>t+1);
       return; // don't also pan
     }
     // Pan (single pointer, no pinch, no node drag)
     const d = panDragRef.current; if (d && d.active && !pinch.active) {
       const v = viewRef.current;
-      v.tx = d.startTx + (e.clientX - d.startX);
-      v.ty = d.startTy + (e.clientY - d.startY);
+      const nx = d.startTx + (e.clientX - d.startX);
+      const ny = d.startTy + (e.clientY - d.startY);
+      v.tx = v.targetTx = nx;
+      v.ty = v.targetTy = ny;
+      const now = performance.now();
+      const last = lastPanSampleRef.current;
+      if (last && now - last.t > 12) {
+        // compute velocity in px/ms
+        momentumRef.current.vx = (e.clientX - last.x) / (now - last.t);
+        momentumRef.current.vy = (e.clientY - last.y) / (now - last.t);
+        lastPanSampleRef.current = { x: e.clientX, y: e.clientY, t: now };
+      }
       setTick(t=>t+1);
     }
   }
@@ -264,7 +318,24 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     if (touchesRef.current.size < 2 && pinchRef.current.active) {
       pinchRef.current.active = false; // end pinch
     }
-    if (panDragRef.current) panDragRef.current.active = false;
+    if (panDragRef.current) {
+      // Launch inertia if velocity significant
+      const last = lastPanSampleRef.current;
+      const now = performance.now();
+      if (last) {
+        const dt = now - last.t;
+        if (dt < 80) {
+          const vx = momentumRef.current.vx;
+          const vy = momentumRef.current.vy;
+          const speed = Math.hypot(vx, vy);
+          if (speed > 0.02) { // threshold px/ms
+            momentumRef.current.active = true;
+          }
+        }
+      }
+      panDragRef.current.active = false;
+      lastPanSampleRef.current = null;
+    }
   }
 
   const { tx, ty, scale } = viewRef.current;
@@ -286,6 +357,7 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
           onPointerDown={onBgPointerDown}
           onPointerMove={onBgPointerMove}
           onPointerUp={onBgPointerUp}
+          ref={el=> { svgElRef.current = el; }}
         >
           <g transform={`translate(${tx} ${ty}) scale(${scale})`}>
           {/* Edges: only render when focused, and only those connected to focus */}
@@ -314,27 +386,42 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
       </g>
         </svg>
 
-        {focus && (
-          <div className="mt-2 text-center text-xs text-white/70">
-            <span className="mr-1">{focus}</span>
-            <span>×{freq.get(focus) || 0}</span>
-          </div>
-        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-xs font-medium select-none" style={{minHeight:'14px'}}>
+          {focus ? (
+            <span className="inline-flex items-center justify-center rounded-full bg-black/40 px-2 py-0.5 text-white/80 backdrop-blur-sm border border-white/10">
+              <span className="mr-1">{focus}</span>
+              <span>×{freq.get(focus) || 0}</span>
+            </span>
+          ) : (
+            // Invisible placeholder to keep height stable
+            <span className="opacity-0">placeholder</span>
+          )}
+        </div>
       </div>
 
       {/* Zoom Controls */}
       <ConstellationControls onAction={(action)=>{
         const v = viewRef.current;
+        const svg = svgElRef.current;
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        const centerScreenX = rect.left + rect.width/2;
+        const centerScreenY = rect.top + rect.height/2;
         if (action === 'reset') {
-          v.scale = 1; v.tx = 0; v.ty = 0; setTick(t=>t+1); return;
+          v.targetScale = 1;
+          v.targetTx = 0;
+          v.targetTy = 0;
+          setTick(t=>t+1);
+          return;
         }
-        const factor = action === 'in' ? 1.2 : 1/1.2;
-        const worldCx = (width/2 - v.tx) / v.scale;
-        const worldCy = (height/2 - v.ty) / v.scale;
-        const newScale = clamp(v.scale * factor, 0.55, 2.75);
-        v.tx = width/2 - worldCx * newScale;
-        v.ty = height/2 - worldCy * newScale;
-        v.scale = newScale;
+        const factor = action === 'in' ? 1.25 : 1/1.25;
+        const targetScale = clamp(v.scale * factor, 0.55, 2.75);
+        // Maintain center anchor
+        const worldCx = (centerScreenX - rect.left - v.tx) / v.scale;
+        const worldCy = (centerScreenY - rect.top - v.ty) / v.scale;
+        v.targetScale = targetScale;
+        v.targetTx = (centerScreenX - rect.left) - worldCx * targetScale;
+        v.targetTy = (centerScreenY - rect.top) - worldCy * targetScale;
         setTick(t=>t+1);
       }} />
     </div>
