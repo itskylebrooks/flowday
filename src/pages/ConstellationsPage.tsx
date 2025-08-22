@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry } from '../lib/types';
 import { emojiStats, clamp } from '../lib/utils';
 
@@ -11,26 +11,167 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     [freq]
   );
 
-  const nodePositions = useMemo(() => {
-    const width = 360, height = 360;
-    const cx = width / 2, cy = height / 2, R = 110;
-    return topEmojis.map(([emo], i) => {
-      const angle = (i / Math.max(1, topEmojis.length)) * Math.PI * 2;
-      return { emo, x: Math.round(cx + R * Math.cos(angle)), y: Math.round(cy + R * Math.sin(angle)) };
-    });
-  }, [topEmojis]);
+  // Force-directed layout state (kept outside React state for perf)
+  interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
+  interface SimEdge { a: number; b: number; w: number; }
+  // Canvas dimensions (slightly smaller to reduce footprint)
+  const CANVAS_SIZE = 325;
+  const width = CANVAS_SIZE, height = CANVAS_SIZE;
+  const NODE_PADDING = 24; // desired padding from edge (in px)
+  const nodesRef = useRef<SimNode[]>([]);
+  const edgesRef = useRef<SimEdge[]>([]);
+  const frameRef = useRef<number | null>(null);
+  const [, setTick] = useState(0); // trigger rerender without reading value
+  // View transform (pan + zoom)
+  const viewRef = useRef({ tx: 0, ty: 0, scale: 1 });
+  const panDragRef = useRef<{startX:number; startY:number; startTx:number; startTy:number; active:boolean} | null>(null);
+  // Multi-touch pinch state
+  const touchesRef = useRef<Map<number, {x:number; y:number}>>(new Map());
+  const pinchRef = useRef<{
+    active: boolean;
+    initialDist: number;
+    initialScale: number;
+    anchorWorld: { x: number; y: number };
+    anchorScreen: { x: number; y: number };
+  }>({ active: false, initialDist: 0, initialScale: 1, anchorWorld: { x:0, y:0 }, anchorScreen: { x:0, y:0 } });
 
-  const edges = useMemo(() => {
-    const acc: { a: string; b: string; w: number }[] = [];
+  // (Re)initialize simulation when top emojis change
+  useEffect(() => {
+    // Precompute sizes (frequency -> size) so we can respect bounds fully (size/2 + padding)
+    const sized = topEmojis.map(([emo]) => {
+      const count = freq.get(emo) || 1;
+      const size = clamp(24 + count * 6, 24, 64); // keep logic in sync w/ render
+      return { emo, size };
+    });
+    const maxRadius = sized.reduce((m, s) => Math.max(m, s.size / 2), 0);
+    const R = Math.max(10, Math.min(width, height) / 2 - maxRadius - NODE_PADDING);
+    const cx = width / 2, cy = height / 2;
+    const nodes: SimNode[] = sized.map((s, i, arr) => {
+      const angle = (i / arr.length) * Math.PI * 2;
+      const x = cx + R * Math.cos(angle);
+      const y = cy + R * Math.sin(angle);
+      return { emo: s.emo, x, y, vx: 0, vy: 0, r: s.size / 2 };
+    });
+    // Build edges from pair counts referencing node indices
+    const indexByEmoji = new Map(nodes.map((n, i) => [n.emo, i] as const));
+    const edges: SimEdge[] = [];
     for (const [key, w] of pair.entries()) {
-      if (w < 1) continue; // include any co-mention at least once
+      if (w < 1) continue;
       const [a, b] = key.split('__');
-      const A = nodePositions.find(n => n.emo === a);
-      const B = nodePositions.find(n => n.emo === b);
-      if (A && B) acc.push({ a, b, w });
+      const ia = indexByEmoji.get(a); const ib = indexByEmoji.get(b);
+      if (ia != null && ib != null) edges.push({ a: ia, b: ib, w });
     }
-    return acc;
-  }, [pair, nodePositions]);
+    nodesRef.current = nodes;
+    edgesRef.current = edges;
+  }, [topEmojis, pair, freq, width, height]);
+
+  // Drag handling
+  const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean } | null>(null);
+
+  function svgToWorld(clientX: number, clientY: number, svg: SVGSVGElement) {
+    const rect = svg.getBoundingClientRect();
+    const { tx, ty, scale } = viewRef.current;
+    const x = (clientX - rect.left - tx) / scale;
+    const y = (clientY - rect.top - ty) / scale;
+    return { x, y };
+  }
+
+  function onPointerDown(e: React.PointerEvent<SVGGElement>, index: number) {
+    e.stopPropagation();
+    // If a pinch is in progress or a second touch begins, disable node dragging
+    if (e.pointerType === 'touch' && touchesRef.current.size > 0) return;
+    const svg = e.currentTarget.ownerSVGElement as SVGSVGElement;
+    const { x, y } = svgToWorld(e.clientX, e.clientY, svg);
+    draggingRef.current = { index, px: x, py: y, moved: false };
+    (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent<SVGGElement>) {
+    if (!draggingRef.current) return;
+    const svg = e.currentTarget.ownerSVGElement as SVGSVGElement;
+    const { x: nx, y: ny } = svgToWorld(e.clientX, e.clientY, svg);
+    const d = draggingRef.current;
+    if (Math.abs(nx - d.px) + Math.abs(ny - d.py) > 2) d.moved = true;
+    const node = nodesRef.current[d.index];
+  node.x = clamp(nx, node.r + NODE_PADDING, width - (node.r + NODE_PADDING));
+  node.y = clamp(ny, node.r + NODE_PADDING, height - (node.r + NODE_PADDING));
+    node.vx = 0; node.vy = 0;
+    setTick(t => t + 1);
+  }
+  function onPointerUp(_: React.PointerEvent<SVGGElement>, emo: string) {
+    if (!draggingRef.current) return;
+    const d = draggingRef.current;
+    draggingRef.current = null;
+    if (!d.moved) {
+      setFocus(f => f === emo ? null : emo);
+    }
+  }
+
+  // Physics simulation loop
+  useEffect(() => {
+    let last = performance.now();
+    const nodes = nodesRef.current;
+    if (!nodes.length) return;
+    function step(now: number) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const nodes = nodesRef.current;
+      const edges = edgesRef.current;
+      // Skip physics while dragging to keep node under pointer
+      if (!draggingRef.current) {
+        // Reset small accumulative force (implicit in velocity updates)
+        // Repulsion (naive O(n^2), fine for <=14 nodes)
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i], b = nodes[j];
+            let dx = a.x - b.x; let dy = a.y - b.y; let dist2 = dx*dx + dy*dy;
+            if (dist2 < 1) { dx = (Math.random()-0.5); dy = (Math.random()-0.5); dist2 = dx*dx + dy*dy; }
+            const dist = Math.sqrt(dist2);
+            const rep = 2200 / dist2; // repulsion constant
+            const fx = (dx / dist) * rep;
+            const fy = (dy / dist) * rep;
+            a.vx += fx * dt; a.vy += fy * dt;
+            b.vx -= fx * dt; b.vy -= fy * dt;
+          }
+        }
+        // Spring attraction for co-usage
+        for (const e of edges) {
+          const a = nodes[e.a], b = nodes[e.b];
+            const dx = b.x - a.x; const dy = b.y - a.y; const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
+            const base = 150; const factor = 18; const minL = 40;
+            const target = clamp(base - e.w * factor, minL, base);
+            const k = 0.15; // spring stiffness
+            const f = k * (dist - target);
+            const fx = (dx / dist) * f;
+            const fy = (dy / dist) * f;
+            a.vx += fx * dt; a.vy += fy * dt;
+            b.vx -= fx * dt; b.vy -= fy * dt;
+        }
+        // Integrate
+        for (const n of nodes) {
+          n.vx *= 0.9; n.vy *= 0.9; // friction
+          n.x += n.vx * 60 * dt; // scale velocities for visual speed
+          n.y += n.vy * 60 * dt;
+          // bounds
+          const minX = n.r + NODE_PADDING;
+          const maxX = width - (n.r + NODE_PADDING);
+          const minY = n.r + NODE_PADDING;
+          const maxY = height - (n.r + NODE_PADDING);
+          if (n.x < minX) { n.x = minX; n.vx *= -0.4; }
+          if (n.x > maxX) { n.x = maxX; n.vx *= -0.4; }
+          if (n.y < minY) { n.y = minY; n.vy *= -0.4; }
+          if (n.y > maxY) { n.y = maxY; n.vy *= -0.4; }
+        }
+      }
+      // Update view (throttle - every frame for smoothness with small node count)
+      setTick(t => t + 1);
+      frameRef.current = requestAnimationFrame(step);
+    }
+    frameRef.current = requestAnimationFrame(step);
+    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
+  }, [topEmojis, width, height]);
+
+  const nodes = nodesRef.current;
+  const edges = edgesRef.current;
 
   const [focus, setFocus] = useState<string | null>(null);
   // Reset focus when dataset changes (e.g., year navigation)
@@ -41,39 +182,136 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
     return { op: connected ? 0.5 : 0, sw: connected ? clamp(1 + w * 0.6, 1, 4) : 0 };
   }
 
-  const width = 360, height = 360;
+  // width/height defined earlier
+
+  // Wheel zoom handler
+  function onWheel(e: React.WheelEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const svg = e.currentTarget;
+  // Determine world coords at cursor to anchor zoom
+  const v = viewRef.current;
+  const zoomFactor = Math.exp(-e.deltaY * 0.0015); // smooth exponential zoom
+  const newScale = clamp(v.scale * zoomFactor, 0.55, 2.75);
+    // Keep point (x,y) under cursor stable: tx' = cx - x*scale'
+  // We only used x above; recalc world y to avoid extra variable warning
+  const world = svgToWorld(e.clientX, e.clientY, svg);
+  v.tx = e.clientX - svg.getBoundingClientRect().left - world.x * newScale;
+  v.ty = e.clientY - svg.getBoundingClientRect().top - world.y * newScale;
+    v.scale = newScale;
+    setTick(t=>t+1);
+  }
+
+  // Background pan handlers on outer svg (not on nodes)
+  function onBgPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    const svg = e.currentTarget;
+    // Track touches for pinch
+    touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touchesRef.current.size === 2) {
+      // Initiate pinch
+      const arr = [...touchesRef.current.values()];
+      const dx = arr[0].x - arr[1].x; const dy = arr[0].y - arr[1].y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const midpoint = { x: (arr[0].x + arr[1].x)/2, y: (arr[0].y + arr[1].y)/2 };
+      const world = svgToWorld(midpoint.x, midpoint.y, svg);
+      const v = viewRef.current;
+      pinchRef.current = {
+        active: true,
+        initialDist: dist,
+        initialScale: v.scale,
+        anchorWorld: world,
+        anchorScreen: midpoint
+      };
+      panDragRef.current = null; // cancel any pan
+    } else if (touchesRef.current.size === 1) {
+      // Start panning only if single pointer and not dragging a node
+      if (draggingRef.current) return;
+      const v = viewRef.current;
+      panDragRef.current = { startX: e.clientX, startY: e.clientY, startTx: v.tx, startTy: v.ty, active: true };
+    }
+    svg.setPointerCapture(e.pointerId);
+  }
+  function onBgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    const svg = e.currentTarget;
+    if (touchesRef.current.has(e.pointerId)) {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    // Pinch handling
+    const pinch = pinchRef.current;
+    if (pinch.active && touchesRef.current.size >= 2) {
+      const arr = [...touchesRef.current.values()].slice(0,2);
+      const dx = arr[0].x - arr[1].x; const dy = arr[0].y - arr[1].y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const v = viewRef.current;
+      const scale = clamp(pinch.initialScale * (dist / pinch.initialDist), 0.55, 2.75);
+      v.scale = scale;
+      // Keep anchor world point fixed at original screen midpoint.
+      const rect = svg.getBoundingClientRect();
+      v.tx = pinch.anchorScreen.x - rect.left - pinch.anchorWorld.x * scale;
+      v.ty = pinch.anchorScreen.y - rect.top - pinch.anchorWorld.y * scale;
+      setTick(t=>t+1);
+      return; // don't also pan
+    }
+    // Pan (single pointer, no pinch, no node drag)
+    const d = panDragRef.current; if (d && d.active && !pinch.active) {
+      const v = viewRef.current;
+      v.tx = d.startTx + (e.clientX - d.startX);
+      v.ty = d.startTy + (e.clientY - d.startY);
+      setTick(t=>t+1);
+    }
+  }
+  function onBgPointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    touchesRef.current.delete(e.pointerId);
+    if (touchesRef.current.size < 2 && pinchRef.current.active) {
+      pinchRef.current.active = false; // end pinch
+    }
+    if (panDragRef.current) panDragRef.current.active = false;
+  }
+
+  const { tx, ty, scale } = viewRef.current;
 
   return (
     <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
       <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
       <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
 
-      <div className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3" style={{touchAction:'none'}}>
-        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}
-             shapeRendering="geometricPrecision" textRendering="geometricPrecision" style={{pointerEvents:'none', userSelect:'none'}}>
+  <div className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3" style={{touchAction:'none'}}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
+          shapeRendering="geometricPrecision"
+          textRendering="geometricPrecision"
+          style={{ userSelect:'none', touchAction:'none', cursor: panDragRef.current? 'grabbing':'grab' }}
+          onWheel={onWheel}
+          onPointerDown={onBgPointerDown}
+          onPointerMove={onBgPointerMove}
+          onPointerUp={onBgPointerUp}
+        >
+          <g transform={`translate(${tx} ${ty}) scale(${scale})`}>
           {/* Edges: only render when focused, and only those connected to focus */}
           {edges.map((e, idx) => {
-            const A = nodePositions.find(n => n.emo === e.a)!;
-            const B = nodePositions.find(n => n.emo === e.b)!;
-            const { op, sw } = edgeStyle(e.a, e.b, e.w);
+            const A = nodes[e.a]; const B = nodes[e.b];
+            const { op, sw } = edgeStyle(A.emo, B.emo, e.w);
             return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="white" strokeWidth={sw} opacity={op}
               className="edge-line" data-connected={op>0} />;
           })}
 
-      {nodePositions.map((n) => {
-            const count = freq.get(n.emo) || 1;
-            const size = clamp(24 + count * 6, 24, 64); // visibly bigger and scales with mentions
-            const active = focus === n.emo;
-            return (
-          <g key={n.emo} transform={`translate(${n.x}, ${n.y})`} onClick={() => setFocus(active ? null : n.emo)}
-            style={{ cursor: 'pointer', pointerEvents:'auto' }}>
-                {/* Remove gray circle; render emoji larger with subtle outline for contrast */}
-                <text textAnchor="middle" dominantBaseline="central" fontSize={size}
-                      stroke="black" strokeWidth={0.6} strokeOpacity={0.25}>{n.emo}</text>
-                <text textAnchor="middle" dominantBaseline="central" fontSize={size}>{n.emo}</text>
-              </g>
-            );
-          })}
+  {nodes.map((n, idx) => {
+        const count = freq.get(n.emo) || 1;
+        const size = clamp(24 + count * 6, 24, 64);
+        return (
+          <g key={n.emo} transform={`translate(${n.x}, ${n.y})`}
+             onPointerDown={(e) => onPointerDown(e, idx)}
+             onPointerMove={onPointerMove}
+             onPointerUp={(e) => onPointerUp(e, n.emo)}
+             style={{ cursor: 'pointer', pointerEvents:'auto' }}>
+            <text textAnchor="middle" dominantBaseline="central" fontSize={size}
+                  stroke="black" strokeWidth={0.6} strokeOpacity={0.25}>{n.emo}</text>
+            <text textAnchor="middle" dominantBaseline="central" fontSize={size}>{n.emo}</text>
+          </g>
+        );
+      })}
+      </g>
         </svg>
 
         {focus && (
@@ -83,6 +321,40 @@ export default function ConstellationsPage({ entries }: { entries: Entry[] }) {
           </div>
         )}
       </div>
+
+      {/* Zoom Controls */}
+      <ConstellationControls onAction={(action)=>{
+        const v = viewRef.current;
+        if (action === 'reset') {
+          v.scale = 1; v.tx = 0; v.ty = 0; setTick(t=>t+1); return;
+        }
+        const factor = action === 'in' ? 1.2 : 1/1.2;
+        const worldCx = (width/2 - v.tx) / v.scale;
+        const worldCy = (height/2 - v.ty) / v.scale;
+        const newScale = clamp(v.scale * factor, 0.55, 2.75);
+        v.tx = width/2 - worldCx * newScale;
+        v.ty = height/2 - worldCy * newScale;
+        v.scale = newScale;
+        setTick(t=>t+1);
+      }} />
+    </div>
+  );
+}
+
+function ConstellationControls({ onAction }: { onAction: (a:'in'|'out'|'reset')=>void }) {
+  // Enlarged buttons for easier tap targets
+  const btnCls = "w-12 h-12 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition";
+  return (
+    <div className="mt-3 flex justify-center gap-3 text-white select-none">
+      <button aria-label="Zoom out" onClick={()=>onAction('out')} className={btnCls}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M5 11V13H19V11H5Z"/></svg>
+      </button>
+      <button aria-label="Reset view" onClick={()=>onAction('reset')} className={btnCls}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM15.4462 9.96803L9.96803 15.4462C9.38559 15.102 8.89798 14.6144 8.55382 14.032L14.032 8.55382C14.6144 8.89798 15.102 9.38559 15.4462 9.96803Z"/></svg>
+      </button>
+      <button aria-label="Zoom in" onClick={()=>onAction('in')} className={btnCls}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>
+      </button>
     </div>
   );
 }
