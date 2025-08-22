@@ -85,13 +85,14 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
             </form>
           </div>
           <div className="py-3">
-            <div className="text-sm font-medium">Memories</div>
-            <div className="text-xs text-white/60">Export monthly/weekly/yearly posters</div>
-          </div>
-          <div className="py-3">
             <div className="text-sm font-medium">Reminders</div>
             <div className="text-xs text-white/60">Daily reminder time, weekly recap</div>
           </div>
+          {/* Removed Memories section */}
+          {/* <div className="py-3">
+            <div className="text-sm font-medium">Reminders</div>
+            <div className="text-xs text-white/60">Daily reminder time, weekly recap</div>
+          </div> */}
         </div>
 
   <div className="mt-5 flex justify-center">
