@@ -274,18 +274,8 @@ export default function App() {
           </div>
 
           {/* Label above slider */}
-          <div className="mt-2 text-center text-sm text-white/75 h-[34px] flex items-start justify-center">
-            {showAura ? (
-              <div className="leading-snug">
-                <div>Saved 🌈</div>
-                <div className="text-[11px] text-white/50 mt-0.5">(tap aura to edit)</div>
-              </div>
-            ) : (
-              <div className="leading-snug">
-                <div>Pick your vibe</div>
-                <div className="text-[11px] opacity-0 mt-0.5 select-none pointer-events-none">placeholder</div>
-              </div>
-            )}
+          <div className="mt-2 text-center text-sm text-white/75 min-h-[20px] flex items-center justify-center">
+            {showAura ? 'Saved 🌈' : 'Pick your vibe'}
           </div>
 
           {/* Thicker color slider (stays in place) */}
