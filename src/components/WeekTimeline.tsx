@@ -26,6 +26,15 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
     return typeof e?.hue === 'number' ? hsl(e.hue) : gray;
   });
 
+  const hasHue = entries.some(e => typeof e.hue === 'number');
+  if (!hasHue) {
+    return (
+      <div className="mx-auto w-[320px] flex items-center justify-center select-none" style={{ height: 200 }}>
+        <div className="text-white/18 font-poster" style={{ fontSize: 170, lineHeight: 1 }} aria-label="No data yet">?</div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-[320px]">
       <svg

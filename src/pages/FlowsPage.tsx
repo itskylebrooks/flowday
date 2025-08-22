@@ -6,8 +6,8 @@ import { todayISO } from '../lib/utils';
 import { useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
 
-export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode }:
-  { recent7: Entry[]; monthHues: number[]; monthEmpty: boolean; mode: 'week' | 'month'; onToggleMode: () => void }) {
+export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode, animKey }:
+  { recent7: Entry[]; monthHues: number[]; monthEmpty: boolean; mode: 'week' | 'month'; onToggleMode: () => void; animKey: string }) {
 
   const user = loadUser();
   const [posterMode, setPosterMode] = useState(false); // controls meta visibility
@@ -61,7 +61,7 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           <div className="mt-1 text-center poster-sub text-white/70 tracking-wider">My flowday</div>
         </div>
         <div className="relative">
-          <div key={mode} className="flow-anim w-full flex items-center justify-center">
+          <div key={animKey + '-' + mode} className="flow-anim w-full flex items-center justify-center">
             {mode === 'week' ? (
               <WeekTimeline entries={recent7} />
             ) : (

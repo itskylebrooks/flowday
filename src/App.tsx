@@ -338,7 +338,14 @@ export default function App() {
       <div className="page-view" data-active={page==='flows'}>
         {page==='flows' && (
           <div className="h-full animate-fadeSwap">
-            <FlowsPage recent7={recent7} monthHues={monthHues} monthEmpty={monthEmpty} mode={flowsMode} onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')} />
+            <FlowsPage
+              recent7={recent7}
+              monthHues={monthHues}
+              monthEmpty={monthEmpty}
+              mode={flowsMode}
+              animKey={flowsMode==='week' ? 'w'+weekOffset : 'm'+monthOffset}
+              onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')}
+            />
           </div>
         )}
       </div>

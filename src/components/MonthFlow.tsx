@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useId } from 'react';
 import { hsl } from '../lib/utils';
 
 export default function MonthFlow({ hues, empty=false, className = '' }: { hues: number[]; empty?: boolean; className?: string }) {
@@ -7,12 +7,19 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
   const glowRef = useRef<SVGPathElement | null>(null);
   const maskPathRef = useRef<SVGPathElement | null>(null);
   const glitterRefs = useRef<SVGCircleElement[]>([]);
+  // Unique IDs per instance so multiple MonthFlow components don't clash
+  const rawId = useId();
+  const uid = rawId.replace(/:/g,'');
+  const gradId = `monthFlowGrad-${uid}`;
+  const glowId = `flowGlow-${uid}`;
+  const glitterGradId = `glitterGrad-${uid}`;
+  const maskId = `monthMask-${uid}`;
+  const fadeLeftId = `fadeLeft-${uid}`;
+  const fadeRightId = `fadeRight-${uid}`;
 
-  // Build up to three gradients from hues
+  // Build up to three gradients from hues (only relevant if not empty)
   const main = hues.slice(0, 3).map((h, i) => ({ color: hsl(h), offset: i / Math.max(1, hues.slice(0, 3).length - 1) }));
-  // If single hue, add slight neighboring hues for subtle depth
-  const stops = ((): Array<{ offset: number; color: string }> => {
-    if (main.length >= 2) return main;
+  const stops = main.length >= 2 ? main : (() => {
     const h = hues[0] ?? 220;
     return [hsl((h + 350) % 360), hsl(h), hsl((h + 10) % 360)].map((c, i) => ({ color: c, offset: i / 2 }));
   })();
@@ -84,73 +91,74 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
     return () => cancelAnimationFrame(raf);
   }, [hueKey]);
 
+  if (empty) {
+    return (
+      <div className={'mx-auto flex items-center justify-center select-none ' + className} style={{ width, height }}>
+        <div className="text-white/18 font-poster" style={{ fontSize: 170, lineHeight: 1 }} aria-label="No data yet">?</div>
+      </div>
+    );
+  }
+
   return (
     <svg className={'mx-auto block ' + className} viewBox={`0 0 ${width} ${height}`} width={width} height={height}
          shapeRendering="geometricPrecision">
       <defs>
-        <linearGradient id="monthFlowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          {empty ? (
-            <>
-              <stop offset="0%" stopColor="#ffffff" />
-              <stop offset="100%" stopColor="#ffffff" />
-            </>
-          ) : (
-            stops.map((s, i) => (
-              <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} />
-            ))
-          )}
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
+          {stops.map((s, i) => (
+            <stop key={i} offset={`${s.offset * 100}%`} stopColor={s.color} />
+          ))}
         </linearGradient>
         {/* Soft glow to avoid strict borders */}
-        <filter id="flowGlow" x="-25%" y="-60%" width="150%" height="220%">
+  <filter id={glowId} x="-25%" y="-60%" width="150%" height="220%">
           <feGaussianBlur stdDeviation="14" result="blur" />
         </filter>
         {/* Glitter appearance */}
-        <radialGradient id="glitterGrad" cx="50%" cy="50%" r="50%">
+  <radialGradient id={glitterGradId} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
           <stop offset="60%" stopColor="#fff" stopOpacity="0.35" />
           <stop offset="100%" stopColor="#fff" stopOpacity="0" />
         </radialGradient>
         {/* Mask to clip glitter inside the wave */}
-        <mask id="monthMask">
+  <mask id={maskId}>
           <rect x="0" y="0" width={width} height={height} fill="black" />
           <path ref={maskPathRef} fill="white" />
         </mask>
         {/* Edge fade overlays (used as simple fills, not masks) */}
-        <linearGradient id="fadeLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+  <linearGradient id={fadeLeftId} x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#0E0E0E" stopOpacity="1" />
           <stop offset="35%" stopColor="#0E0E0E" stopOpacity="1" />
           <stop offset="100%" stopColor="#0E0E0E" stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="fadeRight" x1="0%" y1="0%" x2="100%" y2="0%">
+  <linearGradient id={fadeRightId} x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#0E0E0E" stopOpacity="0" />
           <stop offset="65%" stopColor="#0E0E0E" stopOpacity="1" />
           <stop offset="100%" stopColor="#0E0E0E" stopOpacity="1" />
         </linearGradient>
       </defs>
       {/* Glow underlay */}
-  <path ref={glowRef} fill={empty ? '#ffffff' : 'url(#monthFlowGrad)'} opacity={empty ? 0.15 : 0.35} filter="url(#flowGlow)" />
+  <path ref={glowRef} fill={`url(#${gradId})`} opacity={0.35} filter={`url(#${glowId})`} />
       {/* Main band */}
-  <path ref={pathRef} fill={empty ? '#ffffff' : 'url(#monthFlowGrad)'} opacity={empty ? 0.9 : 0.96} />
+  <path ref={pathRef} fill={`url(#${gradId})`} opacity={0.96} />
       {/* Glitter layer */}
-  <g style={{ mixBlendMode: 'screen' }} mask="url(#monthMask)">
+  <g style={{ mixBlendMode: 'screen' }} mask={`url(#${maskId})`}>
         {Array.from({ length: seedsRef.current!.length }).map((_, i) => (
           <circle
             key={i}
             ref={(el) => { if (el) glitterRefs.current[i] = el; }}
             r={seedsRef.current![i].r}
-    fill={empty ? '#ffffff' : 'url(#glitterGrad)'}
-    opacity={empty ? 0.25 : 0.5}
+  fill={`url(#${glitterGradId})`}
+    opacity={0.5}
           />
         ))}
       </g>
       {/* Edge fade overlays (above wave). Using rectangles keeps existing glitter mask logic untouched. */}
-      <g pointerEvents="none" opacity={empty ? 0.75 : 1}>
+  <g pointerEvents="none" opacity={1}>
         {/* Hard cut rectangles to guarantee vertical edge */}
         <rect x={0} y={0} width={4} height={height} fill="#0E0E0E" />
         <rect x={width-4} y={0} width={4} height={height} fill="#0E0E0E" />
         {/* Fading depth overlays */}
-        <rect x={0} y={0} width={95} height={height} fill="url(#fadeLeft)" />
-        <rect x={width-95} y={0} width={95} height={height} fill="url(#fadeRight)" />
+  <rect x={0} y={0} width={95} height={height} fill={`url(#${fadeLeftId})`} />
+  <rect x={width-95} y={0} width={95} height={height} fill={`url(#${fadeRightId})`} />
       </g>
     </svg>
   );
