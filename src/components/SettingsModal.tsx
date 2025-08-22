@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser } from '../lib/storage';
+import { loadUser, saveUser, loadReminders, saveReminders } from '../lib/storage';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -11,6 +11,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [reminders, setReminders] = useState(()=> loadReminders());
+  const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
   const CLOSE_DURATION = 280; // ms (match CSS .28s)
@@ -25,6 +27,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
       const current = loadUser();
       setUsername(current.username);
       setDirty(false); setSaving(false); setSavedFlash(false);
+  // refresh reminders
+  setReminders(loadReminders());
+  remindersDirtyRef.current = false;
     }
   }, [open]);
 
@@ -79,6 +84,71 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
     }
     return { topEmoji: emoji, gradientCSS: gradient };
   }, [entries]);
+
+  // Persist reminders when modal closes if changed
+  useEffect(()=>{
+    if (!open && remindersDirtyRef.current) {
+      saveReminders(reminders);
+      remindersDirtyRef.current = false;
+    }
+  }, [open, reminders]);
+
+  // Lightweight in-tab scheduler (not push notifications)
+  useEffect(()=>{
+    // Check every minute
+    let timer: number | null = null;
+    function check() {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      const timeStr = `${hh}:${mm}`;
+      const r = reminders;
+      // Daily
+      if (r.dailyEnabled && r.dailyTime === timeStr) {
+        // Only trigger if page visible
+        if (document.visibilityState === 'visible') {
+          console.log('[Flowday] Daily reminder');
+        }
+      }
+      // Weekly
+      if (r.weeklyEnabled && r.weeklyTime === timeStr && now.getDay() === r.weeklyDay) {
+        if (document.visibilityState === 'visible') {
+          console.log('[Flowday] Weekly recap reminder');
+        }
+      }
+    }
+    // align to next minute
+    const ms = 60000 - (Date.now() % 60000) + 50;
+    const start = window.setTimeout(()=>{
+      check();
+      timer = window.setInterval(check, 60000) as unknown as number;
+    }, ms);
+    return ()=> { window.clearTimeout(start); if(timer) window.clearInterval(timer); };
+  }, [reminders]);
+
+  // ---- Time helpers (stored internally always as 24h HH:MM) ----
+  function parse24(str: string): { h: number; m: number } {
+    const m = /^([0-9]{2}):([0-9]{2})$/.exec(str);
+    if (!m) return { h: 20, m: 0 };
+    return { h: Math.min(23, parseInt(m[1],10)), m: Math.min(59, parseInt(m[2],10)) };
+  }
+  function to24(h: number, m: number) {
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  function split12(str: string): { h12: number; m: number; period: 'AM'|'PM' } {
+    const { h, m } = parse24(str);
+    const period: 'AM'|'PM' = h >= 12 ? 'PM' : 'AM';
+    const h12 = ((h % 12) || 12);
+    return { h12, m, period };
+  }
+  function join12(h12: number, m: number, period: 'AM'|'PM') {
+    let h24 = h12 % 12;
+    if (period === 'PM') h24 += 12;
+    if (period === 'AM' && h24 === 12) h24 = 0; // 12 AM -> 00
+    if (period === 'PM' && h24 === 12) h24 = 12; // 12 PM stays 12
+    return to24(h24, m);
+  }
+  const minuteOptions = Array.from({length:12}, (_,i)=> i*5); // 0..55 step 5
 
   if (!open && !closing) return null;
   return (
@@ -162,9 +232,124 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide }: {
               </div>
             </form>
           </div>
-          <div className="py-3">
-            <div className="text-sm font-medium">Reminders</div>
-            <div className="text-xs text-white/60">Daily reminder time, weekly recap</div>
+          <div className="py-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-medium">Reminders</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={()=> { const nextFmt: '24' | '12' = reminders.timeFormat==='24' ? '12':'24'; const v={...reminders,timeFormat: nextFmt}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  className="text-[11px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/60"
+                >{reminders.timeFormat==='24'?'24h':'12h'}</button>
+                <button
+                  type="button"
+                  onClick={()=> { setReminders(loadReminders()); remindersDirtyRef.current=false; }}
+                  className="text-[11px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/60"
+                >Reset</button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {/* Daily row */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={()=> { const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
+                >Daily reminder</button>
+                {/* Custom time selects */}
+                {reminders.timeFormat !== '12' && (()=> { const {h,m}=parse24(reminders.dailyTime); return (
+                  <div className="flex items-center gap-1" aria-label="Daily time 24h">
+                    <select disabled={!reminders.dailyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {Array.from({length:24},(_,i)=> <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+                    </select>
+                    <span className="text-white/50 text-xs px-0.5">:</span>
+                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
+                    </select>
+                  </div>
+                )})()}
+                {reminders.timeFormat === '12' && (()=> { const {h12,m,period}=split12(reminders.dailyTime); return (
+                  <div className="flex items-center gap-1" aria-label="Daily time 12h">
+                    <select disabled={!reminders.dailyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {Array.from({length:12},(_,i)=> i+1).map(hh=> <option key={hh} value={hh}>{hh}</option>)}
+                    </select>
+                    <span className="text-white/50 text-xs px-0.5">:</span>
+                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
+                    </select>
+                    <select disabled={!reminders.dailyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,dailyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                )})()}
+              </div>
+              {/* Weekly row */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={()=> { const v={...reminders,weeklyEnabled: !reminders.weeklyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.weeklyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
+                >Weekly recap</button>
+                <select
+                  value={reminders.weeklyDay}
+                  disabled={!reminders.weeklyEnabled}
+                  onChange={(e)=> { const v = { ...reminders, weeklyDay: parseInt(e.target.value,10) }; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  className="rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30"
+                >
+                  {reminders.timeFormat==='24' ? (
+                    <>
+                      <option value={1}>Mon</option>
+                      <option value={2}>Tue</option>
+                      <option value={3}>Wed</option>
+                      <option value={4}>Thu</option>
+                      <option value={5}>Fri</option>
+                      <option value={6}>Sat</option>
+                      <option value={0}>Sun</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value={0}>Sun</option>
+                      <option value={1}>Mon</option>
+                      <option value={2}>Tue</option>
+                      <option value={3}>Wed</option>
+                      <option value={4}>Thu</option>
+                      <option value={5}>Fri</option>
+                      <option value={6}>Sat</option>
+                    </>
+                  )}
+                </select>
+                {reminders.timeFormat !== '12' && (()=> { const {h,m}=parse24(reminders.weeklyTime); return (
+                  <div className="flex items-center gap-1" aria-label="Weekly time 24h">
+                    <select disabled={!reminders.weeklyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {Array.from({length:24},(_,i)=> <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+                    </select>
+                    <span className="text-white/50 text-xs px-0.5">:</span>
+                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
+                    </select>
+                  </div>
+                )})()}
+                {reminders.timeFormat === '12' && (()=> { const {h12,m,period}=split12(reminders.weeklyTime); return (
+                  <div className="flex items-center gap-1" aria-label="Weekly time 12h">
+                    <select disabled={!reminders.weeklyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {Array.from({length:12},(_,i)=> i+1).map(hh=> <option key={hh} value={hh}>{hh}</option>)}
+                    </select>
+                    <span className="text-white/50 text-xs px-0.5">:</span>
+                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
+                    </select>
+                    <select disabled={!reminders.weeklyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,weeklyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                )})()}
+              </div>
+              <p className="text-[11px] text-white/35 leading-relaxed">
+                Reminders run only while Flowday is open (local device).
+              </p>
+            </div>
           </div>
           {/* Removed Memories section */}
           {/* <div className="py-3">

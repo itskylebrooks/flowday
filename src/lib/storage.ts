@@ -1,8 +1,9 @@
-import type { Entry, UserProfile } from './types';
+import type { Entry, UserProfile, RemindersSettings } from './types';
 
 export const STORAGE_KEY = 'flowday_entries_v1';
 export const RECENTS_KEY = 'flowday_recent_emojis_v1';
 export const USER_KEY = 'flowday_user_v1';
+export const REMINDERS_KEY = 'flowday_reminders_v1';
 
 export function loadEntries(): Entry[] {
   try {
@@ -85,4 +86,50 @@ function sanitizeUsername(name: string): string {
   cleaned = cleaned.replace(/[^a-z0-9_-]/g, '');
   if (!cleaned) cleaned = 'user';
   return cleaned.slice(0, 24);
+}
+
+// --- Reminders persistence ---
+function defaultReminders(): RemindersSettings {
+  return {
+    dailyEnabled: false,
+    dailyTime: '20:00',
+    weeklyEnabled: false,
+  weeklyDay: 1, // Monday
+    weeklyTime: '18:00',
+  timeFormat: '24',
+    updatedAt: Date.now(),
+  };
+}
+
+export function loadReminders(): RemindersSettings {
+  try {
+    const raw = localStorage.getItem(REMINDERS_KEY);
+    if (!raw) return defaultReminders();
+    const obj = JSON.parse(raw) as Partial<RemindersSettings>;
+    const base = defaultReminders();
+    const merged: RemindersSettings = {
+      dailyEnabled: typeof obj.dailyEnabled === 'boolean' ? obj.dailyEnabled : base.dailyEnabled,
+      dailyTime: typeof obj.dailyTime === 'string' ? obj.dailyTime : base.dailyTime,
+      weeklyEnabled: typeof obj.weeklyEnabled === 'boolean' ? obj.weeklyEnabled : base.weeklyEnabled,
+      weeklyDay: typeof obj.weeklyDay === 'number' ? obj.weeklyDay : base.weeklyDay,
+      weeklyTime: typeof obj.weeklyTime === 'string' ? obj.weeklyTime : base.weeklyTime,
+      timeFormat: obj.timeFormat === '12' ? '12' : '24',
+      updatedAt: typeof obj.updatedAt === 'number' ? obj.updatedAt : Date.now(),
+    };
+    return merged;
+  } catch { return defaultReminders(); }
+}
+
+export function saveReminders(prefs: RemindersSettings) {
+  const safe: RemindersSettings = {
+    dailyEnabled: !!prefs.dailyEnabled,
+    dailyTime: prefs.dailyTime || '20:00',
+    weeklyEnabled: !!prefs.weeklyEnabled,
+  weeklyDay: typeof prefs.weeklyDay === 'number' ? prefs.weeklyDay : 1,
+    weeklyTime: prefs.weeklyTime || '18:00',
+  timeFormat: prefs.timeFormat === '12' ? '12' : '24',
+    updatedAt: Date.now(),
+  };
+  localStorage.setItem(REMINDERS_KEY, JSON.stringify(safe));
+  return safe;
 }
