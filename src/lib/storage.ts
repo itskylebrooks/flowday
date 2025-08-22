@@ -224,3 +224,16 @@ export function saveReminders(prefs: RemindersSettings) {
   localStorage.setItem(REMINDERS_KEY, JSON.stringify(safe));
   return safe;
 }
+
+// --- Full data wipe (local-only) ---
+export function clearAllData() {
+  try {
+    // Current & legacy entry keys
+    localStorage.removeItem(STORAGE_KEY);
+    for (const k of LEGACY_KEYS) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+    // Related feature keys
+    localStorage.removeItem(RECENTS_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(REMINDERS_KEY);
+  } catch { /* ignore */ }
+}

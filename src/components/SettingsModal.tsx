@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser, loadReminders, saveReminders } from '../lib/storage';
+import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -188,18 +188,16 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
                 <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Future: global uniqueness.</p>
               </div>
-              <div className="pt-1 grid gap-2 opacity-50 cursor-not-allowed select-none">
-                <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/40">Sign in (soon)</button>
-                <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-400/50">Delete account (soon)</button>
+              <div className="pt-1 grid gap-2">
+                <div className="opacity-50 cursor-not-allowed select-none space-y-2">
+                  <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/40">Sign in (soon)</button>
+                  <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-400/50">Delete account (soon)</button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
-                    try {
-                      localStorage.removeItem('flowday_entries_v1');
-                      localStorage.removeItem('flowday_recent_emojis_v1');
-                      localStorage.removeItem('flowday_user_v1');
-                    } catch { /* ignore */ }
+                    clearAllData();
                     alert('Local data cleared. App will reload.');
                     window.location.reload();
                   }}
