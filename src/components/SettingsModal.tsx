@@ -133,6 +133,22 @@ export default function SettingsModal({ open, onClose, entries }: { open: boolea
               <div className="pt-1 grid gap-2 opacity-50 cursor-not-allowed select-none">
                 <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/40">Sign in (soon)</button>
                 <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-400/50">Delete account (soon)</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
+                    try {
+                      localStorage.removeItem('flowday_entries_v1');
+                      localStorage.removeItem('flowday_recent_emojis_v1');
+                      localStorage.removeItem('flowday_user_v1');
+                    } catch { /* ignore */ }
+                    alert('Local data cleared. App will reload.');
+                    window.location.reload();
+                  }}
+                  className="w-full rounded-md bg-red-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-red-500/25 text-red-300 hover:bg-red-600/25 active:bg-red-600/30 transition"
+                >
+                  Delete all local data
+                </button>
               </div>
             </form>
           </div>
