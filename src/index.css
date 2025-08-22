@@ -68,6 +68,17 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 .animate-fadeInMove { animation: fadeInMove .35s ease both; }
 .animate-fadeSwap { animation: fadeSwap .28s ease both; }
 
+/* Guide step transitions */
+@keyframes guideEnterForward { from { opacity:0; transform:translateX(26px) scale(.985); } to { opacity:1; transform:translateX(0) scale(1); } }
+@keyframes guideExitForward { from { opacity:1; transform:translateX(0) scale(1); } to { opacity:0; transform:translateX(-24px) scale(.985); } }
+@keyframes guideEnterBack { from { opacity:0; transform:translateX(-26px) scale(.985); } to { opacity:1; transform:translateX(0) scale(1); } }
+@keyframes guideExitBack { from { opacity:1; transform:translateX(0) scale(1); } to { opacity:0; transform:translateX(24px) scale(.985); } }
+.guide-step-layer { position:absolute; inset:0; }
+.guide-step-enter-forward { animation: guideEnterForward .38s cubic-bezier(.4,0,.2,1); }
+.guide-step-exit-forward { animation: guideExitForward .32s cubic-bezier(.4,0,.55,1) forwards; }
+.guide-step-enter-back { animation: guideEnterBack .38s cubic-bezier(.4,0,.2,1); }
+.guide-step-exit-back { animation: guideExitBack .32s cubic-bezier(.4,0,.55,1) forwards; }
+
 .page-stack { position: relative; width:100%; height:100%; }
 .page-view { position:absolute; inset:0; opacity:0; pointer-events:none; transform:translateX(14px); transition: opacity .32s ease, transform .38s ease; }
 .page-view[data-active='true'] { opacity:1; pointer-events:auto; transform:translateX(0); }

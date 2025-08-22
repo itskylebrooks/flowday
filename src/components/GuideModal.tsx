@@ -46,11 +46,15 @@ const STEPS: { title: string; body: string }[] = [
 
 export default function GuideModal({ open, onClose }: GuideModalProps) {
   const [step, setStep] = useState(0);
+  // transition layering state
+  const [renderedSteps, setRenderedSteps] = useState([{ key: 0, idx: 0, phase: 'enter' as 'enter'|'exit', dir: 'forward' as 'forward'|'back' }]);
   const [visible, setVisible] = useState(open);
   const [closing, setClosing] = useState(false);
   const [entering, setEntering] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const enterRaf = useRef<number | null>(null);
+  const stepAnimTimer = useRef<number | null>(null);
+  const stepKeyRef = useRef(0);
 
   // When open toggles true -> show immediately
   useEffect(()=>{
@@ -60,7 +64,9 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
       setVisible(true);
       setClosing(false);
       setEntering(true); // start from hidden state
-      setStep(0);
+  setStep(0);
+  stepKeyRef.current++;
+  setRenderedSteps([{ key: stepKeyRef.current, idx: 0, phase: 'enter', dir: 'forward' }]);
       // two RAFs to ensure initial class applied before transition
       enterRaf.current = requestAnimationFrame(()=> {
         enterRaf.current = requestAnimationFrame(()=> setEntering(false));
@@ -77,6 +83,27 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
     if(enterRaf.current) cancelAnimationFrame(enterRaf.current);
   }, []);
 
+  // step change effect to trigger animated layer swap
+  useEffect(()=>{
+    return () => { if(stepAnimTimer.current) clearTimeout(stepAnimTimer.current); };
+  }, []);
+
+  const queueStep = (next: number) => {
+    if (next === step) return; // no-op
+    const dir: 'forward'|'back' = next > step ? 'forward' : 'back';
+    // mark existing layers exiting (only keep top-most latest active one)
+    setRenderedSteps(prev => {
+      const updated = prev.map(p => ({ ...p, phase: 'exit' as const, dir }));
+      stepKeyRef.current++;
+      return [...updated, { key: stepKeyRef.current, idx: next, phase: 'enter' as const, dir }];
+    });
+    setStep(next);
+    if(stepAnimTimer.current) clearTimeout(stepAnimTimer.current);
+    stepAnimTimer.current = window.setTimeout(()=> {
+      setRenderedSteps(curr => curr.filter(layer => layer.phase === 'enter'));
+    }, 400); // longer than exit animation (0.32s) to be safe
+  };
+
   if (!visible) return null;
   const last = step === STEPS.length - 1;
   return (
@@ -91,8 +118,20 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
           </button>
         </div>
         <div className="text-[11px] tracking-wide uppercase text-white/40 mb-2">Quick guide</div>
-        <h2 className="text-lg font-semibold mb-3 text-white/90">{STEPS[step].title}</h2>
-        <p className="text-sm text-white/65 leading-relaxed min-h-[68px]">{STEPS[step].body}</p>
+        <div className="relative min-h-[120px]">
+          {renderedSteps.map(layer => {
+            const data = STEPS[layer.idx];
+            const stateClass = layer.phase === 'enter'
+              ? (layer.dir === 'forward' ? 'guide-step-enter-forward' : 'guide-step-enter-back')
+              : (layer.dir === 'forward' ? 'guide-step-exit-forward' : 'guide-step-exit-back');
+            return (
+              <div key={layer.key} className={`guide-step-layer ${stateClass}`}>
+                <h2 className="text-lg font-semibold mb-3 text-white/90">{data.title}</h2>
+                <p className="text-sm text-white/65 leading-relaxed">{data.body}</p>
+              </div>
+            );
+          })}
+        </div>
         <div className="mt-5 flex items-center justify-between text-xs text-white/45">
           <div>Step {step+1} / {STEPS.length}</div>
           <div className="flex gap-1">
@@ -102,12 +141,12 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
         <div className="mt-6 flex gap-3">
           {step>0 && (
             <button
-              onClick={()=> setStep(s=> Math.max(0,s-1))}
+              onClick={()=> queueStep(Math.max(0, step-1))}
               className="flex-1 rounded-md px-3 py-2 text-sm font-medium bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/80 transition"
             >Back</button>
           )}
           <button
-            onClick={()=> { if(last) onClose(); else setStep(s=> Math.min(STEPS.length-1, s+1)); }}
+            onClick={()=> { if(last) onClose(); else queueStep(Math.min(STEPS.length-1, step+1)); }}
             className="flex-1 rounded-md px-3 py-2 text-sm font-medium bg-white/15 hover:bg-white/25 ring-1 ring-white/15 text-white transition"
           >{last? 'Finish':'Next'}</button>
         </div>
