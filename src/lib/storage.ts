@@ -1,24 +1,106 @@
 import type { Entry, UserProfile, RemindersSettings } from './types';
+import { clamp } from './utils';
 
-export const STORAGE_KEY = 'flowday_entries_v1';
+// ---------------- Versioned Entry Storage ----------------
+// Historical formats:
+//  - v0 (implicit): raw Entry[] stored at legacy key (same shape as Entry, no wrapper)
+//  - v1: JSON string of raw Entry[] under key 'flowday_entries_v1'
+//  - v2 (current): { version:2, entries: Entry[] } under key 'flowday_entries_v2'
+// Future versions can add fields; extend migrate() accordingly.
+
+export const CURRENT_VERSION = 2 as const;
+export const STORAGE_KEY = 'flowday_entries_v2';
+const LEGACY_KEYS = ['flowday_entries_v1']; // oldest last
+
+interface PersistedV2 { version: 2; entries: unknown; }
+type PersistedAny = PersistedV2 | Entry[] | unknown;
+type UnknownRecord = Record<string, unknown>;
+
+function isISO(s: unknown): s is string { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+function sanitizeEntry(raw: unknown): Entry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as UnknownRecord;
+  if (!isISO(rec.date)) return null;
+  let emojis: string[] = Array.isArray(rec.emojis) ? (rec.emojis as unknown[]) as string[] : [];
+  emojis = emojis.filter(e => typeof e === 'string').map(e=>e.trim()).filter(Boolean);
+  emojis = Array.from(new Set(emojis)).slice(0,3);
+  let hue: number | undefined;
+  if (typeof rec.hue === 'number' && emojis.length>0) {
+    hue = ((clamp(Math.round(rec.hue as number), -720, 720) % 360) + 360) % 360;
+  }
+  const updatedAt = typeof rec.updatedAt === 'number' ? (rec.updatedAt as number) : Date.now();
+  const entry: Entry = { date: rec.date as string, emojis, updatedAt };
+  if (hue != null && emojis.length>0) entry.hue = hue;
+  if (rec.song && typeof rec.song === 'object') {
+    const songRec = rec.song as UnknownRecord;
+    const t = typeof songRec.title === 'string' ? songRec.title : undefined;
+    const a = typeof songRec.artist === 'string' ? songRec.artist : undefined;
+    if ((t && t.length) || (a && a.length)) entry.song = { title: t, artist: a };
+  }
+  return entry;
+}
+
+function migrate(persisted: PersistedAny): Entry[] {
+  // Detect wrapper version
+  if (persisted && typeof persisted === 'object' && 'version' in (persisted as UnknownRecord)) {
+    const v = (persisted as UnknownRecord).version as number | undefined;
+    if (v === 2) {
+      const listRaw = (persisted as UnknownRecord).entries;
+      const list = Array.isArray(listRaw) ? listRaw : [];
+      return (list as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+    }
+    // Unknown newer version: best-effort entries extraction
+    const ent = (persisted as UnknownRecord).entries;
+    if (Array.isArray(ent)) {
+      return (ent as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+    }
+    return [];
+  }
+  // Legacy raw array (v0/v1)
+  if (Array.isArray(persisted)) {
+    return persisted.map(sanitizeEntry).filter(Boolean) as Entry[];
+  }
+  return [];
+}
+
+function persist(entries: Entry[]) {
+  const payload: PersistedV2 = { version: CURRENT_VERSION, entries: [...entries].sort((a,b)=>a.date.localeCompare(b.date)) };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+}
+
+export function loadEntries(): Entry[] {
+  // Try current
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PersistedAny;
+      const migrated = migrate(parsed);
+      persist(migrated); // self-heal formatting
+      return migrated;
+    }
+  } catch { /* ignore */ }
+  // Legacy keys
+  for (const k of LEGACY_KEYS) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as PersistedAny;
+      const migrated = migrate(parsed);
+      persist(migrated);
+      try { localStorage.removeItem(k); } catch { /* ignore */ }
+      return migrated;
+    } catch { /* keep trying */ }
+  }
+  return [];
+}
+
+export function saveEntries(list: Entry[]) { persist(list); }
 export const RECENTS_KEY = 'flowday_recent_emojis_v1';
 export const USER_KEY = 'flowday_user_v1';
 export const REMINDERS_KEY = 'flowday_reminders_v1';
 
-export function loadEntries(): Entry[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw) as Entry[];
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveEntries(list: Entry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
+// ---------------------------------------------------------
 
 export function upsertEntry(list: Entry[], entry: Entry): Entry[] {
   const idx = list.findIndex((e) => e.date === entry.date);
