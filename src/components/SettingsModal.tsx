@@ -1,8 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser } from '../lib/storage';
+import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
+import type { Entry } from '../lib/types';
 
-export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SettingsModal({ open, onClose, entries }: { open: boolean; onClose: () => void; entries: Entry[] }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -43,14 +45,64 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     }, 120);
   }
 
+  // Auto avatar derivation
+  const { topEmoji, gradientCSS } = useMemo(()=>{
+    const monthKey = todayISO().slice(0,7);
+    const monthEntries = entries.filter(e=> e.date.startsWith(monthKey));
+    if (!monthEntries.length) {
+      return { topEmoji: '🙂', gradientCSS: 'radial-gradient(circle at 50% 50%, hsl(220 10% 28%) 0%, hsl(220 10% 18%) 75%)' };
+    }
+    const { freq } = emojiStats(monthEntries);
+    let best: string | null = null; let bestC = -1;
+    for (const [emo, c] of freq.entries()) { if (c > bestC) { best = emo; bestC = c; } }
+    const emoji = best || '🙂';
+    const rawStops = monthlyStops(monthEntries).slice(0,3);
+    const stops = rawStops.length ? rawStops : [220,300,40];
+    let gradient: string;
+    if (stops.length === 1) {
+      const h0 = stops[0];
+      gradient = `radial-gradient(circle at 45% 40%, ${hsl(h0,75,60)} 0%, ${hsl(h0,70,45)} 55%, ${hsl(h0,65,28)} 100%)`;
+    } else if (stops.length === 2) {
+      const [h1,h2] = stops;
+      gradient = `linear-gradient(135deg, ${hsl(h1,80,58)} 0%, ${hsl(h2,75,48)} 100%)`;
+      gradient += `, radial-gradient(circle at 50% 60%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 70%)`;
+    } else {
+      const [h1,h2,h3] = stops;
+      // Smooth blend: multi-stop linear gradient + radial vignette
+      gradient = `linear-gradient(135deg,
+        ${hsl(h1,85,60)} 0%,
+        ${hsl(h1,80,55)} 15%,
+        ${hsl(h2,80,55)} 50%,
+        ${hsl(h3,78,52)} 85%,
+        ${hsl(h3,72,45)} 100%)`;
+      gradient += `, radial-gradient(circle at 50% 55%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.45) 75%)`;
+    }
+    return { topEmoji: emoji, gradientCSS: gradient };
+  }, [entries]);
+
   if (!open && !closing) return null;
   return (
     <div className={"fixed inset-0 z-50 flex items-end justify-center settings-overlay backdrop-blur-sm sm:items-center " + (closing? 'closing':'')} onClick={beginClose}>
   <div className={"w-full max-w-sm rounded-t-2xl bg-[#111] p-6 pt-7 ring-1 ring-white/10 sm:rounded-2xl settings-panel " + (closing? 'closing':'')}
        onClick={(e)=>e.stopPropagation()}>
-        <div className="mb-4 text-center">
-          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+        <div className="mb-4 relative">
+          <div className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent text-center">
             Settings
+          </div>
+          {/* Auto Avatar */}
+          <div className="absolute top-0 right-0" title="Your Flowday avatar (auto-generated)">
+            <div className="relative group" style={{ width:48, height:48 }}>
+              <div
+                className="w-full h-full rounded-full ring-1 ring-white/15 shadow-inner overflow-hidden"
+                style={{ backgroundImage: gradientCSS, backgroundSize:'cover', backgroundPosition:'center', transition:'filter 0.6s', filter:'saturate(1.05)' }}
+              >
+                <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), rgba(255,255,255,0) 60%)'}} />
+                <div className="flex items-center justify-center w-full h-full text-[24px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] select-none">
+                  {topEmoji}
+                </div>
+              </div>
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">Your month</div>
+            </div>
           </div>
         </div>
 

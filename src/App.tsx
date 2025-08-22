@@ -397,7 +397,7 @@ export default function App() {
         onClose={closePicker}
         onPick={handlePick}
       />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} />
     </div>
   );
 }
