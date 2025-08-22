@@ -156,7 +156,16 @@ export function saveUser(profile: UserProfile) {
 
 function createDefaultUser(): UserProfile {
   const now = Date.now();
-  const user: UserProfile = { username: 'user', createdAt: now, updatedAt: now };
+  // Attempt to derive username from Telegram WebApp context if present
+  let base = 'user';
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { username?: string } } } } }).Telegram?.WebApp;
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (tgUser && tgUser.username) {
+      base = sanitizeUsername(tgUser.username);
+    }
+  } catch { /* ignore */ }
+  const user: UserProfile = { username: base, createdAt: now, updatedAt: now };
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
 }
