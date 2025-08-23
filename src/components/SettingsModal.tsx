@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
@@ -93,13 +93,32 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     return { topEmoji: emoji, gradientCSS: gradient };
   }, [entries]);
 
+  const pushRemindersToCloud = useCallback(async (updated = reminders) => {
+    if (!isCloudEnabled()) return;
+    try {
+      interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
+      const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
+      if (!initData) return;
+      const body = {
+        initData,
+        daily_enabled: updated.dailyEnabled,
+        daily_time: updated.dailyTime,
+        weekly_enabled: updated.weeklyEnabled,
+        weekly_day: updated.weeklyDay,
+        weekly_time: updated.weeklyTime
+      };
+      await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+    } catch { /* ignore */ }
+  }, [reminders]);
+
   // Persist reminders when modal closes if changed
   useEffect(()=>{
     if (!open && remindersDirtyRef.current) {
       saveReminders(reminders);
+      void pushRemindersToCloud();
       remindersDirtyRef.current = false;
     }
-  }, [open, reminders]);
+  }, [open, reminders, pushRemindersToCloud]);
 
   // Reminder execution logic removed (placeholder) — only settings & persistence remain for now.
 
@@ -234,31 +253,31 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={()=> { const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  onClick={()=> { const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }}
                   className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
                 >Daily reminder</button>
                 {/* Custom time selects */}
                 {reminders.timeFormat !== '12' && (()=> { const {h,m}=parse24(reminders.dailyTime); return (
                   <div className="flex items-center gap-1" aria-label="Daily time 24h">
-                    <select disabled={!reminders.dailyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.dailyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {Array.from({length:24},(_,i)=> <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
                     </select>
                     <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
                     </select>
                   </div>
                 )})()}
                 {reminders.timeFormat === '12' && (()=> { const {h12,m,period}=split12(reminders.dailyTime); return (
                   <div className="flex items-center gap-1" aria-label="Daily time 12h">
-                    <select disabled={!reminders.dailyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.dailyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {Array.from({length:12},(_,i)=> i+1).map(hh=> <option key={hh} value={hh}>{hh}</option>)}
                     </select>
                     <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
                     </select>
-                    <select disabled={!reminders.dailyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,dailyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.dailyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,dailyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
                     </select>
@@ -269,13 +288,13 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={()=> { const v={...reminders,weeklyEnabled: !reminders.weeklyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  onClick={()=> { const v={...reminders,weeklyEnabled: !reminders.weeklyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }}
                   className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.weeklyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
                 >Weekly recap</button>
                 <select
                   value={reminders.weeklyDay}
                   disabled={!reminders.weeklyEnabled}
-                  onChange={(e)=> { const v = { ...reminders, weeklyDay: parseInt(e.target.value,10) }; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
+                  onChange={(e)=> { const v = { ...reminders, weeklyDay: parseInt(e.target.value,10) }; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }}
                   className="rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30"
                 >
                   {reminders.timeFormat==='24' ? (
@@ -302,25 +321,25 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </select>
                 {reminders.timeFormat !== '12' && (()=> { const {h,m}=parse24(reminders.weeklyTime); return (
                   <div className="flex items-center gap-1" aria-label="Weekly time 24h">
-                    <select disabled={!reminders.weeklyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.weeklyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {Array.from({length:24},(_,i)=> <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
                     </select>
                     <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
                     </select>
                   </div>
                 )})()}
                 {reminders.timeFormat === '12' && (()=> { const {h12,m,period}=split12(reminders.weeklyTime); return (
                   <div className="flex items-center gap-1" aria-label="Weekly time 12h">
-                    <select disabled={!reminders.weeklyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.weeklyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {Array.from({length:12},(_,i)=> i+1).map(hh=> <option key={hh} value={hh}>{hh}</option>)}
                     </select>
                     <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.weeklyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,weeklyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
                     </select>
-                    <select disabled={!reminders.weeklyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,weeklyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
+                    <select disabled={!reminders.weeklyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,weeklyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
                     </select>

@@ -28,12 +28,28 @@ create index if not exists entries_user_updated_idx on public.entries(telegram_i
 -- Ensure usernames are unique case-insensitively when present
 create unique index if not exists users_username_unique on public.users (lower(username)) where username is not null;
 
--- Reminders placeholder
+-- Reminders (daily + weekly) configuration
+-- If migrating from earlier placeholder table, run manual ALTERs:
+--   alter table public.reminders add column if not exists daily_enabled boolean not null default false;
+--   alter table public.reminders add column if not exists daily_time text not null default '20:00';
+--   alter table public.reminders add column if not exists weekly_enabled boolean not null default false;
+--   alter table public.reminders add column if not exists weekly_day int not null default 1; -- 1=Mon (ISO)
+--   alter table public.reminders add column if not exists weekly_time text not null default '18:00';
+--   alter table public.reminders add column if not exists last_daily_sent date;
+--   alter table public.reminders add column if not exists last_weekly_sent date;
+--   alter table public.reminders drop column if exists payload;
 create table if not exists public.reminders (
   telegram_id bigint primary key references public.users(telegram_id) on delete cascade,
-  payload jsonb,
+  daily_enabled boolean not null default false,
+  daily_time text not null default '20:00',      -- HH:MM 24h
+  weekly_enabled boolean not null default false,
+  weekly_day int not null default 1,             -- 1=Mon .. 7 unused; we use 0=Sun..6=Sat in app but store ISO Monday default
+  weekly_time text not null default '18:00',
+  last_daily_sent date,                          -- date (UTC) last daily reminder sent
+  last_weekly_sent date,                         -- date (UTC) last weekly recap sent
   updated_at timestamptz default now()
 );
+create index if not exists reminders_daily_enabled_idx on public.reminders(daily_enabled);
 
 -- Legacy plaintext upsert function removed (encryption-only now).
 

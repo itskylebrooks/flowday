@@ -1,6 +1,6 @@
 // Telegram-aware sync helpers (client-side)
 import type { Entry } from './types';
-import { loadEntries, saveEntries } from './storage';
+import { loadEntries, saveEntries, loadReminders, saveReminders } from './storage';
 
 const SYNC_KEY = 'flowday_last_sync_iso_v1';
 const CLOUD_FLAG_KEY = 'flowday_cloud_enabled_v1';
@@ -79,10 +79,24 @@ export async function verifyTelegram(tz?: string) {
           }
         } catch { /* ignore */ }
       }
+      // Attempt to fetch reminders preferences once on verify (best-effort)
+      try {
+        const { data: rData } = await postJSON('/api/reminders-get', { initData });
+        if (rData?.ok && rData.prefs) {
+          const prefs = rData.prefs as { daily_enabled?: boolean; daily_time?: string; weekly_enabled?: boolean; weekly_day?: number; weekly_time?: string };
+          const local = loadReminders();
+          const merged = { ...local };
+            if (typeof prefs.daily_enabled === 'boolean') merged.dailyEnabled = prefs.daily_enabled;
+            if (typeof prefs.daily_time === 'string') merged.dailyTime = prefs.daily_time;
+            if (typeof prefs.weekly_enabled === 'boolean') merged.weeklyEnabled = prefs.weekly_enabled;
+            if (typeof prefs.weekly_day === 'number') merged.weeklyDay = prefs.weekly_day;
+            if (typeof prefs.weekly_time === 'string') merged.weeklyTime = prefs.weekly_time;
+          saveReminders(merged);
+        }
+      } catch { /* ignore */ }
     }
   } catch { /* silent */ }
 }
-
 export async function syncPull(): Promise<number | null> {
   if (!isTG()) return null;
   if (!isCloudEnabled()) return null;
