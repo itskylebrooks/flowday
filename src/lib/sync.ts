@@ -12,21 +12,28 @@ function getInitData(): string { return (window as unknown as TGWin).Telegram?.W
 
 // Some environments expose Telegram.WebApp before initData is populated; we lazily
 // wait (poll) for a non-empty initData (up to a timeout) before first network calls.
-let initDataReady: Promise<string> | null = null;
-async function waitForInitData(maxMs = 4000): Promise<string> {
+let initDataValue = '';
+let initDataInflight: Promise<string> | null = null;
+async function waitForInitData(maxMs = 10_000): Promise<string> {
   if (!isTG()) return '';
-  if (initDataReady) return initDataReady;
-  initDataReady = new Promise<string>(resolve => {
-    const started = Date.now();
-    const tick = () => {
-      const cur = getInitData();
-      if (cur) { resolve(cur); return; }
-      if (Date.now() - started > maxMs) { resolve(''); return; }
-      setTimeout(tick, 120);
-    };
-    tick();
-  });
-  return initDataReady;
+  if (initDataValue) return initDataValue;
+  if (!initDataInflight) {
+    initDataInflight = new Promise<string>(resolve => {
+      const started = Date.now();
+      const tick = () => {
+        const cur = getInitData();
+        if (cur) { initDataValue = cur; resolve(cur); return; }
+        if (Date.now() - started > maxMs) { resolve(''); return; }
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
+  const val = await initDataInflight;
+  if (!val) { // did not get it this round; allow future retries
+    initDataInflight = null;
+  }
+  return val;
 }
 
 export function mergeByNewer(local: Entry[], incoming: Entry[]): Entry[] {
@@ -47,12 +54,15 @@ async function postJSON(path: string, body: unknown): Promise<{ res: Response; d
   return { res, data };
 }
 
+let verifyDone = false;
 export async function verifyTelegram(tz?: string) {
-  if (!isTG()) return;
+  if (!isTG() || verifyDone) return;
   const initData = await waitForInitData();
-  if (!initData) return; // avoid spamming server with missing-initData
-  try { await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }); }
-  catch { /* silent */ }
+  if (!initData) return; // wait until a later attempt when initData appears
+  try {
+    await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    verifyDone = true;
+  } catch { /* silent */ }
 }
 
 export async function syncPull(): Promise<number | null> {
@@ -162,3 +172,19 @@ export function startPeriodicPull() {
   periodicTimer = setInterval(()=> { syncPull(); }, 60000);
 }
 export function stopPeriodicPull() { if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = null; } }
+
+// Startup helper: attempt verify + initial pull multiple times in case initData arrives late
+let startupLoopRan = false;
+export function startStartupSyncLoop() {
+  if (!isTG() || startupLoopRan) return;
+  startupLoopRan = true;
+  let attempts = 0;
+  const loop = async () => {
+    if (verifyDone) return; // already verified; loop naturally stops
+    attempts++;
+    await verifyTelegram();
+    if (verifyDone) { void syncPull(); return; }
+    if (attempts < 8) setTimeout(loop, 1000 * Math.min(5, attempts));
+  };
+  loop();
+}
