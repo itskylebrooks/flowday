@@ -95,7 +95,14 @@ export function loadEntries(): Entry[] {
   return [];
 }
 
-export function saveEntries(list: Entry[]) { persist(list); }
+export function saveEntries(list: Entry[]) {
+  persist(list);
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('flowday:entries-updated', { detail: { entries: list } }));
+    }
+  } catch { /* ignore */ }
+}
 export const RECENTS_KEY = 'flowday_recent_emojis_v1';
 export const USER_KEY = 'flowday_user_v1';
 export const REMINDERS_KEY = 'flowday_reminders_v1';
