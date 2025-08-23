@@ -37,7 +37,10 @@ export default function App() {
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
   const HEADER_H = 56; // tailwind h-14
   const FOOTER_H = 56; // tailwind h-14
-  const headerTopOffset = isTG ? 8 : 0;      // px push-down for top nav
+  // Move the top nav (and content) further down by 70px for iOS Telegram specifically.
+  // Otherwise keep the small existing Telegram nudges.
+  const IOS_UI_SHIFT = (isTG && tgPlatform === 'ios') ? 70 : 0;
+  const headerTopOffset = IOS_UI_SHIFT || (isTG ? 8 : 0);      // px push-down for top nav
   const footerBottomOffset = (isTG && tgPlatform === 'ios') ? 20 : 0;  // raise only on iOS Telegram
   const contentTop = HEADER_H + headerTopOffset;
   const contentBottom = FOOTER_H + footerBottomOffset;
