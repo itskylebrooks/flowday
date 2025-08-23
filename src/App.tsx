@@ -17,21 +17,28 @@ import AuraBlock from './components/AuraBlock';
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
+  const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
       setIsTG(flag);
-      if (flag) setTgAccent(prev => prev || telegramAccentColor());
+      if (flag) {
+        setTgAccent(prev => prev || telegramAccentColor());
+        try {
+          const platform = (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform;
+          if (platform && platform !== tgPlatform) setTgPlatform(platform);
+        } catch { /* ignore */ }
+      }
     }
     poll();
     const id = setInterval(poll, 500);
     return ()=> clearInterval(id);
-  }, []);
+  }, [tgPlatform]);
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
   const HEADER_H = 56; // tailwind h-14
   const FOOTER_H = 56; // tailwind h-14
   const headerTopOffset = isTG ? 8 : 0;      // px push-down for top nav
-  const footerBottomOffset = isTG ? 20 : 0;  // px raise-up for bottom nav
+  const footerBottomOffset = (isTG && tgPlatform === 'ios') ? 20 : 0;  // raise only on iOS Telegram
   const contentTop = HEADER_H + headerTopOffset;
   const contentBottom = FOOTER_H + footerBottomOffset;
   // Song length constraints
