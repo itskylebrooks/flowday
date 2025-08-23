@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
+import { allow } from './_rate';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
@@ -19,9 +20,13 @@ export default async function handler(req: Req, res: Res) {
     const u = parseTGUser(initData);
     if (!u?.id) return res.status(400).json({ ok:false, ...devReason('user') });
 
-    let query = supabase.from('entries')
+  // Rate limit pulls: one every 2s per user id
+  // We'll know ID only after validation, so delay rate check until after parsing user.
+  let query = supabase.from('entries')
       .select('date, emojis, hue, song_title, song_artist, updated_at')
       .eq('telegram_id', u.id);
+
+  if (!allow('pull:'+u.id, 2000)) return res.status(429).json({ ok:false, ...devReason('rate') });
 
     if (since && typeof since === 'string') query = query.gt('updated_at', since);
 

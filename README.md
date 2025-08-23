@@ -102,6 +102,91 @@ Inside Telegram:
 
 Outside Telegram: all enhancements no-op.
 
+## Supabase Sync (Telegram)
+
+Serverless API routes (see `api/`) perform Telegram `initData` HMAC verification, then read/write Supabase using a **newer-wins** strategy so the most recently edited version of a day (client vs cloud) prevails.
+
+### Required Tables (outline)
+
+```sql
+create table if not exists public.users (
+  telegram_id bigint primary key,
+  username text,
+  first_name text,
+  last_name text,
+  language_code text,
+  tz text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.entries (
+  telegram_id bigint references public.users(telegram_id) on delete cascade,
+  date date not null,
+  emojis text[] not null default array[]::text[],
+  hue int,
+  song_title text,
+  song_artist text,
+  updated_at timestamptz not null,
+  primary key (telegram_id, date),
+  check (array_length(emojis,1) <= 3),
+  check (hue is null or (hue >= 0 and hue <= 360))
+);
+
+create table if not exists public.reminders (
+  telegram_id bigint primary key references public.users(telegram_id) on delete cascade,
+  payload jsonb,
+  updated_at timestamptz default now()
+);
+
+create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
+```
+
+### Newer-Wins RPC Function
+
+`api/sync-push` calls a Postgres function so conflict resolution happens inside the database transaction.
+
+```sql
+create or replace function public.flowday_upsert_entries(p_user bigint, p_rows jsonb)
+returns void language plpgsql as $$
+declare r jsonb; begin
+  for r in select * from jsonb_array_elements(p_rows) loop
+    insert into public.entries(telegram_id, date, emojis, hue, song_title, song_artist, updated_at)
+    values (
+      p_user,
+      (r->>'date')::date,
+      coalesce((select array(select jsonb_array_elements_text(r->'emojis'))), array[]::text[]),
+      case when (r ? 'hue') then (r->>'hue')::int else null end,
+      nullif(r->>'song_title',''),
+      nullif(r->>'song_artist',''),
+      (r->>'updated_at')::timestamptz
+    )
+    on conflict (telegram_id, date) do update set
+      emojis = excluded.emojis,
+      hue = excluded.hue,
+      song_title = excluded.song_title,
+      song_artist = excluded.song_artist,
+      updated_at = excluded.updated_at
+    where excluded.updated_at > public.entries.updated_at;
+  end loop;
+end; $$;
+```
+
+Grant execute to service role (already implicit) and restrict to server usage only (never expose the service key).
+
+### Rate Limiting (Basic)
+
+Endpoints apply an in-memory per-instance throttle (push: 400ms, pull: 2s). For production scale, replace with a durable store (Redis / Deno KV / Upstash) or Supabase edge functions + Ratelimit.
+
+### Environment Variables
+
+```
+VITE_SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=... (server only)
+BOT_TOKEN=... (server only)
+```
+
+Never expose `SUPABASE_SERVICE_ROLE_KEY` or `BOT_TOKEN` to client bundles.
+
 ## Development
 
 Run tests:
