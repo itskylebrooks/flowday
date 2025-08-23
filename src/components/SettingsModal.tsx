@@ -228,11 +228,19 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={()=> { const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }}
-                  className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
+                  onClick={()=> {
+                    if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
+                    const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
+                  }}
+                  disabled={!isCloudEnabled()}
+                  aria-disabled={!isCloudEnabled()}
+                  className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8') + ' ' + (isCloudEnabled() ? '' : 'disabled:opacity-50 disabled:cursor-not-allowed')}
                 >Daily reminder</button>
                 <span className="text-xs text-white/70">Triggers at 7pm Berlin time</span>
               </div>
+              {!isCloudEnabled() && (
+                <div className="text-[11px] text-white/40">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
+              )}
               <p className="text-[11px] text-white/35 leading-relaxed">
                 Reminders don't work for now and will be implemented in a future update.
               </p>

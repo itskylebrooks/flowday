@@ -72,7 +72,12 @@ export default async function handler(req: Req, res: Res) {
     for (const r of rows) {
       if (r.last_daily_sent === today) continue; // already sent today
       const chatId = r.telegram_id;
-      const text = `Daily Flowday reminder — take a moment to reflect and log your day.`;
+  const text = `✨ Your flow is waiting
+
+Pick today’s colors & emojis — it only takes 20 seconds.
+Every drop adds to your week’s ribbon, your month’s mix, your sky of constellations.
+
+🎶 Tap below and let the day glow into memory.`;
       try {
         const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
