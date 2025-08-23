@@ -27,13 +27,10 @@ export default async function handler(req: Req, res: Res) {
     const u = parseTGUser(initData); if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user' });
     // sanitize
     const dailyEnabled = !!daily_enabled;
-    const reTime = /^([0-2]\d):([0-5]\d)$/;
-    const dt = typeof daily_time === 'string' && reTime.test(daily_time) ? daily_time : '20:00';
-    // Upsert
+    // Upsert only columns present in DB
     const { error } = await supabase.from('reminders').upsert({
       telegram_id: u.id,
       daily_enabled: dailyEnabled,
-      daily_time: dt,
       updated_at: new Date().toISOString()
     }, { onConflict: 'telegram_id' });
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
