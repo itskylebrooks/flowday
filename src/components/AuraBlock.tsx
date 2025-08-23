@@ -22,9 +22,9 @@ export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: numb
   return (
     <div className="mx-auto mt-2 flex flex-col items-center">
       <div className="relative h-56 w-56 rounded-full ring-1 ring-white/10" style={auraBackground(hue)}>
-        {/* key ensures the rotating container remounts when hue or emojis change, so animation starts from 0 */}
+        {/* key ensures the rotating container remounts when emojis change, so animation starts from 0 */}
         <motion.div
-          key={`${hue}-${emojis.join(',')}`}
+          key={`${emojis.join(',')}`}
           className="absolute inset-0"
           initial={{ rotate: 0 }}
           animate={{ rotate: 360 }}
