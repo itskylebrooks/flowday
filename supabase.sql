@@ -42,9 +42,6 @@ create table if not exists public.reminders (
   telegram_id bigint primary key references public.users(telegram_id) on delete cascade,
   daily_enabled boolean not null default false,
   daily_time text not null default '20:00',      -- HH:MM 24h
-  weekly_enabled boolean not null default false,
-  weekly_day int not null default 1,             -- 1=Mon .. 7 unused; we use 0=Sun..6=Sat in app but store ISO Monday default
-  weekly_time text not null default '18:00',
   last_daily_sent date,                          -- date (UTC) last daily reminder sent
   last_weekly_sent date,                         -- date (UTC) last weekly recap sent
   updated_at timestamptz default now()

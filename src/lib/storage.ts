@@ -184,10 +184,7 @@ function defaultReminders(): RemindersSettings {
   return {
     dailyEnabled: false,
     dailyTime: '20:00',
-    weeklyEnabled: false,
-  weeklyDay: 1, // Monday
-    weeklyTime: '18:00',
-  timeFormat: '24',
+    timeFormat: '24',
     updatedAt: Date.now(),
   };
 }
@@ -201,9 +198,6 @@ export function loadReminders(): RemindersSettings {
     const merged: RemindersSettings = {
       dailyEnabled: typeof obj.dailyEnabled === 'boolean' ? obj.dailyEnabled : base.dailyEnabled,
       dailyTime: typeof obj.dailyTime === 'string' ? obj.dailyTime : base.dailyTime,
-      weeklyEnabled: typeof obj.weeklyEnabled === 'boolean' ? obj.weeklyEnabled : base.weeklyEnabled,
-      weeklyDay: typeof obj.weeklyDay === 'number' ? obj.weeklyDay : base.weeklyDay,
-      weeklyTime: typeof obj.weeklyTime === 'string' ? obj.weeklyTime : base.weeklyTime,
       timeFormat: obj.timeFormat === '12' ? '12' : '24',
       updatedAt: typeof obj.updatedAt === 'number' ? obj.updatedAt : Date.now(),
     };
@@ -215,10 +209,7 @@ export function saveReminders(prefs: RemindersSettings) {
   const safe: RemindersSettings = {
     dailyEnabled: !!prefs.dailyEnabled,
     dailyTime: prefs.dailyTime || '20:00',
-    weeklyEnabled: !!prefs.weeklyEnabled,
-  weeklyDay: typeof prefs.weeklyDay === 'number' ? prefs.weeklyDay : 1,
-    weeklyTime: prefs.weeklyTime || '18:00',
-  timeFormat: prefs.timeFormat === '12' ? '12' : '24',
+    timeFormat: prefs.timeFormat === '12' ? '12' : '24',
     updatedAt: Date.now(),
   };
   localStorage.setItem(REMINDERS_KEY, JSON.stringify(safe));

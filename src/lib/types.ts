@@ -24,9 +24,6 @@ export interface UserProfile {
 export interface RemindersSettings {
   dailyEnabled: boolean;
   dailyTime: string; // HH:MM (24h)
-  weeklyEnabled: boolean;
-  weeklyDay: number; // 0=Sunday .. 6=Saturday
-  weeklyTime: string; // HH:MM
   timeFormat?: '24' | '12'; // display preference
   // future: timezone, push subscription, etc.
   updatedAt: number;

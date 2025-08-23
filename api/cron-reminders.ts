@@ -54,13 +54,13 @@ export default async function handler(req: Req, res: Res) {
       const tz = r.users?.tz || 'UTC';
       if (r.daily_enabled && r.daily_time && isDue(tz, r.daily_time, now)) {
         if (r.last_daily_sent !== todayUTC) {
-          // send daily
-          const text = 'How are you feeling today? Tap to add your Flowday entry.';
-          try {
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-              method:'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ chat_id: r.telegram_id, text })
-            });
-            dailySent++;
+            const { data, error } = await supabase.from('reminders')
+              .select('telegram_id,daily_enabled,daily_time,last_daily_sent, users!inner(tz,username)')
+              .eq('daily_enabled', true)
+              .limit(1000);
+            if (error) return res.status(500).json({ ok:false, error:'db-error' });
+          interface RRow { telegram_id: number; daily_enabled: boolean; daily_time: string; last_daily_sent: string | null; users?: { tz?: string | null; username?: string | null } }
+          const rows: RRow[] = (data as unknown as RRow[]) || [];
             updates.push({ telegram_id: r.telegram_id, last_daily_sent: todayUTC });
           } catch { /* ignore individual failure */ }
         }
@@ -80,23 +80,3 @@ export default async function handler(req: Req, res: Res) {
             try {
               await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method:'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ chat_id: r.telegram_id, text })
-              });
-              weeklySent++;
-              updates.push({ telegram_id: r.telegram_id, last_weekly_sent: todayUTC });
-            } catch { /* ignore */ }
-          }
-        }
-      }
-    }
-
-    // Persist updates (best-effort)
-    for (const u of updates) {
-      try { await supabase.from('reminders').update({ last_daily_sent: u.last_daily_sent, last_weekly_sent: u.last_weekly_sent, updated_at: new Date().toISOString() }).eq('telegram_id', u.telegram_id); } catch { /* ignore */ }
-    }
-
-    res.json({ ok:true, dailySent, weeklySent, checked: rows.length });
-  } catch (e) {
-    console.error('[cron-reminders] unexpected', (e as Error)?.message);
-    res.status(500).json({ ok:false, error:'server-error' });
-  }
-}

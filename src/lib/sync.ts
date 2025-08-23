@@ -83,14 +83,11 @@ export async function verifyTelegram(tz?: string) {
       try {
         const { data: rData } = await postJSON('/api/reminders-get', { initData });
         if (rData?.ok && rData.prefs) {
-          const prefs = rData.prefs as { daily_enabled?: boolean; daily_time?: string; weekly_enabled?: boolean; weekly_day?: number; weekly_time?: string };
+          const prefs = rData.prefs as { daily_enabled?: boolean; daily_time?: string };
           const local = loadReminders();
           const merged = { ...local };
-            if (typeof prefs.daily_enabled === 'boolean') merged.dailyEnabled = prefs.daily_enabled;
-            if (typeof prefs.daily_time === 'string') merged.dailyTime = prefs.daily_time;
-            if (typeof prefs.weekly_enabled === 'boolean') merged.weeklyEnabled = prefs.weekly_enabled;
-            if (typeof prefs.weekly_day === 'number') merged.weeklyDay = prefs.weekly_day;
-            if (typeof prefs.weekly_time === 'string') merged.weeklyTime = prefs.weekly_time;
+          if (typeof prefs.daily_enabled === 'boolean') merged.dailyEnabled = prefs.daily_enabled;
+          if (typeof prefs.daily_time === 'string') merged.dailyTime = prefs.daily_time;
           saveReminders(merged);
         }
       } catch { /* ignore */ }

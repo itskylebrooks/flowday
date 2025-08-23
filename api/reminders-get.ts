@@ -23,7 +23,7 @@ export default async function handler(req: Req, res: Res) {
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac' });
     const u = parseTGUser(initData); if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user' });
-    const { data, error } = await supabase.from('reminders').select('daily_enabled,daily_time,weekly_enabled,weekly_day,weekly_time').eq('telegram_id', u.id).limit(1).maybeSingle();
+  const { data, error } = await supabase.from('reminders').select('daily_enabled,daily_time').eq('telegram_id', u.id).limit(1).maybeSingle();
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
     if (!data) return res.json({ ok:true, exists:false });
     res.json({ ok:true, exists:true, prefs: data });
