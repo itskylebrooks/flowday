@@ -3,6 +3,7 @@ import type { Entry } from './types';
 import { loadEntries, saveEntries } from './storage';
 
 const SYNC_KEY = 'flowday_last_sync_iso_v1';
+const CLOUD_FLAG_KEY = 'flowday_cloud_enabled_v1';
 const RETRY_MS = 6_000;
 
 // Narrow window typing for Telegram detection without using any
@@ -60,13 +61,18 @@ export async function verifyTelegram(tz?: string) {
   const initData = await waitForInitData();
   if (!initData) return; // wait until a later attempt when initData appears
   try {
-    await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    const { data } = await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
     verifyDone = true;
+    if (data && typeof data === 'object' && 'exists' in data) {
+      const existsVal = (data as { exists?: unknown }).exists;
+      if (existsVal === true) localStorage.setItem(CLOUD_FLAG_KEY,'1');
+    }
   } catch { /* silent */ }
 }
 
 export async function syncPull(): Promise<number | null> {
   if (!isTG()) return null;
+  if (!isCloudEnabled()) return null;
   const initData = await waitForInitData();
   if (!initData) return null;
   const since = localStorage.getItem(SYNC_KEY) || '';
@@ -96,6 +102,7 @@ function flushPush() {
 
 async function rawSyncPush(pending: PendingPush[]) {
   if (!isTG() || !pending.length) return;
+  if (!isCloudEnabled()) { pushQueue = []; return; }
   const initData = await waitForInitData();
   if (!initData) { // requeue all until initData available
     pushQueue.push(...pending);
@@ -150,6 +157,7 @@ export function queueSyncPushMany(entries: Entry[]) {
 
 export async function initialFullSyncIfNeeded() {
   if (!isTG()) return;
+  if (!isCloudEnabled()) return;
   await waitForInitData();
   const FLAG = 'flowday_initial_sync_done_v1';
   if (localStorage.getItem(FLAG)) return; // already performed
@@ -168,6 +176,7 @@ export async function initialFullSyncIfNeeded() {
 let periodicTimer: ReturnType<typeof setInterval> | null = null;
 export function startPeriodicPull() {
   if (!isTG()) return;
+  if (!isCloudEnabled()) return;
   if (periodicTimer) return;
   periodicTimer = setInterval(()=> { syncPull(); }, 60000);
 }
@@ -187,4 +196,35 @@ export function startStartupSyncLoop() {
     if (attempts < 8) setTimeout(loop, 1000 * Math.min(5, attempts));
   };
   loop();
+}
+
+// Cloud enable/disable -------------------------------------------------
+export function isCloudEnabled(): boolean { return !!localStorage.getItem(CLOUD_FLAG_KEY); }
+export function enableCloud() { localStorage.setItem(CLOUD_FLAG_KEY,'1'); localStorage.removeItem('flowday_initial_sync_done_v1'); }
+export function disableCloud() { localStorage.removeItem(CLOUD_FLAG_KEY); localStorage.removeItem(SYNC_KEY); localStorage.removeItem('flowday_initial_sync_done_v1'); }
+
+export async function signInToCloud(): Promise<boolean> {
+  if (!isTG()) return false;
+  const initData = await waitForInitData();
+  if (!initData) return false;
+  try {
+    const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    if (res.ok && data?.ok) {
+      enableCloud();
+      await initialFullSyncIfNeeded();
+      startPeriodicPull();
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
+export async function deleteCloudAccount(): Promise<boolean> {
+  if (!isTG() || !isCloudEnabled()) return false;
+  const initData = await waitForInitData(); if (!initData) return false;
+  try {
+    const { res, data } = await postJSON('/api/telegram-delete', { initData });
+    if (res.ok && data?.ok) { disableCloud(); stopPeriodicPull(); return true; }
+  } catch { /* ignore */ }
+  return false;
 }

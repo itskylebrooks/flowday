@@ -8,7 +8,7 @@ import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
-import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop } from './lib/sync';
+import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
@@ -58,8 +58,10 @@ export default function App() {
     startStartupSyncLoop(); // resilient verification loop
     (async ()=> {
       await verifyTelegram();
-      await initialFullSyncIfNeeded();
-      startPeriodicPull();
+      if (isCloudEnabled()) {
+        await initialFullSyncIfNeeded();
+        startPeriodicPull();
+      }
     })();
     return () => { /* periodic pull persists across app lifetime; no cleanup needed */ };
   }, []);

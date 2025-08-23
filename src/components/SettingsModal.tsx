@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
+import { isCloudEnabled, signInToCloud, deleteCloudAccount } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -189,10 +190,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Future: global uniqueness.</p>
               </div>
               <div className="pt-1 grid gap-2">
-                <div className="opacity-50 cursor-not-allowed select-none space-y-2">
-                  <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/40">Sign in (soon)</button>
-                  <button type="button" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-400/50">Delete account (soon)</button>
-                </div>
+                <CloudAccountSection />
                 <button
                   type="button"
                   onClick={() => {
@@ -343,6 +341,45 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           <div className="mt-0.5">Icons by Remix Design.</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Subcomponent to handle cloud account actions
+function CloudAccountSection() {
+  const [enabled, setEnabled] = useState(isCloudEnabled());
+  const [working, setWorking] = useState(false);
+  async function handleSignIn() {
+    setWorking(true);
+    const ok = await signInToCloud();
+    setWorking(false);
+    if (ok) { setEnabled(true); }
+  }
+  async function handleDelete() {
+    if (!enabled) return;
+    if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
+    setWorking(true);
+    const ok = await deleteCloudAccount();
+    setWorking(false);
+    if (ok) setEnabled(false);
+  }
+  return (
+    <div className="space-y-2">
+      {!enabled && (
+        <button type="button" disabled={working} onClick={handleSignIn}
+          className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
+          {working ? 'Signing in…' : 'Sign in & enable sync'}
+        </button>
+      )}
+      {enabled && (
+        <button type="button" disabled={working} onClick={handleDelete}
+          className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
+          {working ? 'Deleting…' : 'Delete cloud account'}
+        </button>
+      )}
+      <p className="text-[10px] leading-relaxed text-white/35">
+        {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
+      </p>
     </div>
   );
 }
