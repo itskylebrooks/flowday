@@ -8,6 +8,7 @@ import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
+import { verifyTelegram, syncPull, queueSyncPush } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
@@ -50,6 +51,28 @@ export default function App() {
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
   useEffect(() => { saveEntries(entries); }, [entries]);
+  // Telegram verification + initial cloud sync (telegram only)
+  useEffect(()=> {
+    interface TGWin { Telegram?: { WebApp?: unknown } }
+    if (!(window as unknown as TGWin).Telegram?.WebApp) return; // fast path
+    verifyTelegram();
+    syncPull();
+  }, []);
+
+  // Detect single-entry changes & queue push (telegram only)
+  const prevEntriesRef = useRef<Entry[]>(entries);
+  useEffect(()=> {
+  interface TGWin { Telegram?: { WebApp?: unknown } }
+  if (!(window as unknown as TGWin).Telegram?.WebApp) { prevEntriesRef.current = entries; return; }
+    const prevMap = new Map(prevEntriesRef.current.map(e => [e.date, e] as const));
+    const changed: Entry[] = [];
+    for (const e of entries) {
+      const prev = prevMap.get(e.date);
+      if (!prev || prev.updatedAt !== e.updatedAt) changed.push(e);
+    }
+    if (changed.length === 1) queueSyncPush(changed[0]); // only push single edits to keep batch small
+    prevEntriesRef.current = entries;
+  }, [entries]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
