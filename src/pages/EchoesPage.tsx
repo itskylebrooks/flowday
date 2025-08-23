@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import cassetteInsert from '../assets/audio/cassette-insert.mp3';
 import cassetteEject from '../assets/audio/cassette-eject.mp3';
+import { createCassettePool, playCassetteInsert, playCassetteEject } from '../lib/sounds';
 import type { Entry } from '../lib/types';
 import { hsl } from '../lib/utils';
 
@@ -61,14 +62,9 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
   const [active, setActive] = useState<Entry | null>(null);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<number | null>(null);
-  // Audio elements managed imperatively (constructed once)
-  const openAudioRef = useRef<HTMLAudioElement | null>(null);
-  const closeAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Initialize a small audio pool for low-latency repeated playback
   useEffect(()=> {
-    openAudioRef.current = new Audio(cassetteInsert);
-    closeAudioRef.current = new Audio(cassetteEject);
-    if (openAudioRef.current) openAudioRef.current.volume = 0.55;
-    if (closeAudioRef.current) closeAudioRef.current.volume = 0.55;
+    createCassettePool(cassetteInsert, cassetteEject, 6, 0.55);
   }, []);
 
   function openModal(e: Entry) {
@@ -76,16 +72,14 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
     setClosing(false);
     setActive(e);
   // Play open (insert) sound
-  const a = openAudioRef.current;
-  if (a) { try { a.currentTime = 0; a.play(); } catch { /* ignore play interruption */ } }
+  playCassetteInsert();
   }
 
   function beginClose() {
     if (!active || closing) return;
     setClosing(true);
   // Play close (eject) sound
-  const a = closeAudioRef.current;
-  if (a) { try { a.currentTime = 0; a.play(); } catch { /* ignore play interruption */ } }
+  playCassetteEject();
     // Match settingsOut duration (.28s) + small buffer
     closeTimer.current = window.setTimeout(()=>{ setActive(null); setClosing(false); }, 300);
   }
