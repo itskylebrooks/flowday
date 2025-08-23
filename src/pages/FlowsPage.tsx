@@ -3,109 +3,82 @@ import WeekTimeline from '../components/WeekTimeline';
 import MonthFlow from '../components/MonthFlow';
 import { loadUser } from '../lib/storage';
 import { todayISO } from '../lib/utils';
-import { useRef, useState } from 'react';
-import { sharePreparedMessage } from '../lib/telegram';
+import { useRef, useState, useMemo } from 'react';
+import { sharePoster } from '../lib/sharePoster';
 import { toPng } from 'html-to-image';
 
 export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode, animKey }:
   { recent7: Entry[]; monthHues: number[]; monthEmpty: boolean; mode: 'week' | 'month'; onToggleMode: () => void; animKey: string }) {
 
   const user = loadUser();
-  const [posterMode, setPosterMode] = useState(false); // controls meta visibility
+  const [posterMode, setPosterMode] = useState(false); // controls meta / instruction visibility
   const posterRef = useRef<HTMLDivElement | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Environment detection (memoized to avoid recompute)
+  const { isTelegram, isAndroidTelegram } = useMemo(() => {
+    if (typeof window === 'undefined') return { isTelegram:false, isAndroidTelegram:false };
+    const tgWebApp = (window as unknown as { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp;
+    const ua = (navigator.userAgent || navigator.vendor || '').toLowerCase();
+    const isAndroid = ua.includes('android');
+    return { isTelegram: !!tgWebApp, isAndroidTelegram: !!tgWebApp && isAndroid };
+  }, []);
   function formatToday(): string {
     const iso = todayISO();
     const d = new Date(iso + 'T00:00:00');
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  async function handleSavePoster() {
+  async function handlePosterButton() {
+    // Android Telegram: just toggle instructional text (screenshot flow)
+    if (isAndroidTelegram) { setPosterMode(p => !p); return; }
     if (exporting) return;
     setExporting(true);
-    setPosterMode(true); // start fade in
-    const FADE_IN_MS = 420; // keep in sync with CSS durations (max .45s)
+    setPosterMode(true); // show meta before capture
+    const FADE_IN_MS = 420;
     setTimeout(async () => {
       try {
-        const node = posterRef.current;
-        if (!node) throw new Error('poster node missing');
+        const node = posterRef.current; if (!node) throw new Error('poster node missing');
         const width = node.offsetWidth;
-        const dataUrl = await toPng(node, {
-          width,
-            height: width,
-          cacheBust: true,
-          pixelRatio: 2,
-          backgroundColor: '#0E0E0E'
-        });
+        const dataUrl = await toPng(node, { width, height: width, cacheBust: true, pixelRatio: 2, backgroundColor: '#0E0E0E' });
         const stamp = todayISO();
-        const tgWebApp = (window as unknown as { Telegram?: { WebApp?: { showPopup?: (cfg:{message:string; buttons?: {id:string; text:string}[]})=>void; shareMessage?: (id:string)=>void } } }).Telegram?.WebApp;
-        const isTG = !!tgWebApp;
-        if (isTG) {
-          const ua = (navigator.userAgent || navigator.vendor || '').toLowerCase();
-          const isAndroid = ua.includes('android');
-          if (isAndroid) {
-            // Android Telegram: feature not implemented yet
-            try { tgWebApp?.showPopup?.({ message: 'Poster sharing not available on Android yet.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
-          } else {
-            // iOS / Desktop Telegram: attempt prepared inline message share first
+        let shared = false;
+        if (isTelegram) {
+          // Attempt Telegram native share via prepared message API wrapper
             try {
-              const res = await fetch(dataUrl);
-              const blob = await res.blob();
-              const filename = `flowday-${mode}-${stamp}.png`;
-              let shared = false;
-              // Attempt backend prepared message (requires server endpoint)
-              try {
-                const form = new FormData();
-                form.append('file', new File([blob], filename, { type: 'image/png' }));
-                const resp = await fetch('/api/tg/save-prepared', { method: 'POST', body: form });
-                if (resp.ok) {
-                  const json = await resp.json();
-                  if (json && json.id) {
-                    sharePreparedMessage(json.id as string);
-                    shared = true;
-                  }
+              const result = await sharePoster(dataUrl, 'Flowday');
+              if (result.ok && result.method === 'telegram') shared = true;
+            } catch { /* ignore */ }
+          if (!shared) {
+            // Attempt Web Share API (outside / inside Telegram if available)
+            try {
+              const resp = await fetch(dataUrl); const blob = await resp.blob();
+              const file = new File([blob], `flowday-${mode}-${stamp}.png`, { type: 'image/png' });
+              const navShare = navigator as Navigator & { share?: (d: ShareData)=>Promise<void>; canShare?: (d: ShareData)=>boolean };
+              const shareData: ShareData & { files?: File[] } = { files:[file], title:'Flowday', text:'My Flowday poster' };
+              if (navShare.share) {
+                if (!navShare.canShare || navShare.canShare(shareData)) {
+                  await navShare.share(shareData);
+                  shared = true;
                 }
-              } catch { /* swallow and fallback */ }
-              if (!shared) {
-                // Fallback to Web Share API inside Telegram if available
-                interface ShareCap { share?: (data: { files?: File[]; title?: string; text?: string })=>Promise<void>; canShare?: (data:{ files?: File[] })=>boolean }
-                const file = new File([blob], filename, { type: 'image/png' });
-                const navShare = navigator as ShareCap;
-                try {
-                  if (navShare.share) {
-                    if (!navShare.canShare || navShare.canShare({ files: [file] })) {
-                      await navShare.share({ files: [file], title: 'Flowday', text: 'My Flowday poster' });
-                      shared = true;
-                    }
-                  }
-                } catch { /* ignore */ }
               }
-              if (!shared) {
-                // Graceful final fallback: download so user still gets asset
-                const a = document.createElement('a');
-                a.download = filename;
-                a.href = dataUrl;
-                a.click();
-                try { tgWebApp?.showPopup?.({ message: 'Direct share unavailable. Poster downloaded instead.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
-              }
-            } catch (innerErr) {
-              console.error('Share preparation failed', innerErr);
-              try { tgWebApp?.showPopup?.({ message: 'Could not generate poster for sharing.', buttons:[{id:'ok', text:'OK'}] }); } catch { /* ignore */ }
-            }
+            } catch { /* ignore */ }
+          }
+          if (!shared) {
+            // Fallback to download inside Telegram
+            const a = document.createElement('a');
+            a.download = `flowday-${mode}-${stamp}.png`;
+            a.href = dataUrl; a.click();
           }
         } else {
-          // Standard browser download
+          // Non-Telegram browser: direct download
           const a = document.createElement('a');
           a.download = `flowday-${mode}-${stamp}.png`;
-          a.href = dataUrl;
-          a.click();
+          a.href = dataUrl; a.click();
         }
-  // Hide meta immediately after capture
-  setPosterMode(false);
-      } catch (err) {
-        console.error(err);
-        setPosterMode(false);
+      } catch (e) {
+        console.error('poster share failed', e);
       } finally {
+        setPosterMode(false);
         setExporting(false);
       }
     }, FADE_IN_MS);
@@ -144,13 +117,31 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           {mode === 'week' ? 'Switch to month' : 'Switch to week'}
         </button>
         <button
-          onClick={handleSavePoster}
-          disabled={exporting}
+          onClick={handlePosterButton}
+          disabled={!isAndroidTelegram && exporting}
           className="rounded-md px-3 py-2 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-40"
         >
-          {exporting ? 'Exporting…' : 'Save as poster'}
+          {isAndroidTelegram
+            ? (posterMode ? 'Hide poster text' : 'Show poster text')
+            : isTelegram
+              ? (exporting ? 'Exporting…' : 'Share poster')
+              : (exporting ? 'Exporting…' : 'Save as poster')}
         </button>
       </div>
+      {/* Android Telegram screenshot instruction overlay (no layout shift) */}
+      {isAndroidTelegram && (
+        <div
+          className={
+            'pointer-events-none absolute left-0 right-0 bottom-[130px] flex justify-center transition-all duration-300 text-center text-[13px] leading-snug ' +
+            (posterMode ? 'opacity-100 translate-y-0 text-white/80' : 'opacity-0 translate-y-2 text-white/80')
+          }
+          aria-hidden={!posterMode}
+        >
+          <span className="px-2">
+            Take a screenshot to share this poster. This is the simplest solution for Android Telegram right now.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
