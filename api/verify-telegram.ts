@@ -3,8 +3,9 @@ import { isValidInitData, parseTGUser, devReason } from './_tg';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Accept legacy VITE_ vars as fallback to ease migration if not yet set in Vercel UI
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 let supabaseInitError: string | null = null;
 const supabase = (function init(){
@@ -34,8 +35,16 @@ export default async function handler(req: Req, res: Res) {
     });
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed', ...devReason('method') });
     if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
-  const body = (req.body as { initData?: string; tz?: string } | undefined) || {};
-  const { initData, tz } = body;
+  const body = (req.body as { initData?: string; tz?: string; debug?: boolean } | undefined) || {};
+  const { initData, tz, debug } = body;
+    if (debug) {
+      return res.json({
+        ok:false,
+        debug:true,
+        env:{ SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_ROLE_KEY, BOT_TOKEN: !!process.env.BOT_TOKEN },
+        supabaseInitError
+      });
+    }
     if (!initData) {
       console.warn('[verify-telegram] missing initData');
       return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
@@ -66,7 +75,7 @@ export default async function handler(req: Req, res: Res) {
 
     res.json({ ok:true, telegram_id: u.id });
   } catch (e) {
-    console.error('[verify-telegram] unexpected error', (e as Error)?.message);
-    res.status(500).json({ ok:false, error:'server-error' });
+    console.error('[verify-telegram] unexpected error', (e as Error)?.message, e);
+    res.status(500).json({ ok:false, error:'server-error', ...(process.env.NODE_ENV!=='production' ? { message:(e as Error)?.message } : {}) });
   }
 }

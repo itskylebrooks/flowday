@@ -4,8 +4,8 @@ import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
@@ -23,8 +23,9 @@ export default async function handler(req: Req, res: Res) {
   try {
   if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
   if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
-  const body = (req.body as { initData?: string; since?: string } | undefined) || {};
-  const { initData, since } = body;
+  const body = (req.body as { initData?: string; since?: string; debug?: boolean } | undefined) || {};
+  const { initData, since, debug } = body;
+  if (debug) return res.json({ ok:false, debug:true, env:{ SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_ROLE_KEY, BOT_TOKEN: !!process.env.BOT_TOKEN }, supabaseInitError });
   if (!initData) return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
   if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
   if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac', ...devReason('hmac') });
