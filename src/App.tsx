@@ -57,6 +57,8 @@ export default function App() {
   const [activeDate, setActiveDate] = useState<string>(todayISO());
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
+  const entriesRef = useRef<Entry[]>(entries);
+  useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
   // Telegram verification + initial cloud sync (telegram only)
   // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
@@ -72,15 +74,27 @@ export default function App() {
       }
     })();
     // Listen for storage-level updates dispatched by background sync so UI updates live
-    const onEntriesUpdated = () => { try { setEntries(loadEntries()); } catch { /* ignore */ } };
+    const onEntriesUpdated = () => {
+      try {
+        const next = loadEntries();
+        const cur = entriesRef.current || [];
+        const a = JSON.stringify(cur);
+        const b = JSON.stringify(next);
+        if (a !== b) setEntries(next);
+      } catch { /* ignore */ }
+    };
     window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
 
     // Also listen for cross-window/localStorage changes which fire 'storage' events
     const onStorage = (e: StorageEvent) => {
       try {
         if (!e.key) return;
-        if (e.key === STORAGE_KEY || e.key === 'flowday_reminders_v1' || e.key === 'flowday_user_v1' || e.key === 'flowday_cloud_enabled_v1') {
-          setEntries(loadEntries());
+        if (e.key === STORAGE_KEY) {
+          try {
+            const next = loadEntries();
+            const cur = entriesRef.current || [];
+            if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
+          } catch { /* ignore */ }
         }
       } catch { /* ignore */ }
     };
