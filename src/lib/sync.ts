@@ -10,6 +10,25 @@ interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
 function isTG(): boolean { return !!(window as unknown as TGWin).Telegram?.WebApp; }
 function getInitData(): string { return (window as unknown as TGWin).Telegram?.WebApp?.initData || ''; }
 
+// Some environments expose Telegram.WebApp before initData is populated; we lazily
+// wait (poll) for a non-empty initData (up to a timeout) before first network calls.
+let initDataReady: Promise<string> | null = null;
+async function waitForInitData(maxMs = 4000): Promise<string> {
+  if (!isTG()) return '';
+  if (initDataReady) return initDataReady;
+  initDataReady = new Promise<string>(resolve => {
+    const started = Date.now();
+    const tick = () => {
+      const cur = getInitData();
+      if (cur) { resolve(cur); return; }
+      if (Date.now() - started > maxMs) { resolve(''); return; }
+      setTimeout(tick, 120);
+    };
+    tick();
+  });
+  return initDataReady;
+}
+
 export function mergeByNewer(local: Entry[], incoming: Entry[]): Entry[] {
   const map = new Map(local.map(e => [e.date, e] as const));
   for (const r of incoming) {
@@ -30,15 +49,16 @@ async function postJSON(path: string, body: unknown): Promise<{ res: Response; d
 
 export async function verifyTelegram(tz?: string) {
   if (!isTG()) return;
-  const initData = getInitData();
-  try {
-    await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
-  } catch { /* silent */ }
+  const initData = await waitForInitData();
+  if (!initData) return; // avoid spamming server with missing-initData
+  try { await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }); }
+  catch { /* silent */ }
 }
 
 export async function syncPull(): Promise<number | null> {
   if (!isTG()) return null;
-  const initData = getInitData();
+  const initData = await waitForInitData();
+  if (!initData) return null;
   const since = localStorage.getItem(SYNC_KEY) || '';
   try {
     const { res, data } = await postJSON('/api/sync-pull', { initData, since });
@@ -66,7 +86,12 @@ function flushPush() {
 
 async function rawSyncPush(pending: PendingPush[]) {
   if (!isTG() || !pending.length) return;
-  const initData = getInitData();
+  const initData = await waitForInitData();
+  if (!initData) { // requeue all until initData available
+    pushQueue.push(...pending);
+    setTimeout(flushPush, 500);
+    return;
+  }
   const entries = pending.map(p => p.entry);
   try {
     const { res } = await postJSON('/api/sync-push', { initData, entries });
@@ -115,6 +140,7 @@ export function queueSyncPushMany(entries: Entry[]) {
 
 export async function initialFullSyncIfNeeded() {
   if (!isTG()) return;
+  await waitForInitData();
   const FLAG = 'flowday_initial_sync_done_v1';
   if (localStorage.getItem(FLAG)) return; // already performed
   // Perform pull first to avoid overwriting cloud data

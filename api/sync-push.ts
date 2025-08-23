@@ -7,6 +7,7 @@ export const config = { runtime: 'nodejs' };
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
+let rpcAvailable = true; // will be disabled if function missing
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -88,12 +89,19 @@ export default async function handler(req: Req, res: Res) {
     }));
 
     if (toUpsert.length) {
-      let used = 'rpc';
-      const { error } = await supabase.rpc('flowday_upsert_entries', { p_user: u.id, p_rows: toUpsert });
-      if (error) {
-        // Fallback: plain upsert newer-wins best-effort (client already filtered newer)
-        console.warn('[sync-push] RPC failed, fallback upsert', error.message);
-        used = 'upsert-fallback';
+      let used = 'upsert-fallback';
+      if (rpcAvailable) {
+        const { error } = await supabase.rpc('flowday_upsert_entries', { p_user: u.id, p_rows: toUpsert });
+        if (!error) {
+          used = 'rpc';
+        } else {
+          console.warn('[sync-push] RPC failed, fallback upsert', error.message);
+          if (/Could not find the function/i.test(error.message || '')) {
+            rpcAvailable = false; // disable further attempts this runtime
+          }
+        }
+      }
+      if (used !== 'rpc') {
         const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({
           telegram_id: u.id,
           ...e
