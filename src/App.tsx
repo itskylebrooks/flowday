@@ -59,9 +59,10 @@ export default function App() {
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
   useEffect(() => { saveEntries(entries); }, [entries]);
   // Telegram verification + initial cloud sync (telegram only)
+  // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
+  // appears later (e.g. opening in another device) without requiring a manual reload.
   useEffect(()=> {
-    interface TGWin { Telegram?: { WebApp?: unknown } }
-    if (!(window as unknown as TGWin).Telegram?.WebApp) return;
+    if (!isTG) return;
     startStartupSyncLoop(); // resilient verification loop
     (async ()=> {
       await verifyTelegram();
@@ -71,7 +72,7 @@ export default function App() {
       }
     })();
     return () => { /* periodic pull persists across app lifetime; no cleanup needed */ };
-  }, []);
+  }, [isTG]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
