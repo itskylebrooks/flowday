@@ -55,35 +55,24 @@ export default async function handler(req: Req, res: Res) {
 
     const now = new Date();
 
-    // Fetch enabled daily reminders and user's timezone
+    // Fetch enabled daily reminders
     const { data, error } = await supabase.from('reminders')
-      .select('telegram_id,daily_time,last_daily_sent,users!inner(tz,username)')
+      .select('telegram_id,daily_enabled,last_daily_sent')
       .eq('daily_enabled', true)
       .limit(1000);
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
 
-    type Row = { telegram_id: number; daily_time: string | null; last_daily_sent: string | null; users?: { tz?: string | null; username?: string | null } };
+    type Row = { telegram_id: number; daily_enabled: boolean; last_daily_sent: string | null };
     const rows: Row[] = (data as unknown as Row[]) || [];
 
     let sent = 0;
     const errors: Array<{ id: number; message: string }> = [];
+    const today = new Date().toISOString().slice(0,10); // UTC date
 
     for (const r of rows) {
-      const tz = r.users?.tz || 'UTC';
-      const target = (r.daily_time || '').trim();
-      if (!target) continue;
-
-      // Check if it's the right minute in user's tz
-      if (!isDue(tz, target, now)) continue;
-
-      // Compute today's date in user's tz to avoid duplicate sends
-      const todayLocal = dateForTz(tz, now);
-      if (r.last_daily_sent === todayLocal) continue; // already sent today
-
+      if (r.last_daily_sent === today) continue; // already sent today
       const chatId = r.telegram_id;
-      const username = r.users?.username;
-      const text = username ? `Hi ${username}! Daily Flowday reminder — take a moment to reflect and log your day.` : `Daily Flowday reminder — take a moment to reflect and log your day.`;
-
+      const text = `Daily Flowday reminder — take a moment to reflect and log your day.`;
       try {
         const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
@@ -96,8 +85,8 @@ export default async function handler(req: Req, res: Res) {
           continue;
         }
 
-        // Mark as sent for today (use user's local date)
-        const { error: upErr } = await supabase.from('reminders').update({ last_daily_sent: todayLocal, updated_at: new Date().toISOString() }).eq('telegram_id', chatId);
+        // Mark as sent for today
+        const { error: upErr } = await supabase.from('reminders').update({ last_daily_sent: today, updated_at: new Date().toISOString() }).eq('telegram_id', chatId);
         if (upErr) {
           errors.push({ id: chatId, message: 'db-update-failed' });
           continue;
