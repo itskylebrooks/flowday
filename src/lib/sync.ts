@@ -204,20 +204,21 @@ export function isCloudEnabled(): boolean { return !!localStorage.getItem(CLOUD_
 export function enableCloud() { localStorage.setItem(CLOUD_FLAG_KEY,'1'); localStorage.removeItem('flowday_initial_sync_done_v1'); }
 export function disableCloud() { localStorage.removeItem(CLOUD_FLAG_KEY); localStorage.removeItem(SYNC_KEY); localStorage.removeItem('flowday_initial_sync_done_v1'); }
 
-export async function signInToCloud(): Promise<boolean> {
-  if (!isTG()) return false;
+export async function signInToCloud(username?: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isTG()) return { ok:false, error:'not-telegram' };
   const initData = await waitForInitData();
-  if (!initData) return false;
+  if (!initData) return { ok:false, error:'no-initData' };
   try {
-    const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
+    if (res.status === 409) return { ok:false, error:'username-taken' };
     if (res.ok && data?.ok) {
       enableCloud();
       await initialFullSyncIfNeeded();
       startPeriodicPull();
-      return true;
+      return { ok:true };
     }
   } catch { /* ignore */ }
-  return false;
+  return { ok:false, error:'unknown' };
 }
 
 export async function deleteCloudAccount(): Promise<boolean> {
@@ -228,4 +229,15 @@ export async function deleteCloudAccount(): Promise<boolean> {
     if (res.ok && data?.ok) { disableCloud(); stopPeriodicPull(); return true; }
   } catch { /* ignore */ }
   return false;
+}
+
+export async function updateCloudUsername(username: string): Promise<{ ok:boolean; error?:string }> {
+  if (!isTG() || !isCloudEnabled()) return { ok:false, error:'not-enabled' };
+  const initData = await waitForInitData(); if (!initData) return { ok:false, error:'no-initData' };
+  try {
+    const { res, data } = await postJSON('/api/telegram-update-username', { initData, username });
+    if (res.status === 409) return { ok:false, error:'username-taken' };
+    if (res.ok && data?.ok) return { ok:true };
+  } catch { /* ignore */ }
+  return { ok:false, error:'unknown' };
 }

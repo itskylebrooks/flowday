@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
-import { isCloudEnabled, signInToCloud, deleteCloudAccount } from '../lib/sync';
+import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -38,17 +38,23 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     setUsername(e.target.value);
     setDirty(true);
   }
-  function handleSave(e?: React.FormEvent) {
+  async function handleSave(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!dirty || saving) return;
     setSaving(true);
-    // mimic async (future server) for visual feedback
-    setTimeout(()=>{
-      const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
-      setUsername(stored.username);
-      setSaving(false); setDirty(false); setSavedFlash(true);
-      setTimeout(()=> setSavedFlash(false), 1400);
-    }, 120);
+    const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
+    // If cloud enabled, attempt remote username update
+    if (isCloudEnabled()) {
+      const r = await updateCloudUsername(stored.username);
+      if (!r.ok && r.error === 'username-taken') {
+        setSaving(false);
+        alert('Username already taken. Please choose another.');
+        return;
+      }
+    }
+    setUsername(stored.username);
+    setSaving(false); setDirty(false); setSavedFlash(true);
+    setTimeout(()=> setSavedFlash(false), 1400);
   }
 
   // Auto avatar derivation
@@ -351,9 +357,14 @@ function CloudAccountSection() {
   const [working, setWorking] = useState(false);
   async function handleSignIn() {
     setWorking(true);
-    const ok = await signInToCloud();
+    const r = await signInToCloud(loadUser().username);
     setWorking(false);
-    if (ok) { setEnabled(true); }
+    if (r.ok) { setEnabled(true); }
+    else if (r.error === 'username-taken') {
+      alert('Username already taken. Choose another and try again.');
+    } else {
+      alert('Sign in failed. Try again.');
+    }
   }
   async function handleDelete() {
     if (!enabled) return;

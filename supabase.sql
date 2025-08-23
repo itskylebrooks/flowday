@@ -27,6 +27,9 @@ create table if not exists public.entries (
 
 create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
 
+-- Ensure usernames are unique case-insensitively when present
+create unique index if not exists users_username_unique on public.users (lower(username)) where username is not null;
+
 -- Reminders placeholder
 create table if not exists public.reminders (
   telegram_id bigint primary key references public.users(telegram_id) on delete cascade,

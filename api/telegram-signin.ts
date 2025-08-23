@@ -18,25 +18,32 @@ export default async function handler(req: Req, res: Res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
     if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
-    const body = (req.body as { initData?: string; tz?: string } | undefined) || {};
-    const { initData, tz } = body;
+  const body = (req.body as { initData?: string; tz?: string; username?: string } | undefined) || {};
+  const { initData, tz, username } = body;
     if (!initData) return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac', ...devReason('hmac') });
     const u = parseTGUser(initData);
     if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
-    // Upsert user (idempotent)
-    const { error: upErr } = await supabase.from('users').upsert({
+    // Determine desired username: explicit > Telegram handle > null
+    const desired = typeof username === 'string' && username.trim().length ? username.trim().toLowerCase() : (u.username ? u.username.toLowerCase() : null);
+    if (desired) {
+      const { data: existing } = await supabase.from('users').select('telegram_id').ilike('username', desired).limit(1);
+      if (existing && existing.length) {
+        return res.status(409).json({ ok:false, error:'username-taken' });
+      }
+    }
+    const { error: upErr } = await supabase.from('users').insert({
       telegram_id: u.id,
-      username: u.username ?? null,
+      username: desired,
       first_name: u.first_name ?? null,
       last_name: u.last_name ?? null,
       language_code: u.language_code ?? null,
       tz: typeof tz === 'string' ? tz : 'UTC',
       updated_at: new Date().toISOString()
     });
-    if (upErr) return res.status(500).json({ ok:false, error:'user-upsert-failed' });
+    if (upErr) return res.status(500).json({ ok:false, error:'user-insert-failed' });
     try { await supabase.from('reminders').insert({ telegram_id: u.id }); } catch { /* ignore duplicate */ }
     res.json({ ok:true, telegram_id: u.id });
   } catch (e) {
