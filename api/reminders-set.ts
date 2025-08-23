@@ -20,7 +20,7 @@ export default async function handler(req: Req, res: Res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
     if (supabaseInitError) return res.status(500).json({ ok:false, error:supabaseInitError });
-  const { initData, daily_enabled, daily_time } = (req.body as Body) || {};
+  const { initData, daily_enabled } = (req.body as Body) || {};
     if (!initData) return res.status(400).json({ ok:false, error:'missing-initData' });
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac' });

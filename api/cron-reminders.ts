@@ -13,27 +13,6 @@ const supabase = (function init(){
 interface Req { method?: string; headers?: Record<string,string|undefined>; body?: unknown }
 interface Res { status:(c:number)=>Res; json:(v:unknown)=>void }
 
-// Check whether the current time in `tz` matches target "HH:MM"
-function isDue(tz: string | null, targetHHMM: string, now: Date) {
-  try {
-    const fmt = new Intl.DateTimeFormat('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', timeZone: tz || 'UTC' });
-    const hhmm = fmt.format(now); // "HH:MM"
-    return hhmm === targetHHMM;
-  } catch {
-    return false;
-  }
-}
-
-// Get ISO date YYYY-MM-DD in user's timezone
-function dateForTz(tz: string | null, now: Date) {
-  try {
-    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC' }); // en-CA -> YYYY-MM-DD
-    return fmt.format(now);
-  } catch {
-    return now.toISOString().slice(0,10);
-  }
-}
-
 export default async function handler(req: Req, res: Res) {
   try {
     // Accept Vercel cron GET requests (user-agent contains vercel-cron) OR POST/GET with Bearer secret
@@ -52,8 +31,6 @@ export default async function handler(req: Req, res: Res) {
     if (supabaseInitError) return res.status(500).json({ ok:false, error:supabaseInitError });
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     const botToken = process.env.BOT_TOKEN;
-
-    const now = new Date();
 
     // Fetch enabled daily reminders
     const { data, error } = await supabase.from('reminders')
