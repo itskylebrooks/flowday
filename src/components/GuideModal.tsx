@@ -8,39 +8,43 @@ interface GuideModalProps {
 const STEPS: { title: string; body: string }[] = [
   {
     title: 'Welcome to Flowday',
-    body: 'Capture each day with up to 3 emojis. They form your monthly aura and yearly constellations.'
+    body: 'A 20-second ritual: pick up to 3 emojis, slide a color, and optionally add a song — your day distilled into color, emoji, and a vibe.'
   },
   {
     title: 'Pick emojis',
-    body: 'Tap the triangle slots to choose emojis that reflect your day. They stay unique per day.'
+    body: 'Tap 1–3 triangle slots to select emojis that reflect your day. They form your aura and feed the constellations.'
   },
   {
     title: 'Color your vibe',
-    body: 'Drag the rainbow slider to set a hue for today. This powers gradients and mood summaries.'
+    body: 'Drag the rainbow slider (unlocks after first emoji) to set today\'s hue — it powers gradients in Flows and Month Mixes.'
   },
   {
-    title: 'Song of the day',
-    body: 'Optionally add a song (artist + title). Leave both blank to clear it.'
+    title: 'Add a song (optional)',
+    body: 'Enter a title and artist to create an Echo (cassette-style snapshot). Leave blank to clear.'
   },
   {
-    title: 'Flows view',
-    body: 'See recent days (week / month) and color patterns. Switch modes inside Flows.'
+    title: 'Save & edit rules',
+    body: 'Saved entries show a gentle confirmation. You can edit today and yesterday only; earlier days are snapshots.'
+  },
+  {
+    title: 'Flows, Mixes & Posters',
+    body: 'Week Flow shows 7 blended bands; Month Mix creates a continuous ribbon — both exportable as PNG posters.'
   },
   {
     title: 'Constellations',
-    body: 'Your most frequent emojis form a physics constellation. Pinch / drag / zoom to explore.'
+    body: 'Top emojis become nodes; co-occurrences connect them. Pinch / drag to explore your emoji sky.'
   },
   {
     title: 'Echoes',
-    body: 'Look back across years to see how your vibe evolves (year offset navigation).'
+    body: 'Days with songs surface as Echo cards (date, title, artist) — open one for a cassette-style view.'
   },
   {
-    title: 'Auto avatar',
-    body: 'Top-right in settings: auto-generated from this month\'s top emoji + colors.'
+    title: 'Sharing & privacy',
+    body: 'Export PNGs or share directly to Telegram. Data is local-first; future sync is optional and opt-in only.'
   },
   {
-    title: 'Reset & privacy',
-    body: 'Data is local first. Use the settings account section to delete all local data anytime.'
+    title: 'Settings & account',
+    body: 'Set a username (auto in Telegram), manage reminders, or wipe local data from Settings.'
   }
 ];
 
