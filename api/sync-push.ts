@@ -95,12 +95,42 @@ export default async function handler(req: Req, res: Res) {
     }));
 
     if (toUpsert.length) {
-      const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({ telegram_id: u.id, ...e })), { onConflict: 'telegram_id,date' });
-      if (upErr) {
-        console.error('[sync-push] upsert failed', upErr.message);
-        return res.status(500).json({ ok:false, error:'db-upsert-failed' });
+      // Try the convenient upsert first (relies on a unique constraint on telegram_id+date)
+      try {
+        const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({ telegram_id: u.id, ...e })), { onConflict: 'telegram_id,date' });
+        if (upErr) throw upErr;
+        console.log('[sync-push] entries upserted', { telegram_id: u.id, count: toUpsert.length, method: 'enc-direct' });
+      } catch (err: unknown) {
+        // If the error indicates the DB doesn't have the expected unique constraint, fall back to safe insert/update per-row.
+  const maybeErr = err as Record<string, unknown> | undefined;
+  const msg = maybeErr && typeof maybeErr.message === 'string' ? maybeErr.message : String(err || '');
+        console.warn('[sync-push] upsert failed, falling back to manual insert/update', msg);
+        const inserts: Array<Record<string, unknown>> = [];
+        const updates: { date: string; fields: Record<string, unknown> }[] = [];
+        for (const r of toUpsert) {
+          const prev = existingMap.get(r.date);
+          const fields: Record<string, unknown> = { emojis_enc: r.emojis_enc, hue_enc: r.hue_enc, song_title_enc: r.song_title_enc, song_artist_enc: r.song_artist_enc, updated_at: r.updated_at };
+          if (prev == null) inserts.push({ telegram_id: u.id, date: r.date, ...fields });
+          else updates.push({ date: r.date, fields });
+        }
+
+        if (inserts.length) {
+          const { error: insErr } = await supabase.from('entries').insert(inserts);
+          if (insErr) {
+            console.error('[sync-push] inserts failed', insErr.message);
+            return res.status(500).json({ ok:false, error:'db-insert-failed' });
+          }
+        }
+
+        for (const urow of updates) {
+          const { error: updErr } = await supabase.from('entries').update(urow.fields).eq('telegram_id', u.id).eq('date', urow.date);
+          if (updErr) {
+            console.error('[sync-push] update failed for', urow.date, updErr.message);
+            return res.status(500).json({ ok:false, error:'db-update-failed' });
+          }
+        }
+        console.log('[sync-push] entries inserted/updated', { telegram_id: u.id, inserted: inserts.length, updated: updates.length, method: 'manual-fallback' });
       }
-      console.log('[sync-push] entries upserted', { telegram_id: u.id, count: toUpsert.length, method: 'enc-direct' });
     }
 
     res.json({ ok:true, count: toUpsert.length });
