@@ -33,18 +33,20 @@ export async function verifyTelegram(tz?: string) {
   } catch { /* silent */ }
 }
 
-export async function syncPull() {
-  if (!isTG()) return;
+export async function syncPull(): Promise<number | null> {
+  if (!isTG()) return null;
   const initData = getInitData();
   const since = localStorage.getItem(SYNC_KEY) || '';
   try {
     const data = await postJSON('/api/sync-pull', { initData, since });
-    if (!data?.ok || !Array.isArray(data.entries)) return;
+    if (!data?.ok || !Array.isArray(data.entries)) return null;
+    const pulled = data.entries as Entry[];
     const local = loadEntries();
-    const merged = mergeByNewer(local, data.entries as Entry[]);
+    const merged = mergeByNewer(local, pulled);
     saveEntries(merged);
     localStorage.setItem(SYNC_KEY, new Date().toISOString());
-  } catch { /* silent */ }
+    return pulled.length;
+  } catch { return null; }
 }
 
 let pushQueue: Entry[] = [];
@@ -75,5 +77,38 @@ export function queueSyncPush(entry: Entry) {
   pushQueue = pushQueue.filter(e => e.date !== entry.date); // dedupe by date
   pushQueue.push(entry);
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(flushPush, 1200); // debounce burst edits
+  pushTimer = setTimeout(flushPush, 900); // slightly faster
 }
+
+export function queueSyncPushMany(entries: Entry[]) {
+  if (!isTG() || !entries.length) return;
+  const setDates = new Set(entries.map(e=>e.date));
+  pushQueue = pushQueue.filter(e => !setDates.has(e.date));
+  pushQueue.push(...entries);
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(flushPush, 900);
+}
+
+export async function initialFullSyncIfNeeded() {
+  if (!isTG()) return;
+  const FLAG = 'flowday_initial_sync_done_v1';
+  if (localStorage.getItem(FLAG)) return; // already performed
+  // Perform pull first to avoid overwriting cloud data
+  const pulled = await syncPull(); // returns count or null
+  const local = loadEntries();
+  if ((pulled === 0 || pulled === null) && local.length) {
+    // Cloud empty (or unknown) but we have local entries -> push all
+    queueSyncPushMany(local);
+    flushPush();
+  }
+  localStorage.setItem(FLAG, '1');
+}
+
+// Optional periodic pull to keep multiple devices in sync (every 60s idle)
+let periodicTimer: ReturnType<typeof setInterval> | null = null;
+export function startPeriodicPull() {
+  if (!isTG()) return;
+  if (periodicTimer) return;
+  periodicTimer = setInterval(()=> { syncPull(); }, 60000);
+}
+export function stopPeriodicPull() { if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = null; } }

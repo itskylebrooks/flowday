@@ -8,7 +8,7 @@ import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
-import { verifyTelegram, syncPull, queueSyncPush } from './lib/sync';
+import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
@@ -54,25 +54,14 @@ export default function App() {
   // Telegram verification + initial cloud sync (telegram only)
   useEffect(()=> {
     interface TGWin { Telegram?: { WebApp?: unknown } }
-    if (!(window as unknown as TGWin).Telegram?.WebApp) return; // fast path
-    verifyTelegram();
-    syncPull();
+    if (!(window as unknown as TGWin).Telegram?.WebApp) return;
+    (async ()=> {
+      await verifyTelegram();
+      await initialFullSyncIfNeeded();
+      startPeriodicPull();
+    })();
+    return () => { /* periodic pull persists across app lifetime; no cleanup needed */ };
   }, []);
-
-  // Detect single-entry changes & queue push (telegram only)
-  const prevEntriesRef = useRef<Entry[]>(entries);
-  useEffect(()=> {
-  interface TGWin { Telegram?: { WebApp?: unknown } }
-  if (!(window as unknown as TGWin).Telegram?.WebApp) { prevEntriesRef.current = entries; return; }
-    const prevMap = new Map(prevEntriesRef.current.map(e => [e.date, e] as const));
-    const changed: Entry[] = [];
-    for (const e of entries) {
-      const prev = prevMap.get(e.date);
-      if (!prev || prev.updatedAt !== e.updatedAt) changed.push(e);
-    }
-    if (changed.length === 1) queueSyncPush(changed[0]); // only push single edits to keep batch small
-    prevEntriesRef.current = entries;
-  }, [entries]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
@@ -214,7 +203,8 @@ export default function App() {
     const hue = Math.round((x / rect.width) * 360);
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
     setShowAura(true);
-    setEntries((old) => upsertEntry(old, next));
+  setEntries((old) => upsertEntry(old, next));
+  queueSyncPush(next);
     if (isTG) {
       // Throttle haptics: only fire if >140ms since last or hue moved >=12 degrees
       const now = performance.now();
@@ -252,7 +242,8 @@ export default function App() {
       setShowAura(false);
     }
     next.updatedAt = Date.now();
-    setEntries(old => upsertEntry(old, next));
+  setEntries(old => upsertEntry(old, next));
+  queueSyncPush(next);
   }
 
   function removeEmojiAt(index: number) {
@@ -266,7 +257,8 @@ export default function App() {
       setShowAura(false);
     }
     next.updatedAt = Date.now();
-    setEntries(old => upsertEntry(old, next));
+  setEntries(old => upsertEntry(old, next));
+  queueSyncPush(next);
   }
 
   function updateSong(partial: Partial<Song>) {
@@ -281,7 +273,8 @@ export default function App() {
       next.song = merged;
     }
     next.updatedAt = Date.now();
-    setEntries(old => upsertEntry(old, next));
+  setEntries(old => upsertEntry(old, next));
+  queueSyncPush(next);
   }
 
   function formatActiveDate(): string {
