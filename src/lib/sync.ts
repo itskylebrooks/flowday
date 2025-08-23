@@ -19,10 +19,13 @@ export function mergeByNewer(local: Entry[], incoming: Entry[]): Entry[] {
   return [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
 }
 
-async function postJSON(path: string, body: unknown) {
+interface JsonResponse { ok?: boolean; [k:string]: unknown }
+
+async function postJSON(path: string, body: unknown): Promise<{ res: Response; data: JsonResponse | null }> {
   const res = await fetch(path, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error('HTTP '+res.status);
-  return res.json().catch(()=> ({}));
+  let data: JsonResponse | null = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  return { res, data };
 }
 
 export async function verifyTelegram(tz?: string) {
@@ -38,8 +41,8 @@ export async function syncPull(): Promise<number | null> {
   const initData = getInitData();
   const since = localStorage.getItem(SYNC_KEY) || '';
   try {
-    const data = await postJSON('/api/sync-pull', { initData, since });
-    if (!data?.ok || !Array.isArray(data.entries)) return null;
+    const { res, data } = await postJSON('/api/sync-pull', { initData, since });
+    if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
     const pulled = data.entries as Entry[];
     const local = loadEntries();
     const merged = mergeByNewer(local, pulled);
@@ -49,8 +52,10 @@ export async function syncPull(): Promise<number | null> {
   } catch { return null; }
 }
 
-let pushQueue: Entry[] = [];
+type PendingPush = { entry: Entry; attempts: number };
+let pushQueue: PendingPush[] = [];
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let nextPullAfterPushTO: ReturnType<typeof setTimeout> | null = null;
 
 function flushPush() {
   if (!pushQueue.length) return;
@@ -59,34 +64,53 @@ function flushPush() {
   void rawSyncPush(batch);
 }
 
-async function rawSyncPush(entries: Entry[]) {
-  if (!isTG() || !entries.length) return;
+async function rawSyncPush(pending: PendingPush[]) {
+  if (!isTG() || !pending.length) return;
   const initData = getInitData();
+  const entries = pending.map(p => p.entry);
   try {
-    await postJSON('/api/sync-push', { initData, entries });
-  } catch {
-    // Requeue once
-    if (entries.length < 10) {
-      setTimeout(()=> { pushQueue.push(...entries); flushPush(); }, RETRY_MS);
+    const { res } = await postJSON('/api/sync-push', { initData, entries });
+    if (!res.ok) {
+      // Retry on 409/429/500-series with backoff
+      if ([429,500,502,503,504].includes(res.status)) {
+        for (const p of pending) {
+          if (p.attempts < 5) {
+            const delay = Math.min(30000, 1000 * Math.pow(2, p.attempts));
+            pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 });
+            setTimeout(flushPush, delay);
+          }
+        }
+      }
+      return;
     }
+    // Successful push: schedule a near-future pull to pick up remote merges on other tabs/devices
+    if (nextPullAfterPushTO) clearTimeout(nextPullAfterPushTO);
+    nextPullAfterPushTO = setTimeout(()=> { syncPull(); }, 5000);
+  } catch {
+    for (const p of pending) {
+      if (p.attempts < 3) {
+        pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 });
+      }
+    }
+    setTimeout(flushPush, RETRY_MS);
   }
 }
 
 export function queueSyncPush(entry: Entry) {
   if (!isTG()) return;
-  pushQueue = pushQueue.filter(e => e.date !== entry.date); // dedupe by date
-  pushQueue.push(entry);
+  pushQueue = pushQueue.filter(e => e.entry.date !== entry.date); // dedupe
+  pushQueue.push({ entry, attempts: 0 });
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(flushPush, 900); // slightly faster
+  pushTimer = setTimeout(flushPush, 700);
 }
 
 export function queueSyncPushMany(entries: Entry[]) {
   if (!isTG() || !entries.length) return;
   const setDates = new Set(entries.map(e=>e.date));
-  pushQueue = pushQueue.filter(e => !setDates.has(e.date));
-  pushQueue.push(...entries);
+  pushQueue = pushQueue.filter(e => !setDates.has(e.entry.date));
+  for (const e of entries) pushQueue.push({ entry: e, attempts: 0 });
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(flushPush, 900);
+  pushTimer = setTimeout(flushPush, 700);
 }
 
 export async function initialFullSyncIfNeeded() {
@@ -98,8 +122,8 @@ export async function initialFullSyncIfNeeded() {
   const local = loadEntries();
   if ((pulled === 0 || pulled === null) && local.length) {
     // Cloud empty (or unknown) but we have local entries -> push all
-    queueSyncPushMany(local);
-    flushPush();
+  queueSyncPushMany(local);
+  flushPush();
   }
   localStorage.setItem(FLAG, '1');
 }
