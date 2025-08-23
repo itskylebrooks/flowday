@@ -15,7 +15,7 @@ function getInitData(): string { return (window as unknown as TGWin).Telegram?.W
 // wait (poll) for a non-empty initData (up to a timeout) before first network calls.
 let initDataValue = '';
 let initDataInflight: Promise<string> | null = null;
-async function waitForInitData(maxMs = 10_000): Promise<string> {
+async function waitForInitData(maxMs = 30_000): Promise<string> {
   if (!isTG()) return '';
   if (initDataValue) return initDataValue;
   if (!initDataInflight) {
@@ -219,12 +219,18 @@ export function startStartupSyncLoop() {
   if (!isTG() || startupLoopRan) return;
   startupLoopRan = true;
   let attempts = 0;
+  const MAX_ATTEMPTS = 8;
   const loop = async () => {
     if (verifyDone) return; // already verified; loop naturally stops
     attempts++;
     await verifyTelegram();
     if (verifyDone) { void syncPull(); return; }
-    if (attempts < 8) setTimeout(loop, 1000 * Math.min(5, attempts));
+    if (attempts < MAX_ATTEMPTS) {
+      setTimeout(loop, 1000 * Math.min(5, attempts));
+    } else {
+      // Exhausted retries; try one last syncPull which itself will wait for initData
+      void syncPull();
+    }
   };
   loop();
 }
