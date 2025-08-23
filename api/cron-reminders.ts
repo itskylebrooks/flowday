@@ -34,20 +34,22 @@ export default async function handler(req: Req, res: Res) {
 
     // Fetch enabled daily reminders
     const { data, error } = await supabase.from('reminders')
-      .select('telegram_id,daily_enabled,last_daily_sent')
+      .select('telegram_id,daily_enabled,last_sent_at,last_daily_sent')
       .eq('daily_enabled', true)
       .limit(1000);
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
 
-    type Row = { telegram_id: number; daily_enabled: boolean; last_daily_sent: string | null };
-    const rows: Row[] = (data as unknown as Row[]) || [];
+  type Row = { telegram_id: number; daily_enabled: boolean; last_sent_at: string | null; last_daily_sent: string | null };
+  const rows: Row[] = (data as unknown as Row[]) || [];
 
     let sent = 0;
     const errors: Array<{ id: number; message: string }> = [];
     const today = new Date().toISOString().slice(0,10); // UTC date
 
     for (const r of rows) {
-      if (r.last_daily_sent === today) continue; // already sent today
+  // prefer timestamp-based last_sent_at, fallback to legacy last_daily_sent date
+  const lastSentDate = r.last_sent_at ? r.last_sent_at.slice(0,10) : r.last_daily_sent;
+  if (lastSentDate === today) continue; // already sent today
       const chatId = r.telegram_id;
   const text = `✨ Your flow is waiting
 
@@ -68,7 +70,8 @@ Every drop adds to your week’s ribbon, your month’s mix, your sky of constel
         }
 
         // Mark as sent for today
-        const { error: upErr } = await supabase.from('reminders').update({ last_daily_sent: today, updated_at: new Date().toISOString() }).eq('telegram_id', chatId);
+  const now = new Date().toISOString();
+  const { error: upErr } = await supabase.from('reminders').update({ last_sent_at: now, last_daily_sent: today, updated_at: now }).eq('telegram_id', chatId);
         if (upErr) {
           errors.push({ id: chatId, message: 'db-update-failed' });
           continue;

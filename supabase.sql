@@ -8,7 +8,9 @@ create table if not exists public.users (
   last_name text,
   language_code text,
   tz text,
-  updated_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  auth_user_id uuid
 );
 
 -- Entries (encrypted-only). Plaintext columns removed; new deployments create encrypted columns only.
@@ -19,7 +21,8 @@ create table if not exists public.entries (
   hue_enc text,
   song_title_enc text,
   song_artist_enc text,
-  updated_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   primary key (telegram_id, date)
 );
 
@@ -42,7 +45,8 @@ create table if not exists public.reminders (
   telegram_id bigint primary key references public.users(telegram_id) on delete cascade,
   daily_enabled boolean not null default false,
   daily_time text not null default '20:00',      -- HH:MM 24h
-  last_daily_sent date,                          -- date (UTC) last daily reminder sent
+  last_sent_at timestamptz,                      -- last time a reminder was sent (timestamp with timezone)
+  last_daily_sent date,                          -- date (UTC) last daily reminder sent (legacy / convenience)
   last_weekly_sent date,                         -- date (UTC) last weekly recap sent
   updated_at timestamptz default now()
 );
