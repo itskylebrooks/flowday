@@ -78,6 +78,15 @@ export async function syncPull(): Promise<number | null> {
   const since = localStorage.getItem(SYNC_KEY) || '';
   try {
     const { res, data } = await postJSON('/api/sync-pull', { initData, since });
+    if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
+    if (res.status === 429) {
+      periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
+      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
+      return null;
+    } else if (res.ok && periodicIntervalMs !== 60000) {
+      periodicIntervalMs = 60000;
+      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
+    }
     if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
     const pulled = data.entries as Entry[];
     const local = loadEntries();
@@ -104,16 +113,12 @@ async function rawSyncPush(pending: PendingPush[]) {
   if (!isTG() || !pending.length) return;
   if (!isCloudEnabled()) { pushQueue = []; return; }
   const initData = await waitForInitData();
-  if (!initData) { // requeue all until initData available
-    pushQueue.push(...pending);
-    setTimeout(flushPush, 500);
-    return;
-  }
+  if (!initData) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
   const entries = pending.map(p => p.entry);
   try {
     const { res } = await postJSON('/api/sync-push', { initData, entries });
+    if (res.status === 410) { disableCloud(); stopPeriodicPull(); return; }
     if (!res.ok) {
-      // Retry on 409/429/500-series with backoff
       if ([429,500,502,503,504].includes(res.status)) {
         for (const p of pending) {
           if (p.attempts < 5) {
@@ -125,15 +130,10 @@ async function rawSyncPush(pending: PendingPush[]) {
       }
       return;
     }
-    // Successful push: schedule a near-future pull to pick up remote merges on other tabs/devices
     if (nextPullAfterPushTO) clearTimeout(nextPullAfterPushTO);
     nextPullAfterPushTO = setTimeout(()=> { syncPull(); }, 5000);
   } catch {
-    for (const p of pending) {
-      if (p.attempts < 3) {
-        pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 });
-      }
-    }
+    for (const p of pending) { if (p.attempts < 3) pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 }); }
     setTimeout(flushPush, RETRY_MS);
   }
 }
@@ -174,11 +174,12 @@ export async function initialFullSyncIfNeeded() {
 
 // Optional periodic pull to keep multiple devices in sync (every 60s idle)
 let periodicTimer: ReturnType<typeof setInterval> | null = null;
+let periodicIntervalMs = 60000;
 export function startPeriodicPull() {
   if (!isTG()) return;
   if (!isCloudEnabled()) return;
   if (periodicTimer) return;
-  periodicTimer = setInterval(()=> { syncPull(); }, 60000);
+  periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs);
 }
 export function stopPeriodicPull() { if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = null; } }
 

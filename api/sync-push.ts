@@ -36,6 +36,11 @@ export default async function handler(req: Req, res: Res) {
     const u = parseTGUser(initData);
   if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
+  // User may have been deleted remotely
+  const { data: userRow, error: userErr } = await supabase.from('users').select('telegram_id').eq('telegram_id', u.id).limit(1).maybeSingle();
+  if (userErr) return res.status(500).json({ ok:false, error:'user-check-failed' });
+  if (!userRow) return res.status(410).json({ ok:false, error:'user-missing' });
+
     // Rate limit (per user) lightweight: at most 1 push every 400ms
   if (!allow('push:'+u.id, 400)) return res.status(429).json({ ok:false, error:'rate-limited', ...devReason('rate') });
 

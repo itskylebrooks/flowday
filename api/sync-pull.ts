@@ -32,6 +32,11 @@ export default async function handler(req: Req, res: Res) {
     const u = parseTGUser(initData);
   if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
+  // Ensure user still exists (may have been deleted from another device)
+  const { data: userRow, error: userErr } = await supabase.from('users').select('telegram_id').eq('telegram_id', u.id).limit(1).maybeSingle();
+  if (userErr) return res.status(500).json({ ok:false, error:'user-check-failed' });
+  if (!userRow) return res.status(410).json({ ok:false, error:'user-missing' });
+
   // Rate limit pulls: one every 2s per user id
   // We'll know ID only after validation, so delay rate check until after parsing user.
   let query = supabase.from('entries')
