@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
-import { decryptStr, hasEnc } from './_enc';
+import { decryptStr } from './_enc';
 import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
@@ -41,7 +41,7 @@ export default async function handler(req: Req, res: Res) {
   // Rate limit pulls: one every 2s per user id
   // We'll know ID only after validation, so delay rate check until after parsing user.
   let query = supabase.from('entries')
-      .select('date, emojis, hue, song_title, song_artist, emojis_enc, hue_enc, song_title_enc, song_artist_enc, updated_at')
+      .select('date, emojis_enc, hue_enc, song_title_enc, song_artist_enc, updated_at')
       .eq('telegram_id', u.id);
 
   if (!allow('pull:'+u.id, 2000)) return res.status(429).json({ ok:false, error:'rate-limited', ...devReason('rate') });
@@ -54,52 +54,24 @@ export default async function handler(req: Req, res: Res) {
       return res.status(500).json({ ok:false, error:'db-error' });
     }
 
-    interface Row {
-      date: string | Date;
-      emojis: string[] | null;
-      hue: number | null;
-      song_title: string | null;
-      song_artist: string | null;
-      emojis_enc?: string | null;
-      hue_enc?: string | null;
-      song_title_enc?: string | null;
-      song_artist_enc?: string | null;
-      updated_at: string;
-    }
-
+    interface Row { date: string | Date; emojis_enc: string | null; hue_enc: string | null; song_title_enc: string | null; song_artist_enc: string | null; updated_at: string; }
     const rows: Row[] = (data as Row[]) || [];
     const entries = rows.map(r => {
-      // If encrypted columns populated (and key configured), prefer them
       let emojis: string[] = [];
       let hue: number | undefined;
       let songTitle: string | undefined;
       let songArtist: string | undefined;
-      if (hasEnc() && r.emojis_enc) {
-        try {
-          const dec = decryptStr(r.emojis_enc as string);
-          const arr = JSON.parse(dec);
-          if (Array.isArray(arr)) emojis = arr.filter(x => typeof x === 'string').slice(0,3);
-        } catch { /* ignore */ }
-        if (r.hue_enc) {
-          const hStr = decryptStr(r.hue_enc as string);
-            const hNum = parseInt(hStr, 10);
-            if (!isNaN(hNum) && hNum >=0 && hNum <= 360) hue = hNum;
-        }
-        if (r.song_title_enc) songTitle = decryptStr(r.song_title_enc as string) || undefined;
-        if (r.song_artist_enc) songArtist = decryptStr(r.song_artist_enc as string) || undefined;
-      } else {
-        emojis = Array.isArray(r.emojis) ? (r.emojis as string[]).slice(0,3) : [];
-        hue = typeof r.hue === 'number' ? r.hue : undefined;
-        songTitle = r.song_title || undefined;
-        songArtist = r.song_artist || undefined;
+      try {
+        const decE = r.emojis_enc ? decryptStr(r.emojis_enc) : '';
+        const arr = decE ? JSON.parse(decE) : [];
+        if (Array.isArray(arr)) emojis = arr.filter(x => typeof x === 'string').slice(0,3);
+      } catch { /* ignore */ }
+      if (r.hue_enc) {
+        const hStr = decryptStr(r.hue_enc); const hNum = parseInt(hStr, 10); if (!isNaN(hNum) && hNum>=0 && hNum<=360) hue = hNum;
       }
-      return {
-        date: String(r.date),
-        emojis,
-        hue,
-        song: (songTitle || songArtist) ? { title: songTitle, artist: songArtist } : undefined,
-        updatedAt: new Date(r.updated_at).getTime()
-      };
+      if (r.song_title_enc) songTitle = decryptStr(r.song_title_enc) || undefined;
+      if (r.song_artist_enc) songArtist = decryptStr(r.song_artist_enc) || undefined;
+      return { date: String(r.date), emojis, hue, song: (songTitle || songArtist) ? { title: songTitle, artist: songArtist } : undefined, updatedAt: new Date(r.updated_at).getTime() };
     });
 
   console.log('[sync-pull] entries returned', { telegram_id: u.id, count: entries.length, since: since || null });

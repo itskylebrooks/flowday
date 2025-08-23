@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
-import { encryptStr, hasEnc } from './_enc';
+import { encryptStr } from './_enc';
 import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
@@ -8,7 +8,7 @@ export const config = { runtime: 'nodejs' };
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
-let rpcAvailable = true; // will be disabled if function missing
+// RPC removed (legacy plaintext); direct encrypted upserts only.
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
   const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -84,54 +84,23 @@ export default async function handler(req: Req, res: Res) {
 
     const toUpsert = clean.filter(c => {
       const prev = existingMap.get(c.date);
-      return prev == null || c.updatedAt > prev; // local pre-filter (saves bandwidth); DB still enforces newer-wins
-    }).map(e => {
-      if (hasEnc()) {
-        return {
-          date: e.date,
-          // Store encrypted payload in enc columns; legacy columns left null
-          emojis_enc: encryptStr(JSON.stringify(e.emojis)),
-          hue_enc: (typeof e.hue === 'number') ? encryptStr(String(e.hue)) : null,
-          song_title_enc: e.song?.title ? encryptStr(e.song.title) : null,
-          song_artist_enc: e.song?.artist ? encryptStr(e.song.artist) : null,
-          updated_at: new Date(e.updatedAt).toISOString()
-        } as const;
-      }
-      return {
-        date: e.date,
-        emojis: e.emojis,
-        hue: (typeof e.hue === 'number') ? e.hue : null,
-        song_title: e.song?.title ?? null,
-        song_artist: e.song?.artist ?? null,
-        updated_at: new Date(e.updatedAt).toISOString()
-      } as const;
-    });
+      return prev == null || c.updatedAt > prev;
+    }).map(e => ({
+      date: e.date,
+      emojis_enc: encryptStr(JSON.stringify(e.emojis)),
+      hue_enc: (typeof e.hue === 'number') ? encryptStr(String(e.hue)) : null,
+      song_title_enc: e.song?.title ? encryptStr(e.song.title) : null,
+      song_artist_enc: e.song?.artist ? encryptStr(e.song.artist) : null,
+      updated_at: new Date(e.updatedAt).toISOString()
+    }));
 
     if (toUpsert.length) {
-      let used = 'upsert-fallback';
-      // Skip RPC if encryption in use (RPC only knows legacy columns)
-      if (rpcAvailable && !hasEnc()) {
-        const { error } = await supabase.rpc('flowday_upsert_entries', { p_user: u.id, p_rows: toUpsert });
-        if (!error) {
-          used = 'rpc';
-        } else {
-          console.warn('[sync-push] RPC failed, fallback upsert', error.message);
-          if (/Could not find the function/i.test(error.message || '')) {
-            rpcAvailable = false; // disable further attempts this runtime
-          }
-        }
+      const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({ telegram_id: u.id, ...e })), { onConflict: 'telegram_id,date' });
+      if (upErr) {
+        console.error('[sync-push] upsert failed', upErr.message);
+        return res.status(500).json({ ok:false, error:'db-upsert-failed' });
       }
-      if (used !== 'rpc') {
-        const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({
-          telegram_id: u.id,
-          ...e
-        })), { onConflict: 'telegram_id,date' });
-        if (upErr) {
-          console.error('[sync-push] upsert failed', upErr.message);
-          return res.status(500).json({ ok:false, error:'db-upsert-failed' });
-        }
-      }
-      console.log('[sync-push] entries upserted', { telegram_id: u.id, count: toUpsert.length, method: used });
+      console.log('[sync-push] entries upserted', { telegram_id: u.id, count: toUpsert.length, method: 'enc-direct' });
     }
 
     res.json({ ok:true, count: toUpsert.length });

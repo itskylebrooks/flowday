@@ -11,25 +11,17 @@ create table if not exists public.users (
   updated_at timestamptz not null default now()
 );
 
--- Entries (unique per day per user)
+-- Entries (encrypted-only). Plaintext columns removed; new deployments create encrypted columns only.
 create table if not exists public.entries (
   telegram_id bigint references public.users(telegram_id) on delete cascade,
   date date not null,
-  emojis text[] not null default array[]::text[],
-  hue int,
-  song_title text,
-  song_artist text,
+  emojis_enc text,
+  hue_enc text,
+  song_title_enc text,
+  song_artist_enc text,
   updated_at timestamptz not null,
-  primary key (telegram_id, date),
-  check (array_length(emojis,1) <= 3),
-  check (hue is null or (hue >= 0 and hue <= 360))
+  primary key (telegram_id, date)
 );
-
--- Encrypted (obfuscated) columns – store encrypted JSON / strings when ENC_KEY is provided.
-alter table public.entries add column if not exists emojis_enc text;        -- encrypted JSON array of emojis
-alter table public.entries add column if not exists hue_enc text;           -- encrypted string of hue number
-alter table public.entries add column if not exists song_title_enc text;    -- encrypted song title
-alter table public.entries add column if not exists song_artist_enc text;   -- encrypted song artist
 
 create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
 
@@ -43,29 +35,6 @@ create table if not exists public.reminders (
   updated_at timestamptz default now()
 );
 
--- Newer-wins upsert function
-create or replace function public.flowday_upsert_entries(p_user bigint, p_rows jsonb)
-returns void language plpgsql as $$
-declare r jsonb; begin
-  for r in select * from jsonb_array_elements(p_rows) loop
-    insert into public.entries(telegram_id, date, emojis, hue, song_title, song_artist, updated_at)
-    values (
-      p_user,
-      (r->>'date')::date,
-      coalesce((select array(select jsonb_array_elements_text(r->'emojis'))), array[]::text[]),
-      case when (r ? 'hue') then (r->>'hue')::int else null end,
-      nullif(r->>'song_title',''),
-      nullif(r->>'song_artist',''),
-      (r->>'updated_at')::timestamptz
-    )
-    on conflict (telegram_id, date) do update set
-      emojis = excluded.emojis,
-      hue = excluded.hue,
-      song_title = excluded.song_title,
-      song_artist = excluded.song_artist,
-      updated_at = excluded.updated_at
-    where excluded.updated_at > public.entries.updated_at;
-  end loop;
-end; $$;
+-- Legacy plaintext upsert function removed (encryption-only now).
 
 -- (Optional) revoke public access if using RLS; then write RLS policies.
