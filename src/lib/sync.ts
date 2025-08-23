@@ -245,17 +245,25 @@ export async function signInToCloud(username?: string): Promise<{ ok: boolean; e
   const initData = await waitForInitData();
   if (!initData) return { ok:false, error:'no-initData' };
   if (username && username.trim().length < 4) return { ok:false, error:'username-too-short' };
-  try {
-    const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
-    if (res.status === 409) return { ok:false, error:'username-taken' };
-    if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
-    if (res.ok && data?.ok) {
-      enableCloud();
-      await initialFullSyncIfNeeded();
-      startPeriodicPull();
-      return { ok:true };
+  // Retry a few times for transient network/initData timing issues before surfacing an error.
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
+      if (res.status === 409) return { ok:false, error:'username-taken' };
+      if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
+      if (res.ok && data?.ok) {
+        enableCloud();
+        await initialFullSyncIfNeeded();
+        startPeriodicPull();
+        return { ok:true };
+      }
+      // For non-OK responses, retry unless final attempt
+    } catch {
+      // network error; will retry
     }
-  } catch { /* ignore */ }
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, 500 * attempt));
+  }
   return { ok:false, error:'unknown' };
 }
 
