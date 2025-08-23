@@ -120,28 +120,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   // Reminder execution logic removed (placeholder) — only settings & persistence remain for now.
 
   // ---- Time helpers (stored internally always as 24h HH:MM) ----
-  function parse24(str: string): { h: number; m: number } {
-    const m = /^([0-9]{2}):([0-9]{2})$/.exec(str);
-    if (!m) return { h: 20, m: 0 };
-    return { h: Math.min(23, parseInt(m[1],10)), m: Math.min(59, parseInt(m[2],10)) };
-  }
-  function to24(h: number, m: number) {
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  }
-  function split12(str: string): { h12: number; m: number; period: 'AM'|'PM' } {
-    const { h, m } = parse24(str);
-    const period: 'AM'|'PM' = h >= 12 ? 'PM' : 'AM';
-    const h12 = ((h % 12) || 12);
-    return { h12, m, period };
-  }
-  function join12(h12: number, m: number, period: 'AM'|'PM') {
-    let h24 = h12 % 12;
-    if (period === 'PM') h24 += 12;
-    if (period === 'AM' && h24 === 12) h24 = 0; // 12 AM -> 00
-    if (period === 'PM' && h24 === 12) h24 = 12; // 12 PM stays 12
-    return to24(h24, m);
-  }
-  const minuteOptions = Array.from({length:12}, (_,i)=> i*5); // 0..55 step 5
 
   if (!open && !closing) return null;
   return (
@@ -253,33 +231,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   onClick={()=> { const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }}
                   className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')}
                 >Daily reminder</button>
-                {/* Custom time selects */}
-                {reminders.timeFormat !== '12' && (()=> { const {h,m}=parse24(reminders.dailyTime); return (
-                  <div className="flex items-center gap-1" aria-label="Daily time 24h">
-                    <select disabled={!reminders.dailyEnabled} value={h} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(nh,m)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
-                      {Array.from({length:24},(_,i)=> <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
-                    </select>
-                    <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: to24(h,nm)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
-                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
-                    </select>
-                  </div>
-                )})()}
-                {reminders.timeFormat === '12' && (()=> { const {h12,m,period}=split12(reminders.dailyTime); return (
-                  <div className="flex items-center gap-1" aria-label="Daily time 12h">
-                    <select disabled={!reminders.dailyEnabled} value={h12} onChange={e=> { const nh=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(nh,m,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[52px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
-                      {Array.from({length:12},(_,i)=> i+1).map(hh=> <option key={hh} value={hh}>{hh}</option>)}
-                    </select>
-                    <span className="text-white/50 text-xs px-0.5">:</span>
-                    <select disabled={!reminders.dailyEnabled} value={m} onChange={e=> { const nm=parseInt(e.target.value,10); const v={...reminders,dailyTime: join12(h12,nm,period)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[56px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
-                      {minuteOptions.map(mi=> <option key={mi} value={mi}>{String(mi).padStart(2,'0')}</option>)}
-                    </select>
-                    <select disabled={!reminders.dailyEnabled} value={period} onChange={e=> { const p=e.target.value==='AM'?'AM':'PM'; const v={...reminders,dailyTime: join12(h12,m,p)}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v); }} className="w-[60px] rounded-md bg-white/5 px-2 py-1 text-xs ring-1 ring-white/10 text-white/90 disabled:opacity-30">
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                  </div>
-                )})()}
+                <span className="text-xs text-white/70">Triggers at 7pm Berlin time</span>
               </div>
               <p className="text-[11px] text-white/35 leading-relaxed">
                 Reminders don't work for now and will be implemented in a future update.
