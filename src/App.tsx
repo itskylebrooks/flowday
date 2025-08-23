@@ -407,7 +407,7 @@ export default function App() {
                 type="button"
         onClick={()=> { if(canEditSongMeta) setShowSong(true); }}
         disabled={!canEditSongMeta}
-        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/20 disabled:opacity-35 disabled:cursor-not-allowed text-sm font-medium text-white/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30"
+        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 disabled:opacity-35 disabled:cursor-not-allowed text-sm font-medium text-white/90 transition ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
               >
                 {entry.song ? 'Edit song' : 'Song of the day'}
               </button>
@@ -442,7 +442,7 @@ export default function App() {
               <button
                 type="button"
         onClick={()=> { if (canEditSongMeta) setSongEditorOpen(true); }}
-        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 active:bg-white/20 text-sm font-medium text-white/90 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 text-sm font-medium text-white/90 transition ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
         disabled={!canEditSongMeta}
               >
                 {entry.song ? 'Edit song' : 'Song of the day'}

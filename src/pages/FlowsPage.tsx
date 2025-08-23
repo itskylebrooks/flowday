@@ -109,17 +109,17 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
       </div>
 
       {/* Bottom actions */}
-  <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
         <button
           onClick={onToggleMode}
-          className="rounded-md px-3 py-2 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5"
+          className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition"
         >
           {mode === 'week' ? 'Switch to month' : 'Switch to week'}
         </button>
         <button
           onClick={handlePosterButton}
           disabled={!isAndroidTelegram && exporting}
-          className="rounded-md px-3 py-2 text-sm text-white/90 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-40"
+          className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition disabled:opacity-40"
         >
           {isAndroidTelegram
             ? (posterMode ? 'Hide poster text' : 'Show poster text')
