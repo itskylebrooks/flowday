@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
 import { allow } from './_rate';
 
-export const config = { runtime: 'nodejs20.x' };
+export const config = { runtime: 'nodejs' };
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
