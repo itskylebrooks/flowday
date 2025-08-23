@@ -28,6 +28,9 @@ create table if not exists public.entries (
 
 create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
 
+-- Ensure a unique index on (telegram_id, date) exists so ON CONFLICT upserts work
+create unique index if not exists entries_telegram_date_unique on public.entries(telegram_id, date);
+
 -- Ensure usernames are unique case-insensitively when present
 create unique index if not exists users_username_unique on public.users (lower(username)) where username is not null;
 
