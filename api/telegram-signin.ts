@@ -27,7 +27,8 @@ export default async function handler(req: Req, res: Res) {
     if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
     // Determine desired username: explicit > Telegram handle > null
-    const desired = typeof username === 'string' && username.trim().length ? username.trim().toLowerCase() : (u.username ? u.username.toLowerCase() : null);
+  const desired = typeof username === 'string' && username.trim().length ? username.trim().toLowerCase() : (u.username ? u.username.toLowerCase() : null);
+  if (desired && desired.length < 4) return res.status(400).json({ ok:false, error:'username-too-short' });
     if (desired) {
       const { data: existing } = await supabase.from('users').select('telegram_id').ilike('username', desired).limit(1);
       if (existing && existing.length) {
@@ -45,7 +46,7 @@ export default async function handler(req: Req, res: Res) {
     });
     if (upErr) return res.status(500).json({ ok:false, error:'user-insert-failed' });
     try { await supabase.from('reminders').insert({ telegram_id: u.id }); } catch { /* ignore duplicate */ }
-    res.json({ ok:true, telegram_id: u.id });
+  res.json({ ok:true, telegram_id: u.id, username: desired });
   } catch (e) {
     console.error('[telegram-signin] unexpected', (e as Error)?.message);
     res.status(500).json({ ok:false, error:'server-error' });

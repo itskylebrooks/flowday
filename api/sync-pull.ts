@@ -33,7 +33,7 @@ export default async function handler(req: Req, res: Res) {
   if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
   // Ensure user still exists (may have been deleted from another device)
-  const { data: userRow, error: userErr } = await supabase.from('users').select('telegram_id').eq('telegram_id', u.id).limit(1).maybeSingle();
+  const { data: userRow, error: userErr } = await supabase.from('users').select('telegram_id, username, updated_at').eq('telegram_id', u.id).limit(1).maybeSingle();
   if (userErr) return res.status(500).json({ ok:false, error:'user-check-failed' });
   if (!userRow) return res.status(410).json({ ok:false, error:'user-missing' });
 
@@ -61,8 +61,8 @@ export default async function handler(req: Req, res: Res) {
       updatedAt: new Date(r.updated_at).getTime()
     }));
 
-    console.log('[sync-pull] entries returned', { telegram_id: u.id, count: entries.length, since: since || null });
-    res.json({ ok:true, entries });
+  console.log('[sync-pull] entries returned', { telegram_id: u.id, count: entries.length, since: since || null });
+  res.json({ ok:true, entries, username: userRow.username, userUpdatedAt: userRow.updated_at });
   } catch (e) {
     console.error('[sync-pull] unexpected', (e as Error)?.message);
     res.status(500).json({ ok:false, error:'server-error' });

@@ -42,7 +42,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     if (e) e.preventDefault();
     if (!dirty || saving) return;
     setSaving(true);
-    const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
+  if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
+  const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
     // If cloud enabled, attempt remote username update
     if (isCloudEnabled()) {
       const r = await updateCloudUsername(stored.username);
@@ -193,7 +194,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Future: global uniqueness.</p>
+                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
               </div>
               <div className="pt-1 grid gap-2">
                 <CloudAccountSection />
@@ -357,13 +358,15 @@ function CloudAccountSection() {
   const [working, setWorking] = useState(false);
   async function handleSignIn() {
     setWorking(true);
-    const r = await signInToCloud(loadUser().username);
+    const desired = loadUser().username;
+    if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
+    const r = await signInToCloud(desired);
     setWorking(false);
     if (r.ok) { setEnabled(true); }
-    else if (r.error === 'username-taken') {
-      alert('Username already taken. Choose another and try again.');
-    } else {
-      alert('Sign in failed. Try again.');
+    else {
+      if (r.error === 'username-taken') alert('Username already taken. Choose another.');
+      else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
+      else alert('Sign in failed. Try again.');
     }
   }
   async function handleDelete() {

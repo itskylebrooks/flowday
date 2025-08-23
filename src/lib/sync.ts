@@ -66,6 +66,19 @@ export async function verifyTelegram(tz?: string) {
     if (data && typeof data === 'object' && 'exists' in data) {
       const existsVal = (data as { exists?: unknown }).exists;
       if (existsVal === true) localStorage.setItem(CLOUD_FLAG_KEY,'1');
+      const serverUsername = (data as { username?: unknown }).username;
+      if (typeof serverUsername === 'string') {
+        try {
+          const raw = localStorage.getItem('flowday_user_v1');
+          if (raw) {
+            const obj = JSON.parse(raw);
+            if (obj && typeof obj === 'object' && obj.username !== serverUsername) {
+              obj.username = serverUsername;
+              localStorage.setItem('flowday_user_v1', JSON.stringify(obj));
+            }
+          }
+        } catch { /* ignore */ }
+      }
     }
   } catch { /* silent */ }
 }
@@ -88,6 +101,12 @@ export async function syncPull(): Promise<number | null> {
       if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
     }
     if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
+    if (typeof data.username === 'string') {
+      try {
+        const raw = localStorage.getItem('flowday_user_v1');
+        if (raw) { const obj = JSON.parse(raw); if (obj && typeof obj === 'object' && obj.username !== data.username) { obj.username = data.username; localStorage.setItem('flowday_user_v1', JSON.stringify(obj)); } }
+      } catch { /* ignore */ }
+    }
     const pulled = data.entries as Entry[];
     const local = loadEntries();
     const merged = mergeByNewer(local, pulled);
@@ -208,9 +227,11 @@ export async function signInToCloud(username?: string): Promise<{ ok: boolean; e
   if (!isTG()) return { ok:false, error:'not-telegram' };
   const initData = await waitForInitData();
   if (!initData) return { ok:false, error:'no-initData' };
+  if (username && username.trim().length < 4) return { ok:false, error:'username-too-short' };
   try {
     const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
     if (res.status === 409) return { ok:false, error:'username-taken' };
+    if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
     if (res.ok && data?.ok) {
       enableCloud();
       await initialFullSyncIfNeeded();
@@ -234,9 +255,11 @@ export async function deleteCloudAccount(): Promise<boolean> {
 export async function updateCloudUsername(username: string): Promise<{ ok:boolean; error?:string }> {
   if (!isTG() || !isCloudEnabled()) return { ok:false, error:'not-enabled' };
   const initData = await waitForInitData(); if (!initData) return { ok:false, error:'no-initData' };
+  if (username.trim().length < 4) return { ok:false, error:'username-too-short' };
   try {
     const { res, data } = await postJSON('/api/telegram-update-username', { initData, username });
     if (res.status === 409) return { ok:false, error:'username-taken' };
+    if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
     if (res.ok && data?.ok) return { ok:true };
   } catch { /* ignore */ }
   return { ok:false, error:'unknown' };
