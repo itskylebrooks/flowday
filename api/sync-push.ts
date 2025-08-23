@@ -2,10 +2,19 @@ import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
 import { allow } from './_rate';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const config = { runtime: 'nodejs20.x' };
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabaseInitError: string | null = null;
+const supabase = (function init(){
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
+  const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  client.from('users').select('telegram_id', { head:true, count:'exact' }).limit(1)
+    .then(()=> console.log('[sync-push] Supabase connectivity OK'),
+      e => { supabaseInitError = 'supabase-connect-failed'; console.error('[sync-push] connectivity failed', e?.message); });
+  return client;
+})();
 
 interface IncomingEntry { date: string; emojis: string[]; hue?: number; song?: { title?: string; artist?: string }; updatedAt: number; }
 
@@ -14,16 +23,19 @@ interface Res { status: (c:number)=>Res; json: (v:unknown)=>void; }
 
 export default async function handler(req: Req, res: Res) {
   try {
-    if (req.method !== 'POST') return res.status(405).json({ ok:false });
+  if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
+  if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
   const body = (req.body as { initData?: string; entries?: unknown } | undefined) || {};
   const { initData, entries } = body;
-    if (!initData || !Array.isArray(entries) || !process.env.BOT_TOKEN) return res.status(400).json({ ok:false, ...devReason('initData/entries') });
-    if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, ...devReason('hmac') });
+  if (!initData) return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
+  if (!Array.isArray(entries)) return res.status(400).json({ ok:false, error:'entries-not-array' });
+  if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
+  if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac', ...devReason('hmac') });
     const u = parseTGUser(initData);
-    if (!u?.id) return res.status(400).json({ ok:false, ...devReason('user') });
+  if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
     // Rate limit (per user) lightweight: at most 1 push every 400ms
-    if (!allow('push:'+u.id, 400)) return res.status(429).json({ ok:false, ...devReason('rate') });
+  if (!allow('push:'+u.id, 400)) return res.status(429).json({ ok:false, error:'rate-limited', ...devReason('rate') });
 
     // Sanitize & limit payload (defense-in-depth)
     const todayPlus = Date.now() + 2*86400000; // allow up to +2 days future (clock drift)
@@ -48,7 +60,7 @@ export default async function handler(req: Req, res: Res) {
       return { date: dateStr, emojis, hue, song: normalizedSong, updatedAt };
     }).filter(e => e.date !== 'invalid');
 
-    if (!clean.length) return res.json({ ok:true, count: 0 });
+  if (!clean.length) return res.json({ ok:true, count: 0 });
 
     // Fetch existing rows for these dates in one round-trip
     const dates = clean.map(c => c.date);
@@ -75,13 +87,27 @@ export default async function handler(req: Req, res: Res) {
     }));
 
     if (toUpsert.length) {
-      // Prefer RPC newer-wins function if present
+      let used = 'rpc';
       const { error } = await supabase.rpc('flowday_upsert_entries', { p_user: u.id, p_rows: toUpsert });
-      if (error) return res.status(500).json({ ok:false });
+      if (error) {
+        // Fallback: plain upsert newer-wins best-effort (client already filtered newer)
+        console.warn('[sync-push] RPC failed, fallback upsert', error.message);
+        used = 'upsert-fallback';
+        const { error: upErr } = await supabase.from('entries').upsert(toUpsert.map(e => ({
+          telegram_id: u.id,
+          ...e
+        })), { onConflict: 'telegram_id,date' });
+        if (upErr) {
+          console.error('[sync-push] upsert failed', upErr.message);
+          return res.status(500).json({ ok:false, error:'db-upsert-failed' });
+        }
+      }
+      console.log('[sync-push] entries upserted', { telegram_id: u.id, count: toUpsert.length, method: used });
     }
 
-  res.json({ ok:true, count: toUpsert.length });
-  } catch {
-    res.status(500).json({ ok:false });
+    res.json({ ok:true, count: toUpsert.length });
+  } catch (e) {
+    console.error('[sync-push] unexpected', (e as Error)?.message);
+    res.status(500).json({ ok:false, error:'server-error' });
   }
 }

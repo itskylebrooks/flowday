@@ -1,10 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const config = { runtime: 'nodejs20.x' };
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+let supabaseInitError: string | null = null;
+const supabase = (function init(){
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    supabaseInitError = 'missing-supabase-env';
+    return null as unknown as ReturnType<typeof createClient>;
+  }
+  const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  // Fast connectivity probe (fire & forget)
+  client.from('users').select('telegram_id', { count: 'exact', head: true }).limit(1)
+    .then(()=> console.log('[verify-telegram] Supabase connectivity OK'),
+      e => { supabaseInitError = 'supabase-connect-failed'; console.error('[verify-telegram] Supabase connectivity failed', e?.message); });
+  return client;
+})();
 
 // Minimal request/response typing compatible with Vercel & generic Node runtimes.
 interface Req { method?: string; body?: unknown; }
@@ -13,16 +27,26 @@ interface Res { status: (c:number)=>Res; json: (v:unknown)=>void; }
 
 export default async function handler(req: Req, res: Res) {
   try {
-    if (req.method !== 'POST') return res.status(405).json({ ok:false, ...devReason('method') });
+    console.log('[verify-telegram] env present', {
+      SUPABASE_URL: !!SUPABASE_URL,
+      SERVICE_ROLE: !!SUPABASE_SERVICE_ROLE_KEY,
+      BOT_TOKEN: !!process.env.BOT_TOKEN
+    });
+    if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed', ...devReason('method') });
+    if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
   const body = (req.body as { initData?: string; tz?: string } | undefined) || {};
   const { initData, tz } = body;
-    if (!initData || !process.env.BOT_TOKEN) return res.status(400).json({ ok:false, ...devReason('initData/botToken') });
-    if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, ...devReason('hmac') });
+    if (!initData) {
+      console.warn('[verify-telegram] missing initData');
+      return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
+    }
+    if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
+    if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac', ...devReason('hmac') });
     const u = parseTGUser(initData);
-    if (!u?.id) return res.status(400).json({ ok:false, ...devReason('user') });
+    if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user', ...devReason('user') });
 
     // Upsert user profile (idempotent)
-    await supabase.from('users').upsert({
+    const { error: upErr } = await supabase.from('users').upsert({
       telegram_id: u.id,
       username: u.username ?? null,
       first_name: u.first_name ?? null,
@@ -31,10 +55,18 @@ export default async function handler(req: Req, res: Res) {
       tz: typeof tz === 'string' ? tz : 'UTC',
       updated_at: new Date().toISOString()
     });
+    if (upErr) {
+      console.error('[verify-telegram] user upsert failed', upErr.message);
+      return res.status(500).json({ ok:false, error:'user-upsert-failed' });
+    }
+    console.log('[verify-telegram] user upserted', { telegram_id: u.id });
     // Ensure reminders row exists (ignore conflicts)
   // Ignore conflict manually: attempt insert; if duplicate key error just continue
-  try { await supabase.from('reminders').insert({ telegram_id: u.id }); } catch { /* ignore */ }
+  try { await supabase.from('reminders').insert({ telegram_id: u.id }); } catch (e) { console.warn('[verify-telegram] reminders insert skipped', (e as Error)?.message); }
 
     res.json({ ok:true, telegram_id: u.id });
-  } catch { res.status(500).json({ ok:false }); }
+  } catch (e) {
+    console.error('[verify-telegram] unexpected error', (e as Error)?.message);
+    res.status(500).json({ ok:false, error:'server-error' });
+  }
 }
