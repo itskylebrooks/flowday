@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { isValidInitData, parseTGUser, devReason } from './_tg';
+import { encryptStr, hasEnc } from './_enc';
 import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
@@ -84,18 +85,32 @@ export default async function handler(req: Req, res: Res) {
     const toUpsert = clean.filter(c => {
       const prev = existingMap.get(c.date);
       return prev == null || c.updatedAt > prev; // local pre-filter (saves bandwidth); DB still enforces newer-wins
-    }).map(e => ({
-      date: e.date,
-      emojis: e.emojis,
-      hue: (typeof e.hue === 'number') ? e.hue : null,
-      song_title: e.song?.title ?? null,
-      song_artist: e.song?.artist ?? null,
-      updated_at: new Date(e.updatedAt).toISOString()
-    }));
+    }).map(e => {
+      if (hasEnc()) {
+        return {
+          date: e.date,
+          // Store encrypted payload in enc columns; legacy columns left null
+          emojis_enc: encryptStr(JSON.stringify(e.emojis)),
+          hue_enc: (typeof e.hue === 'number') ? encryptStr(String(e.hue)) : null,
+          song_title_enc: e.song?.title ? encryptStr(e.song.title) : null,
+          song_artist_enc: e.song?.artist ? encryptStr(e.song.artist) : null,
+          updated_at: new Date(e.updatedAt).toISOString()
+        } as const;
+      }
+      return {
+        date: e.date,
+        emojis: e.emojis,
+        hue: (typeof e.hue === 'number') ? e.hue : null,
+        song_title: e.song?.title ?? null,
+        song_artist: e.song?.artist ?? null,
+        updated_at: new Date(e.updatedAt).toISOString()
+      } as const;
+    });
 
     if (toUpsert.length) {
       let used = 'upsert-fallback';
-      if (rpcAvailable) {
+      // Skip RPC if encryption in use (RPC only knows legacy columns)
+      if (rpcAvailable && !hasEnc()) {
         const { error } = await supabase.rpc('flowday_upsert_entries', { p_user: u.id, p_rows: toUpsert });
         if (!error) {
           used = 'rpc';

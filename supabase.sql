@@ -25,6 +25,12 @@ create table if not exists public.entries (
   check (hue is null or (hue >= 0 and hue <= 360))
 );
 
+-- Encrypted (obfuscated) columns – store encrypted JSON / strings when ENC_KEY is provided.
+alter table public.entries add column if not exists emojis_enc text;        -- encrypted JSON array of emojis
+alter table public.entries add column if not exists hue_enc text;           -- encrypted string of hue number
+alter table public.entries add column if not exists song_title_enc text;    -- encrypted song title
+alter table public.entries add column if not exists song_artist_enc text;   -- encrypted song artist
+
 create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
 
 -- Ensure usernames are unique case-insensitively when present
