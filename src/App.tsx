@@ -7,7 +7,7 @@ import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
-import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
+import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
@@ -72,18 +72,28 @@ export default function App() {
       }
     })();
     // Listen for storage-level updates dispatched by background sync so UI updates live
-    const onEntriesUpdated = () => {
-      try { setEntries(loadEntries()); } catch { /* ignore */ }
-    };
+    const onEntriesUpdated = () => { try { setEntries(loadEntries()); } catch { /* ignore */ } };
     window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+
+    // Also listen for cross-window/localStorage changes which fire 'storage' events
+    const onStorage = (e: StorageEvent) => {
+      try {
+        if (!e.key) return;
+        if (e.key === STORAGE_KEY || e.key === 'flowday_reminders_v1' || e.key === 'flowday_user_v1' || e.key === 'flowday_cloud_enabled_v1') {
+          setEntries(loadEntries());
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('storage', onStorage as EventListener);
 
     // When the document becomes visible (reopen Telegram), attempt a pull so UI refreshes
     const onVisibility = () => { if (document.visibilityState === 'visible') void syncPull(); };
     document.addEventListener('visibilitychange', onVisibility as EventListener);
 
     return () => {
-      window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
-      document.removeEventListener('visibilitychange', onVisibility as EventListener);
+  window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+  window.removeEventListener('storage', onStorage as EventListener);
+  document.removeEventListener('visibilitychange', onVisibility as EventListener);
     };
   }, [isTG]);
 
