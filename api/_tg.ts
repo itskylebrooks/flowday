@@ -1,7 +1,7 @@
 // Shared Telegram WebApp initData verification utilities (server-side only)
 // Implements HMAC validation per Telegram spec:
 // https://core.telegram.org/bots/webapps#initializing-mini-apps
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 export interface TGUser { id: number; username?: string; first_name?: string; last_name?: string; language_code?: string }
 
