@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Motion tokens: centralize page-switch timing and easing so transitions are consistent */
+:root {
+	--motion-page-duration: .32s; /* standard duration for page switching */
+	--motion-page-ease: cubic-bezier(.4,0,.2,1);
+}
+
 /* Poster typography */
 /* Legacy poster font utility (kept for backward compatibility) */
 .font-poster { font-family: 'Bebas Neue', 'Source Serif 4', ui-serif, Georgia, serif; letter-spacing: .5px; }
@@ -25,8 +31,8 @@
 .cassette-sticker .cassette-row { position:relative; padding-bottom:3px; }
 .cassette-sticker .cassette-row:after { content:''; position:absolute; left:0; right:0; bottom:0; height:1px; background:rgba(0,0,0,0.32); }
 .cassette-sticker .cassette-row.artist-row:after { background:rgba(0,0,0,0.28); }
-/* Echoes year transition */
-@keyframes echoesYearIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+/* Echoes year transition: slide in from the right (cassette cards) */
+@keyframes echoesYearIn { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 .echoes-year-anim { animation: echoesYearIn .45s cubic-bezier(.4,0,.25,1); }
 /* Cassette preview reels */
 .cassette-preview:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04)_0_6px,rgba(0,0,0,0.04)_6px_12px); mix-blend-mode:overlay; opacity:.35; pointer-events:none; }
@@ -65,8 +71,16 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 	from { opacity: 0; transform: translateX(6px); }
 	to { opacity: 1; transform: translateX(0); }
 }
-.animate-fadeInMove { animation: fadeInMove .35s ease both; }
-.animate-fadeSwap { animation: fadeSwap .28s ease both; }
+/* Use centralized page motion tokens for consistency */
+.animate-fadeInMove { animation: fadeInMove var(--motion-page-duration) var(--motion-page-ease) both; }
+.animate-fadeSwap { animation: fadeSwap var(--motion-page-duration) var(--motion-page-ease) both; }
+
+/* Header/date: fade in from top (used for top nav title swaps) */
+@keyframes fadeFromTop {
+	from { opacity: 0; transform: translateY(-6px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeFromTop { animation: fadeFromTop var(--motion-page-duration) var(--motion-page-ease) both; }
 
 /* Guide step transitions */
 @keyframes guideEnterForward { from { opacity:0; transform:translateX(26px) scale(.985); } to { opacity:1; transform:translateX(0) scale(1); } }
@@ -80,7 +94,10 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 .guide-step-exit-back { animation: guideExitBack .32s cubic-bezier(.4,0,.55,1) forwards; }
 
 .page-stack { position: relative; width:100%; height:100%; }
-.page-view { position:absolute; inset:0; opacity:0; pointer-events:none; transform:translateX(14px); transition: opacity .32s ease, transform .38s ease; }
+.page-view { position:absolute; inset:0; opacity:0; pointer-events:none; transition: opacity var(--motion-page-duration) var(--motion-page-ease), transform var(--motion-page-duration) var(--motion-page-ease); }
+/* Directional offsets for incoming page animation */
+.page-view.from-left { transform: translateX(-14px); }
+.page-view.from-right { transform: translateX(14px); }
 .page-view[data-active='true'] { opacity:1; pointer-events:auto; transform:translateX(0); }
 
 /* Aura <-> Emoji triangle smooth morph */

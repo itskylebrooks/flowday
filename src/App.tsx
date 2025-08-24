@@ -358,7 +358,7 @@ export default function App() {
           <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">
             <span
               key={page==='constellations' ? 'constellations-static' : headerCenterText()}
-              className={page==='constellations' ? 'inline-block' : 'inline-block animate-fadeSwap'}
+              className={'inline-block animate-fadeFromTop'}
             >{headerCenterText()}</span>
           </div>
           <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
@@ -371,7 +371,7 @@ export default function App() {
 
   {/* Content area sized between fixed bars (no scroll) */}
   <div className="absolute inset-x-0 overflow-hidden page-stack" style={{ top: contentTop, bottom: contentBottom }}>
-      <div className="page-view" data-active={page==='today'}>
+      <div className="page-view from-left" data-active={page==='today'}>
         <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
@@ -500,7 +500,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="page-view" data-active={page==='flows'}>
+  <div className="page-view from-left" data-active={page==='flows'}>
         {page==='flows' && (
           <div className="h-full animate-fadeSwap">
             <FlowsPage
@@ -514,14 +514,14 @@ export default function App() {
           </div>
         )}
       </div>
-      <div className="page-view" data-active={page==='constellations'}>
+  <div className="page-view from-right" data-active={page==='constellations'}>
         {page==='constellations' && (
           <div className="h-full">
             <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
           </div>
         )}
       </div>
-      <div className="page-view" data-active={page==='echoes'}>
+  <div className="page-view from-right" data-active={page==='echoes'}>
         {page==='echoes' && (
           <div className="h-full animate-fadeSwap">
             <EchoesPage entries={entries} yearOffset={yearOffset} />
