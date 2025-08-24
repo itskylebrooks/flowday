@@ -301,21 +301,68 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
 // Small inline modal to select language (placeholder)
 function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: string; onChoose: (lang: string) => void }) {
-  if (!open) return null;
   const options = ['English', 'Русский', 'Deutsch', 'Español', 'Français'];
+  const [mounted, setMounted] = useState(open);
+  const [active, setActive] = useState(open);
+  const ANIM = 260; // ms
+
+  useEffect(() => {
+    let t: number | undefined;
+    if (open) {
+      setMounted(true);
+      // next frame to ensure transition runs
+      requestAnimationFrame(() => setActive(true));
+    } else {
+      setActive(false);
+      t = window.setTimeout(() => setMounted(false), ANIM + 20);
+    }
+    return () => { if (t) window.clearTimeout(t); };
+  }, [open]);
+
+  if (!mounted) return null;
+
+  const wrapperStyle: React.CSSProperties = {
+    opacity: active ? 1 : 0,
+    transform: active ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.96)',
+    transition: `opacity ${ANIM}ms cubic-bezier(.2,.9,.2,1), transform ${ANIM}ms cubic-bezier(.2,.9,.2,1)`
+  };
+  const panelStyle: React.CSSProperties = {
+    transform: active ? 'scale(1)' : 'scale(0.985) translateY(-6px)',
+    opacity: active ? 1 : 0,
+    transition: `opacity ${ANIM}ms cubic-bezier(.2,.9,.2,1), transform ${ANIM}ms cubic-bezier(.2,.9,.2,1)`
+  };
+
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#0e0e0e] rounded-xl p-4 w-80 ring-1 ring-white/10" onClick={(e)=>e.stopPropagation()}>
-        <div className="text-sm font-medium mb-3">Choose language</div>
-        <div className="space-y-2">
-          {options.map(o=> (
-            <button key={o} onClick={()=>{ onChoose(o); onClose(); }} className={"w-full text-left px-3 py-2 rounded-md " + (o===current ? 'bg-white/5 text-white' : 'hover:bg-white/3 text-white/70')}>
+    <div
+      className={`fixed inset-0 z-60 flex items-center justify-center backdrop-blur-sm ${!active ? 'pointer-events-none' : ''}`}
+      onClick={active ? onClose : undefined}
+      style={wrapperStyle}
+    >
+      <div
+        className="bg-[#111] rounded-lg w-64 ring-1 ring-white/10 shadow-lg settings-panel"
+        style={{ ...panelStyle, minWidth: '220px', maxWidth: '90vw', padding: '14px 14px 12px 14px' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="text-[13px] font-semibold mb-2 text-white/90">Choose language</div>
+        <div className="space-y-1">
+          {options.map(o => (
+            <button
+              key={o}
+              onClick={() => { onChoose(o); onClose(); }}
+              className={
+                `w-full text-left px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors ` +
+                (o === current
+                  ? 'bg-white/7 text-white ring-1 ring-white/12'
+                  : 'hover:bg-white/4 text-white/70')
+              }
+              style={{ letterSpacing: '0.01em' }}
+            >
               {o}
             </button>
           ))}
         </div>
-        <div className="mt-4 text-right">
-          <button onClick={onClose} className="text-xs text-white/40">Close</button>
+        <div className="mt-3 text-right">
+          <button onClick={onClose} className="text-xs text-white/40 px-2 py-1 hover:text-white/70 transition">Close</button>
         </div>
       </div>
     </div>
