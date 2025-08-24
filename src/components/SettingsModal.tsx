@@ -69,8 +69,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     setTimeout(()=> setSavedFlash(false), 1400);
   }
 
-  async function handleSendEmail(e: React.FormEvent){
-    e.preventDefault();
+  async function handleSendEmail(){
     if (!email.trim() || sendingEmail) return;
     setSendingEmail(true);
     let redirect = window.location.origin;
@@ -226,32 +225,42 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
               </div>
 
-              <div>
-                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Email (optional)</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e=>{ setEmail(e.target.value); setEmailStatus('idle'); }}
-                    className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
-                    placeholder="you@example.com"
-                    disabled={sendingEmail || emailStatus==='sent'}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendEmail}
-                    disabled={sendingEmail || emailStatus==='sent' || !email.trim()}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
-                  >
-                    {sendingEmail ? 'Sending…' : emailStatus==='sent' ? 'Sent' : 'Link'}
-                  </button>
+              {isTG && (
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Email (optional)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e=>{ setEmail(e.target.value); setEmailStatus('idle'); }}
+                      className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                      placeholder="you@example.com"
+                      disabled={sendingEmail || emailStatus==='sent'}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendEmail}
+                      disabled={sendingEmail || emailStatus==='sent' || !email.trim()}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                    >
+                      {sendingEmail ? 'Sending…' : emailStatus==='sent' ? 'Sent' : 'Link'}
+                    </button>
+                  </div>
+                  {emailStatus==='sent' && (<p className="mt-1 text-[11px] text-green-400">Check your inbox for the login link.</p>)}
+                  {emailStatus==='error' && (<p className="mt-1 text-[11px] text-red-400">Couldn't send link. Try again later.</p>)}
                 </div>
-                {emailStatus==='sent' && (<p className="mt-1 text-[11px] text-green-400">Check your inbox for the login link.</p>)}
-                {emailStatus==='error' && (<p className="mt-1 text-[11px] text-red-400">Couldn't send link. Try again later.</p>)}
-              </div>
+              )}
 
               <div className="pt-1 grid gap-2">
-                <CloudAccountSection />
+                <CloudAccountSection
+                  isTG={!!isTG}
+                  email={email}
+                  setEmail={(v)=>{ setEmail(v); setEmailStatus('idle'); }}
+                  emailStatus={emailStatus}
+                  setEmailStatus={setEmailStatus}
+                  sendingEmail={sendingEmail}
+                  onSendEmail={handleSendEmail}
+                />
               </div>
 
               <div className="mt-1">
@@ -368,47 +377,102 @@ function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; on
 }
 
 // Subcomponent to handle cloud account actions
-function CloudAccountSection() {
+function CloudAccountSection({
+  isTG,
+  email,
+  setEmail,
+  emailStatus,
+  setEmailStatus,
+  sendingEmail,
+  onSendEmail,
+}: {
+  isTG: boolean;
+  email: string;
+  setEmail: (v: string) => void;
+  emailStatus: 'idle' | 'sent' | 'error';
+  setEmailStatus: (v: 'idle' | 'sent' | 'error') => void;
+  sendingEmail: boolean;
+  onSendEmail: () => void;
+}) {
   const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
-  async function handleSignIn() {
-    setWorking(true);
-    const desired = loadUser().username;
-    if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
-    const r = await signInToCloud(desired);
-    setWorking(false);
-    if (r.ok) { setEnabled(true); }
-    else {
-      if (r.error === 'username-taken') alert('Username already taken. Choose another.');
-      else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
-      else alert('Sign in failed. Try again.');
+
+  if (isTG) {
+    async function handleSignIn() {
+      setWorking(true);
+      const desired = loadUser().username;
+      if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
+      const r = await signInToCloud(desired);
+      setWorking(false);
+      if (r.ok) { setEnabled(true); }
+      else {
+        if (r.error === 'username-taken') alert('Username already taken. Choose another.');
+        else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
+        else alert('Sign in failed. Try again.');
+      }
     }
+    async function handleDelete() {
+      if (!enabled) return;
+      if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
+      setWorking(true);
+      const ok = await deleteCloudAccount();
+      setWorking(false);
+      if (ok) setEnabled(false);
+    }
+    return (
+      <div className="space-y-2">
+        {!enabled && (
+          <button type="button" disabled={working} onClick={handleSignIn}
+            className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
+            {working ? 'Signing in…' : 'Sign in & enable sync'}
+          </button>
+        )}
+        {enabled && (
+          <button type="button" disabled={working} onClick={handleDelete}
+            className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
+            {working ? 'Deleting…' : 'Delete cloud account'}
+          </button>
+        )}
+        <p className="text-[10px] leading-relaxed text-white/35">
+          {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
+        </p>
+      </div>
+    );
   }
-  async function handleDelete() {
-    if (!enabled) return;
-    if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
-    setWorking(true);
-    const ok = await deleteCloudAccount();
-    setWorking(false);
-    if (ok) setEnabled(false);
-  }
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   return (
     <div className="space-y-2">
       {!enabled && (
-        <button type="button" disabled={working} onClick={handleSignIn}
-          className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
-          {working ? 'Signing in…' : 'Sign in & enable sync'}
-        </button>
+        <>
+          <input
+            type="email"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setEmailStatus('idle'); }}
+            className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+            placeholder="you@example.com"
+            disabled={sendingEmail || emailStatus==='sent'}
+          />
+          <button
+            type="button"
+            onClick={onSendEmail}
+            disabled={sendingEmail || emailStatus==='sent' || !emailValid}
+            className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50"
+          >
+            {sendingEmail ? 'Sending…' : emailStatus==='sent' ? 'Sent' : 'Sign in & enable sync'}
+          </button>
+          {emailStatus==='sent' && (<p className="text-[10px] text-green-400">Check your inbox for the login link.</p>)}
+          {emailStatus==='error' && (<p className="text-[10px] text-red-400">Couldn't send link. Try again later.</p>)}
+          <p className="text-[10px] leading-relaxed text-white/35">
+            Sign in creates a cloud account. Magic link will be sent to your email.
+          </p>
+        </>
       )}
       {enabled && (
-        <button type="button" disabled={working} onClick={handleDelete}
-          className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
-          {working ? 'Deleting…' : 'Delete cloud account'}
-        </button>
+        <p className="text-[10px] leading-relaxed text-white/35">
+          Cloud sync enabled. Your entries sync across devices.
+        </p>
       )}
-      <p className="text-[10px] leading-relaxed text-white/35">
-        {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
-      </p>
     </div>
   );
 }

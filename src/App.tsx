@@ -13,7 +13,6 @@ import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
-import LoginPage from './pages/LoginPage';
 import { supabase } from './lib/supabase';
 
 export default function App() {
@@ -88,9 +87,6 @@ export default function App() {
     window.history.replaceState({}, '', url.toString());
   }, [session]);
 
-  if (!isTG && !session && import.meta.env.MODE !== 'test') {
-    return <LoginPage />;
-  }
   // Telegram verification + initial cloud sync (telegram only)
   // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
   // appears later (e.g. opening in another device) without requiring a manual reload.
