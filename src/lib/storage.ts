@@ -10,8 +10,22 @@ import { clamp } from './utils';
 
 export const CURRENT_VERSION = 2 as const;
 export const STORAGE_KEY = 'flowday_entries_v2';
-const LEGACY_KEYS = ['flowday_entries_v1']; // oldest last
+// Any localStorage key that starts with this prefix is considered an entry store.
+const STORAGE_PREFIX = 'flowday_entries';
 
+function cleanupOldEntryKeys() {
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith(STORAGE_PREFIX) && key !== STORAGE_KEY) toRemove.push(key);
+    }
+    for (const k of toRemove) {
+      try { localStorage.removeItem(k); } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
 interface PersistedV2 { version: 2; entries: unknown; }
 type PersistedAny = PersistedV2 | Entry[] | unknown;
 type UnknownRecord = Record<string, unknown>;
@@ -67,6 +81,9 @@ function migrate(persisted: PersistedAny): Entry[] {
 function persist(entries: Entry[]) {
   const payload: PersistedV2 = { version: CURRENT_VERSION, entries: [...entries].sort((a,b)=>a.date.localeCompare(b.date)) };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  // After writing the canonical storage key, remove any older entry keys so only
+  // the latest version exists in localStorage.
+  try { cleanupOldEntryKeys(); } catch { /* ignore */ }
 }
 
 export function loadEntries(): Entry[] {
@@ -80,18 +97,23 @@ export function loadEntries(): Entry[] {
       return migrated;
     }
   } catch { /* ignore */ }
-  // Legacy keys
-  for (const k of LEGACY_KEYS) {
-    try {
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as PersistedAny;
-      const migrated = migrate(parsed);
-      persist(migrated);
-      try { localStorage.removeItem(k); } catch { /* ignore */ }
-      return migrated;
-    } catch { /* keep trying */ }
-  }
+  // No current payload found — try to migrate any older entry keys.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (!key.startsWith(STORAGE_PREFIX) || key === STORAGE_KEY) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as PersistedAny;
+        const migrated = migrate(parsed);
+        persist(migrated);
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        return migrated;
+      } catch { /* keep trying other keys */ }
+    }
+  } catch { /* ignore */ }
   return [];
 }
 
@@ -227,8 +249,8 @@ export function saveReminders(prefs: RemindersSettings) {
 export function clearAllData() {
   try {
     // Current & legacy entry keys
-    localStorage.removeItem(STORAGE_KEY);
-    for (const k of LEGACY_KEYS) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+  localStorage.removeItem(STORAGE_KEY);
+  try { cleanupOldEntryKeys(); } catch { /* ignore */ }
     // Related feature keys
     localStorage.removeItem(RECENTS_KEY);
     localStorage.removeItem(USER_KEY);
