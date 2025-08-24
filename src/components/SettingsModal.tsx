@@ -3,7 +3,10 @@ import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
+import { supabase } from '../lib/supabase';
+import { initSessionFromStorage, clearStoredSession } from '../lib/webAuth';
 import type { Entry } from '../lib/types';
+import type { Session } from '@supabase/supabase-js';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
@@ -183,31 +186,31 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   <p className="text-[11px] text-white/40">Manage your username and sync preferences.</p>
                 </div>
               </div>
-            <form onSubmit={handleSave} className="mt-3 space-y-3">
-              <div>
-                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    value={username}
-                    onChange={handleChange}
-                    maxLength={24}
-                    className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
-                    placeholder="user"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!dirty || saving || !username.trim()}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
-                  >
-                    {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
-                  </button>
+            <div className="mt-3 space-y-3">
+              <form onSubmit={handleSave}>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={username}
+                      onChange={handleChange}
+                      maxLength={24}
+                      className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                      placeholder="user"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!dirty || saving || !username.trim()}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                    >
+                      {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
                 </div>
-                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
-              </div>
+              </form>
 
-              <div className="pt-1 grid gap-2">
-                <CloudAccountSection />
-              </div>
+              <AccountSection isTG={isTG} />
 
               <div className="mt-1">
                 <button
@@ -223,7 +226,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   Delete all local data
                 </button>
               </div>
-            </form>
+            </div>
           </div>
 
           {/* Reminders card */}
@@ -323,7 +326,7 @@ function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; on
 }
 
 // Subcomponent to handle cloud account actions
-function CloudAccountSection() {
+function TelegramAccountSection() {
   const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
   async function handleSignIn() {
@@ -366,4 +369,103 @@ function CloudAccountSection() {
       </p>
     </div>
   );
+}
+
+function EmailAccountSection() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [email, setEmail] = useState('');
+  const [working, setWorking] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    initSessionFromStorage().finally(async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) { setSession(data.session); setEmail(data.session.user.email ?? ''); }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Invalid email'); return; }
+    setWorking(true);
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
+    setWorking(false);
+    if (error) { setError("Couldn't send link. Try again."); return; }
+    localStorage.setItem('flowday_post_auth', window.location.href);
+    setMsg('Check your inbox for the magic link.');
+    setCooldown(60);
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    clearStoredSession();
+    setSession(null); setEmail(''); setMsg('');
+  }
+
+  async function handleDelete() {
+    if (!session) return;
+    if (!window.confirm('Delete your cloud account? Local entries stay on this device.')) return;
+    const userId = session.user.id;
+    try { await supabase.from('users').delete().eq('auth_user_id', userId); } catch { /* ignore */ }
+    await handleLogout();
+  }
+
+  if (session) {
+    return (
+      <div className="space-y-2">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Email</label>
+          <input
+            value={email}
+            aria-label="Email"
+            disabled
+            className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 placeholder:text-white/30"
+          />
+        </div>
+        <div className="grid gap-2 mt-2">
+          <button type="button" onClick={handleLogout} className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 hover:bg-white/10">
+            Log out
+          </button>
+          <button type="button" onClick={handleDelete} className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25">
+            Delete account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Email</label>
+        <input
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          disabled={cooldown > 0}
+          aria-label="Email"
+          className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+          placeholder="you@example.com"
+        />
+        {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+      </div>
+      <button type="submit" disabled={working || cooldown > 0} className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
+        {cooldown > 0 ? `Resend link (${cooldown})` : 'Sign in / Log in'}
+      </button>
+      <p className="text-[10px] leading-relaxed text-white/35">Sign in creates a cloud account so entries sync across devices. Magic link will be sent to your email address.</p>
+      {msg && <p className="text-[10px] text-emerald-300">{msg}</p>}
+    </form>
+  );
+}
+
+function AccountSection({ isTG }: { isTG?: boolean }) {
+  return isTG ? <TelegramAccountSection /> : <EmailAccountSection />;
 }
