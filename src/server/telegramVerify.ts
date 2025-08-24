@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isValidInitData, parseTGUser, devReason } from './_tg';
+import { isValidInitData, parseTGUser, devReason } from '../../api/_tg';
 
 export const config = { runtime: 'nodejs' };
 
@@ -26,7 +26,7 @@ interface Req { method?: string; body?: unknown; }
 // Basic response shim; json accepts unknown payload
 interface Res { status: (c:number)=>Res; json: (v:unknown)=>void; }
 
-export default async function handler(req: Req, res: Res) {
+export async function telegramVerifyHandler(req: Req, res: Res) {
   try {
     console.log('[verify-telegram] env present', {
       SUPABASE_URL: !!SUPABASE_URL,

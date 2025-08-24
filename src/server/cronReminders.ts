@@ -13,7 +13,7 @@ const supabase = (function init(){
 interface Req { method?: string; headers?: Record<string,string|undefined>; body?: unknown }
 interface Res { status:(c:number)=>Res; json:(v:unknown)=>void }
 
-export default async function handler(req: Req, res: Res) {
+export async function cronRemindersHandler(req: Req, res: Res) {
   try {
     // Accept Vercel cron GET requests (user-agent contains vercel-cron) OR POST/GET with Bearer secret
     const ua = (req.headers?.['user-agent'] || '').toLowerCase();
