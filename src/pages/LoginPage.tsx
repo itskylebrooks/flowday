@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
+const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+
 export default function LoginPage(){
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle'|'sent'|'error'>('idle');
@@ -12,7 +14,7 @@ export default function LoginPage(){
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin }
+      options: { emailRedirectTo: SITE_URL }
     });
     if (error) {
       setStatus('error');

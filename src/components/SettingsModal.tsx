@@ -17,6 +17,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [email, setEmail] = useState('');
   const [emailStatus, setEmailStatus] = useState<'idle'|'sent'|'error'>('idle');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [cloudEnabled, setCloudEnabled] = useState(isCloudEnabled());
+  const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
   const tgidRef = useRef<string | null>(null);
   useEffect(()=>{ try { tgidRef.current = localStorage.getItem('flowday_tgid'); } catch { tgidRef.current = null; } }, []);
   // simple language state stored locally as a placeholder
@@ -42,6 +44,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   // refresh reminders
   setReminders(loadReminders());
   remindersDirtyRef.current = false;
+      supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email || '')).catch(()=>{});
+      setCloudEnabled(isCloudEnabled());
     }
   }, [open]);
 
@@ -72,7 +76,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   async function handleSendEmail(){
     if (!email.trim() || sendingEmail) return;
     setSendingEmail(true);
-    let redirect = window.location.origin;
+    let redirect = SITE_URL;
     const tgid = tgidRef.current;
     if (tgid) redirect += `?tgid=${tgid}`;
     const { error } = await supabase.auth.signInWithOtp({
@@ -260,6 +264,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   setEmailStatus={setEmailStatus}
                   sendingEmail={sendingEmail}
                   onSendEmail={handleSendEmail}
+                  enabled={cloudEnabled}
+                  setEnabled={setCloudEnabled}
                 />
               </div>
 
@@ -385,6 +391,8 @@ function CloudAccountSection({
   setEmailStatus,
   sendingEmail,
   onSendEmail,
+  enabled,
+  setEnabled,
 }: {
   isTG: boolean;
   email: string;
@@ -393,8 +401,9 @@ function CloudAccountSection({
   setEmailStatus: (v: 'idle' | 'sent' | 'error') => void;
   sendingEmail: boolean;
   onSendEmail: () => void;
+  enabled: boolean;
+  setEnabled: (v: boolean) => void;
 }) {
-  const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
 
   if (isTG) {
@@ -469,9 +478,10 @@ function CloudAccountSection({
         </>
       )}
       {enabled && (
-        <p className="text-[10px] leading-relaxed text-white/35">
-          Cloud sync enabled. Your entries sync across devices.
-        </p>
+        <>
+          <p className="text-[10px] text-white/35 break-words">Signed in as {email || 'unknown'}.</p>
+          <p className="text-[10px] leading-relaxed text-white/35">Cloud sync enabled. Your entries sync across devices.</p>
+        </>
       )}
     </div>
   );

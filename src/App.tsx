@@ -23,7 +23,10 @@ export default function App() {
 
   // Track Supabase auth session for email-based logins
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    (async () => {
+      try { await supabase.auth.initialize(); } catch { /* ignore */ }
+      try { const { data } = await supabase.auth.getSession(); setSession(data.session); } catch { /* ignore */ }
+    })();
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => setSession(sess));
     return () => { sub.subscription.unsubscribe(); };
   }, []);
