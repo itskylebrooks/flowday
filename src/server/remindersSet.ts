@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isValidInitData, parseTGUser } from './_tg';
+import { isValidInitData, parseTGUser } from '../../api/_tg';
 
 export const config = { runtime: 'nodejs' };
 
@@ -16,7 +16,7 @@ interface Res { status:(c:number)=>Res; json:(v:unknown)=>void }
 
 interface Body { initData?: string; daily_enabled?: unknown; daily_time?: unknown }
 
-export default async function handler(req: Req, res: Res) {
+export async function remindersSetHandler(req: Req, res: Res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
     if (supabaseInitError) return res.status(500).json({ ok:false, error:supabaseInitError });

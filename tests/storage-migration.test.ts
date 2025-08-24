@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadEntries, saveEntries, STORAGE_KEY, CURRENT_VERSION } from '../src/lib/storage';
+import { loadEntries, saveEntries, STORAGE_KEY, CURRENT_VERSION } from '../src/storage';
 
 class LS { store: Record<string,string>={}; getItem(k:string){ return this.store[k]??null;} setItem(k:string,v:string){ this.store[k]=v;} removeItem(k:string){ delete this.store[k]; } }
 

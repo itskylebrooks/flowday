@@ -1,4 +1,4 @@
-import { hsl } from '../lib/utils';
+import { hsl } from '../utils';
 
 export default function MonthlyMix({ hues, className = '' }: { hues: number[]; className?: string }) {
   const width = 320, height = 80;

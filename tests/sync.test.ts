@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mergeByNewer } from '../src/lib/sync';
-import type { Entry } from '../src/lib/types';
+import type { Entry } from '../src/types';
 
 describe('mergeByNewer', () => {
   it('prefers newer updatedAt for same date', () => {
