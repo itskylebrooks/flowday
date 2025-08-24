@@ -206,7 +206,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               </div>
 
               <div className="pt-1 grid gap-2">
-                <CloudAccountSection />
+                <CloudAccountSection isTG={isTG} />
               </div>
 
               <div className="mt-1">
@@ -323,9 +323,23 @@ function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; on
 }
 
 // Subcomponent to handle cloud account actions
-function CloudAccountSection() {
+function CloudAccountSection({ isTG }: { isTG?: boolean }) {
   const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
+
+  // If this is not the Telegram build, don't expose cloud sign-in UI.
+  // Show a short informational notice instead.
+  if (!isTG) {
+    return (
+      <div className="space-y-2">
+        <div className="w-full">
+          <div className="w-full text-center text-[12px] px-3 py-1.5 rounded-md bg-white/6 text-white/60 ring-1 ring-white/8">
+            Cloud sync is currently only available in the Telegram version.
+          </div>
+        </div>
+      </div>
+    );
+  }
   async function handleSignIn() {
     setWorking(true);
     const desired = loadUser().username;
