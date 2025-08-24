@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { webEnsureProfile } from '../lib/webSync';
 
 export default function AuthCallback() {
   const [error, setError] = useState(false);
@@ -20,6 +21,8 @@ export default function AuthCallback() {
         const { data } = await supabase.auth.getSession();
         if (!data.session) return setError(true);
       }
+
+      try { await webEnsureProfile(); } catch { /* ignore */ }
 
       const redirect = localStorage.getItem('flowday_post_auth') || '/';
       localStorage.removeItem('flowday_post_auth');

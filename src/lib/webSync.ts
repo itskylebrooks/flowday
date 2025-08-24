@@ -71,8 +71,7 @@ export async function webPushMany(entries: Entry[]): Promise<void> {
   );
   const { error } = await supabase
     .from('entries')
-    .upsert(rows, { onConflict: 'auth_user_id,date' })
-    .select('updated_at');
+    .upsert(rows, { onConflict: 'auth_user_id,date', returning: 'minimal' });
   if (error) { console.warn('[webPushMany] upsert failed', error); return; }
   try { localStorage.setItem(SYNC_KEY, nowIso); } catch { /* ignore */ }
 }
@@ -135,7 +134,7 @@ export async function webSaveReminders(prefs: RemindersSettings): Promise<void> 
         daily_time: prefs.dailyTime,
         updated_at: nowIso,
       },
-      { onConflict: 'auth_user_id' }
+      { onConflict: 'auth_user_id', returning: 'minimal' }
     );
   if (error) console.warn('[webSaveReminders] upsert failed', error);
 }
@@ -146,7 +145,10 @@ export async function webEnsureProfile(): Promise<void> {
   } = await supabase.auth.getUser();
   const uid = user?.id;
   if (!uid) return;
-  await supabase.from('users').upsert({ auth_user_id: uid }, { onConflict: 'auth_user_id' });
+  const { error } = await supabase
+    .from('users')
+    .upsert({ auth_user_id: uid }, { onConflict: 'auth_user_id', returning: 'minimal' });
+  if (error) console.warn('[webEnsureProfile] upsert failed', error);
 }
 
 export async function webSetUsername(
@@ -161,7 +163,7 @@ export async function webSetUsername(
   if (!uid) return { ok: false, error: 'not-authenticated' };
   const { error } = await supabase
     .from('users')
-    .upsert({ auth_user_id: uid, username: clean }, { onConflict: 'auth_user_id' });
+    .upsert({ auth_user_id: uid, username: clean }, { onConflict: 'auth_user_id', returning: 'minimal' });
   if (error?.code === '23505') return { ok: false, error: 'username-taken' };
   if (error) return { ok: false, error: 'server' };
   return { ok: true };
