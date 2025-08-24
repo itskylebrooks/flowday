@@ -32,14 +32,14 @@ export default async function handler(req: Req, res: Res) {
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     const botToken = process.env.BOT_TOKEN;
 
-    // Fetch enabled daily reminders
+    // Fetch enabled daily reminders (minimal schema: no legacy last_sent fields)
     const { data, error } = await supabase.from('reminders')
-      .select('telegram_id,daily_enabled,last_sent_at,last_daily_sent')
+      .select('telegram_id,daily_enabled,updated_at')
       .eq('daily_enabled', true)
       .limit(1000);
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
 
-  type Row = { telegram_id: number; daily_enabled: boolean; last_sent_at: string | null; last_daily_sent: string | null };
+  type Row = { telegram_id: number; daily_enabled: boolean; updated_at: string | null };
   const rows: Row[] = (data as unknown as Row[]) || [];
 
     let sent = 0;
@@ -47,8 +47,8 @@ export default async function handler(req: Req, res: Res) {
     const today = new Date().toISOString().slice(0,10); // UTC date
 
     for (const r of rows) {
-  // prefer timestamp-based last_sent_at, fallback to legacy last_daily_sent date
-  const lastSentDate = r.last_sent_at ? r.last_sent_at.slice(0,10) : r.last_daily_sent;
+  // Use updated_at as the last-sent marker (minimal schema). If updated today, skip.
+  const lastSentDate = r.updated_at ? r.updated_at.slice(0,10) : null;
   if (lastSentDate === today) continue; // already sent today
       const chatId = r.telegram_id;
   const text = `✨ Your flow is waiting
@@ -71,7 +71,8 @@ Every drop adds to your week’s ribbon, your month’s mix, your sky of constel
 
         // Mark as sent for today
   const now = new Date().toISOString();
-  const { error: upErr } = await supabase.from('reminders').update({ last_sent_at: now, last_daily_sent: today, updated_at: now }).eq('telegram_id', chatId);
+  // Only update columns present in the minimal schema. Use updated_at as the marker for last send.
+  const { error: upErr } = await supabase.from('reminders').update({ updated_at: now }).eq('telegram_id', chatId);
         if (upErr) {
           errors.push({ id: chatId, message: 'db-update-failed' });
           continue;

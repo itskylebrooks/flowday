@@ -18,8 +18,8 @@ export default async function handler(req: Req, res: Res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
     if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });
-  const body = (req.body as { initData?: string; tz?: string; username?: string } | undefined) || {};
-  const { initData, tz, username } = body;
+  const body = (req.body as { initData?: string; username?: string } | undefined) || {};
+  const { initData, username } = body;
     if (!initData) return res.status(400).json({ ok:false, error:'missing-initData', ...devReason('initData') });
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac', ...devReason('hmac') });
@@ -35,13 +35,10 @@ export default async function handler(req: Req, res: Res) {
         return res.status(409).json({ ok:false, error:'username-taken' });
       }
     }
+    // Minimal schema: only store telegram_id, username and updated_at
     const { error: upErr } = await supabase.from('users').insert({
       telegram_id: u.id,
       username: desired,
-      first_name: u.first_name ?? null,
-      last_name: u.last_name ?? null,
-      language_code: u.language_code ?? null,
-      tz: typeof tz === 'string' ? tz : 'UTC',
       updated_at: new Date().toISOString()
     });
     if (upErr) return res.status(500).json({ ok:false, error:'user-insert-failed' });

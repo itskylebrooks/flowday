@@ -23,11 +23,11 @@ export default async function handler(req: Req, res: Res) {
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac' });
     const u = parseTGUser(initData); if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user' });
-  const { data, error } = await supabase.from('reminders').select('daily_enabled,last_sent_at,last_daily_sent,updated_at').eq('telegram_id', u.id).limit(1).maybeSingle();
+  const { data, error } = await supabase.from('reminders').select('daily_enabled,updated_at').eq('telegram_id', u.id).limit(1).maybeSingle();
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
     if (!data) return res.json({ ok:true, exists:false });
-    // Normalize response keys for the client (pref: daily enabled + last sent timestamp)
-    const prefs = { daily_enabled: !!data.daily_enabled, last_sent_at: data.last_sent_at ?? data.last_daily_sent ?? null };
+    // Normalize response keys for the client (daily enabled + last update timestamp)
+    const prefs = { daily_enabled: !!data.daily_enabled, last_sent_at: data.updated_at ?? null };
     res.json({ ok:true, exists:true, prefs });
   } catch (e) {
     console.error('[reminders-get] unexpected', (e as Error)?.message);
