@@ -332,11 +332,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   }}
                   disabled={!isCloudEnabled()}
                   className={
-                    "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
-                    (dailyEnabled
-                      ? 'bg-emerald-600 text-white ring-emerald-400/20'
-                      : 'bg-white/6 ring-white/10 text-white/70 hover:bg-white/8')
-                  }
+                      "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
+                      (dailyEnabled
+                        ? 'bg-emerald-600/8 text-white/90 ring-1 ring-emerald-500/30'
+                        : 'bg-red-600/6 text-white/85 ring-1 ring-red-400/25 hover:bg-red-600/12')
+                    }
                 >
                   <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
                   <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
