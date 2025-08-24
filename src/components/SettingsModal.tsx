@@ -5,6 +5,7 @@ import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername 
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 import { t, useLanguage } from '../lib/i18n';
+import type { Lang } from '../lib/i18n';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
@@ -16,7 +17,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [reminders, setReminders] = useState(()=> loadReminders());
   const [language, setLanguage] = useLanguage();
   const [langModalOpen, setLangModalOpen] = useState(false);
-  const langNames: Record<string, string> = { en: t('English'), ru: t('Russian'), de: t('German') };
+  const langNames: Record<Lang, string> = { en: t('English'), ru: t('Russian'), de: t('German') };
   const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
@@ -299,8 +300,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 }
 
 // Small inline modal to select language (placeholder)
-function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: string; onChoose: (lang: string) => void }) {
-  const options: [string, string][] = [
+function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: Lang; onChoose: (lang: Lang) => void }) {
+  const options: [Lang, string][] = [
     ['en', t('English')],
     ['ru', t('Russian')],
     ['de', t('German')]
