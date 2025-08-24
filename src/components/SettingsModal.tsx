@@ -297,7 +297,7 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       <div className="space-y-2">
         <div className="w-full">
           <div className="w-full text-center text-[12px] px-3 py-1.5 rounded-md bg-white/6 text-white/60 ring-1 ring-white/8">
-            Cloud sync is currently only available in the Telegram version.
+            Cloud sync is only available in the Telegram version.
           </div>
         </div>
       </div>
