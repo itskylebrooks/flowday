@@ -4,9 +4,8 @@ import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { clearStoredSession } from '../lib/webAuth';
 import { detectCloudMode, type CloudMode } from '../lib/cloudMode';
-import { webSaveReminders, webLoadReminders } from '../lib/webSync';
+import { webSaveReminders, webLoadReminders, webSetUsername } from '../lib/webSync';
 import type { Entry } from '../lib/types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -61,11 +60,19 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     if (e) e.preventDefault();
     if (!dirty || saving) return;
     setSaving(true);
-  if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
-  const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
-    // If cloud enabled, attempt remote username update
-    if (isCloudEnabled()) {
-      const r = await updateCloudUsername(stored.username);
+    if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
+    const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
+    if (cloudMode === 'telegram') {
+      if (isCloudEnabled()) {
+        const r = await updateCloudUsername(stored.username);
+        if (!r.ok && r.error === 'username-taken') {
+          setSaving(false);
+          alert('Username already taken. Please choose another.');
+          return;
+        }
+      }
+    } else if (cloudMode === 'email') {
+      const r = await webSetUsername(stored.username);
       if (!r.ok && r.error === 'username-taken') {
         setSaving(false);
         alert('Username already taken. Please choose another.');
@@ -202,28 +209,32 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
               </div>
             <div className="mt-3 space-y-3">
-              <form onSubmit={handleSave}>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={username}
-                      onChange={handleChange}
-                      maxLength={24}
-                      className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
-                      placeholder="user"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!dirty || saving || !username.trim()}
-                      className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
-                    >
-                      {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
-                    </button>
+              {isTG || session ? (
+                <form onSubmit={handleSave}>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={username}
+                        onChange={handleChange}
+                        maxLength={24}
+                        className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                        placeholder="user"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!dirty || saving || !username.trim()}
+                        className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                      >
+                        {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
                   </div>
-                  <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
-                </div>
-              </form>
+                </form>
+              ) : (
+                <p className="text-[11px] text-white/40">Create an account to claim your username.</p>
+              )}
 
               <AccountSection isTG={isTG} session={session} setSession={setSession} />
 
@@ -416,7 +427,6 @@ function EmailAccountSection({ session, setSession }: { session: Session | null;
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    clearStoredSession();
     setSession(null); setEmail(''); setMsg('');
   }
 

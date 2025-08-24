@@ -1,28 +1,29 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { storeSession } from '../lib/webAuth';
 
 export default function AuthCallback() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const url = new URL(window.location.href);
-      const tokenHash = url.searchParams.get('token_hash');
-      let session = null;
+      (async () => {
+        const url = new URL(window.location.href);
+        const tokenHash = url.searchParams.get('token_hash');
+
       if (tokenHash) {
         const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
-        if (!error) session = data.session; else setError(true);
+        if (error || !data.session) return setError(true);
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
       } else {
         const { data } = await supabase.auth.getSession();
-        session = data.session; if (!session) setError(true);
+        if (!data.session) return setError(true);
       }
-      if (session) {
-        storeSession(session);
-        const redirect = localStorage.getItem('flowday_post_auth') || '/';
-        localStorage.removeItem('flowday_post_auth');
-        window.location.replace(redirect);
-      }
+
+      const redirect = localStorage.getItem('flowday_post_auth') || '/';
+      localStorage.removeItem('flowday_post_auth');
+      window.location.replace(redirect);
     })();
   }, []);
 

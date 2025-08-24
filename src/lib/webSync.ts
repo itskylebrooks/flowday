@@ -18,7 +18,10 @@ export async function webPullSince(lastIso?: string): Promise<Entry[]> {
     .limit(500);
   if (lastIso) query.gt('updated_at', lastIso);
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) {
+    if (error) console.warn('[webPullSince] select failed', error);
+    return [];
+  }
   interface Row { date: string | Date; emojis_enc: string | null; hue_enc: string | null; song_title_enc: string | null; song_artist_enc: string | null; updated_at: string; }
   const rows = data as Row[];
   const out: Entry[] = [];
@@ -64,10 +67,11 @@ export async function webPushMany(entries: Entry[]): Promise<void> {
     }))
   );
   const rowsWithUid = rows.map(r => ({ ...r, auth_user_id: uid }));
-  await supabase
+  const { error } = await supabase
     .from('entries')
     .upsert(rowsWithUid, { onConflict: 'auth_user_id,date' })
     .select('updated_at');
+  if (error) { console.warn('[webPushMany] upsert failed', error); return; }
   try { localStorage.setItem(SYNC_KEY, new Date().toISOString()); } catch { /* ignore */ }
 }
 
@@ -102,7 +106,10 @@ export function startWebPeriodicPull(intervalMs = 60000): () => void {
 
 export async function webLoadReminders(): Promise<RemindersSettings | null> {
   const { data, error } = await supabase.from('reminders').select('daily_enabled,daily_time,updated_at').single();
-  if (error || !data) return null;
+  if (error || !data) {
+    if (error) console.warn('[webLoadReminders] select failed', error);
+    return null;
+  }
   return {
     dailyEnabled: !!data.daily_enabled,
     dailyTime: data.daily_time || '09:00',
@@ -116,12 +123,42 @@ export async function webSaveReminders(prefs: RemindersSettings): Promise<void> 
   } = await supabase.auth.getUser();
   const uid = user?.id;
   if (!uid) return;
-  await supabase.from('reminders').upsert(
-    {
-      auth_user_id: uid,
-      daily_enabled: prefs.dailyEnabled,
-      daily_time: prefs.dailyTime,
-    },
-    { onConflict: 'auth_user_id' }
-  );
+  const { error } = await supabase
+    .from('reminders')
+    .upsert(
+      {
+        auth_user_id: uid,
+        daily_enabled: prefs.dailyEnabled,
+        daily_time: prefs.dailyTime,
+      },
+      { onConflict: 'auth_user_id' }
+    );
+  if (error) console.warn('[webSaveReminders] upsert failed', error);
+}
+
+export async function webEnsureProfile(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+  await supabase.from('users').upsert({ auth_user_id: uid }, { onConflict: 'auth_user_id' });
+}
+
+export async function webSetUsername(
+  username: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const clean = username.trim().toLowerCase();
+  if (!/^[a-z0-9_]{4,24}$/.test(clean)) return { ok: false, error: 'invalid-username' };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return { ok: false, error: 'not-authenticated' };
+  const { error } = await supabase
+    .from('users')
+    .upsert({ auth_user_id: uid, username: clean }, { onConflict: 'auth_user_id' });
+  if (error?.code === '23505') return { ok: false, error: 'username-taken' };
+  if (error) return { ok: false, error: 'server' };
+  return { ok: true };
 }

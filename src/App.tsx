@@ -14,8 +14,7 @@ import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
 import { detectCloudMode, type CloudMode } from './lib/cloudMode';
-import { initSessionFromStorage } from './lib/webAuth';
-import { webInitialFullSyncIfNeeded, startWebPeriodicPull, webPushEntry, webPullSince } from './lib/webSync';
+import { webInitialFullSyncIfNeeded, startWebPeriodicPull, webPushEntry, webPullSince, webEnsureProfile } from './lib/webSync';
 import { supabase } from './lib/supabase';
 
 export default function App() {
@@ -23,6 +22,7 @@ export default function App() {
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
   const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
   const [emailSession, setEmailSession] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [cloudMode, setCloudMode] = useState<CloudMode>('none');
   useEffect(()=> {
     function poll(){
@@ -42,10 +42,11 @@ export default function App() {
   }, [tgPlatform]);
 
   useEffect(() => {
-    initSessionFromStorage().finally(async () => {
+    (async () => {
       const { data } = await supabase.auth.getSession();
       setEmailSession(!!data.session);
-    });
+      setAuthReady(true);
+    })();
     const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
       setEmailSession(!!session);
     });
@@ -53,8 +54,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!authReady) return;
     setCloudMode(detectCloudMode({ inTelegram: isTG, emailSession }));
-  }, [isTG, emailSession]);
+  }, [authReady, isTG, emailSession]);
+
+  useEffect(() => {
+    if (emailSession) void webEnsureProfile();
+  }, [emailSession]);
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
   const HEADER_H = 56; // tailwind h-14
   const FOOTER_H = 56; // tailwind h-14
