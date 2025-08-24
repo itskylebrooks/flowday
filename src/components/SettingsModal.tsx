@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
+import { loadUser, saveUser, loadReminders, saveReminders, clearAllData, exportAllData, importAllData } from '../lib/storage';
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
@@ -260,7 +260,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
               </div>
               {!isCloudEnabled() && (
-                <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
+                <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders.</div>
               )}
             </div>
           </div>
@@ -289,6 +289,63 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 function CloudAccountSection({ isTG }: { isTG?: boolean }) {
   const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
+  // Web-only import/export state & handlers (hooks must be top-level)
+  const [mode, setMode] = useState<'merge'|'replace'>('merge');
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleExport() {
+    try {
+      setExporting(true);
+      const payload = exportAllData();
+      const json = JSON.stringify(payload, null, 2);
+      setPreview(json);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const now = new Date().toISOString().slice(0,10);
+      a.href = url;
+      a.download = `flowday-export-${now}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed');
+    } finally { setExporting(false); }
+  }
+
+  function triggerFilePick() { fileRef.current?.click(); }
+
+  async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const txt = await f.text();
+    await doImport(txt);
+    try { e.target.value = ''; } catch { /* ignore */ }
+  }
+
+  async function doImport(text: string) {
+    setImporting(true);
+    try {
+      const res = importAllData(text, { merge: mode === 'merge' });
+      if (!res.ok) {
+        alert('Import failed: ' + (res.message || 'unknown'));
+      } else {
+        const parts: string[] = [];
+        if (res.added) parts.push(`${res.added} added`);
+        if (res.merged) parts.push(`${res.merged} merged`);
+        parts.push(`${res.total ?? '??'} total locally`);
+        alert('Import completed: ' + parts.join(', '));
+        // Reload so the running app picks up the new localStorage state immediately
+        window.location.reload();
+      }
+    } catch (e) {
+      alert('Import failed');
+    } finally { setImporting(false); }
+  }
 
   // If this is not the Telegram build, don't expose cloud sign-in UI.
   // Show a short informational notice instead.
@@ -296,10 +353,45 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
     return (
       <div className="space-y-2">
         <div className="w-full">
-          <div className="w-full text-center text-[12px] px-3 py-1.5 rounded-md bg-white/6 text-white/60 ring-1 ring-white/8">
-            Cloud sync is only available in the Telegram version.
+          <div className="w-full flex justify-center">
+            <div className="text-[12px] text-center px-3 py-1.5 rounded-md bg-[#24A1DE] text-white tracking-wide">
+              Cloud sync is only available in the Telegram version.
+            </div>
           </div>
         </div>
+        <div className="w-full grid gap-2 mt-2">
+          <button onClick={handleExport} disabled={exporting}
+            className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+            {exporting ? 'Exporting…' : 'Export all data (JSON)'}
+          </button>
+
+          <div className="flex gap-2">
+            <button type="button" onClick={triggerFilePick}
+              className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+              {importing ? 'Importing…' : 'Import from file'}
+            </button>
+            <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
+            <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
+              <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
+              <span>Merge (keep newest per day)</span>
+            </label>
+            <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
+              <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
+              <span>Replace local</span>
+            </label>
+          </div>
+
+          <div className="text-[10px] text-white/35">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
+        </div>
+        {preview && (
+          <details className="mt-2 text-left text-[11px] text-white/40">
+            <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
+            <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
+          </details>
+        )}
       </div>
     );
   }

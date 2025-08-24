@@ -257,3 +257,110 @@ export function clearAllData() {
     localStorage.removeItem(REMINDERS_KEY);
   } catch { /* ignore */ }
 }
+
+// ---------------- Export / Import helpers ----------------
+export interface ExportPayload {
+  exportedAt: string; // ISO
+  versioned?: unknown;
+  entries: Entry[];
+  user?: UserProfile;
+  reminders?: RemindersSettings;
+  recents?: string[];
+}
+
+export function exportAllData(): ExportPayload {
+  const entries = loadEntries();
+  const user = loadUser();
+  const reminders = loadReminders();
+  const recents = getRecents();
+  const payload: ExportPayload = {
+    exportedAt: new Date().toISOString(),
+    versioned: { storage_key: STORAGE_KEY, version: CURRENT_VERSION },
+    entries,
+    user,
+    reminders,
+    recents,
+  };
+  return payload;
+}
+
+// Merge incoming entries with local by taking the entry with the newest updatedAt for each date.
+function mergeEntriesByNewer(local: Entry[], incoming: Entry[]): Entry[] {
+  const map = new Map<string, Entry>(local.map(e => [e.date, e]));
+  for (const r of incoming) {
+    const cur = map.get(r.date);
+    if (!cur || (r.updatedAt > cur.updatedAt)) map.set(r.date, r);
+  }
+  return [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
+}
+
+export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: boolean; message?: string; added?: number; merged?: number; total?: number } {
+  try {
+    // Accept both already-parsed objects and JSON strings
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!parsed) return { ok:false, message: 'Invalid payload' };
+    // Extract entries
+    let incomingEntries: Entry[] = [];
+    try {
+      if (Array.isArray(parsed)) {
+        incomingEntries = (parsed as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+      } else if (typeof parsed === 'object') {
+        const p = parsed as Record<string, unknown>;
+        if (Array.isArray(p.entries)) incomingEntries = (p.entries as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+        else {
+          // Maybe it's a raw entries array in a wrapper property with a different name
+          for (const v of Object.values(p)) {
+            if (Array.isArray(v)) {
+              const candidate = (v as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+              if (candidate.length) { incomingEntries = candidate; break; }
+            }
+          }
+        }
+      }
+    } catch (e) { return { ok:false, message: 'Invalid entries format' }; }
+
+    const local = loadEntries();
+    let final: Entry[];
+    let added = 0;
+    let merged = 0;
+    if (opts?.merge ?? true) {
+      // compute statistics
+      const localMap = new Map(local.map(e=>[e.date, e] as const));
+      for (const ie of incomingEntries) {
+        const cur = localMap.get(ie.date);
+        if (!cur) added++;
+        else if (ie.updatedAt > cur.updatedAt) merged++;
+      }
+      final = mergeEntriesByNewer(local, incomingEntries);
+    } else {
+      // replace local completely
+      final = incomingEntries.slice().sort((a,b)=> a.date.localeCompare(b.date));
+      added = final.length;
+      merged = 0;
+    }
+    saveEntries(final);
+
+    // Optionally import user/reminders/recents if present
+    try {
+      const p = typeof parsed === 'object' && parsed ? (parsed as Record<string, unknown>) : {};
+      if (p.user && typeof p.user === 'object') {
+        // best-effort shape check
+        const userObj = p.user as Record<string, unknown>;
+        if (typeof userObj.username === 'string') {
+          saveUser({ username: userObj.username as string, createdAt: typeof userObj.createdAt === 'number' ? userObj.createdAt as number : Date.now(), updatedAt: Date.now() });
+        }
+      }
+      if (p.reminders && typeof p.reminders === 'object') {
+        const rem = p.reminders as Partial<RemindersSettings>;
+        saveReminders({ dailyEnabled: !!rem.dailyEnabled, dailyTime: typeof rem.dailyTime === 'string' ? rem.dailyTime : '20:00', timeFormat: rem.timeFormat === '12' ? '12' : '24', updatedAt: Date.now() });
+      }
+      if (Array.isArray((parsed as Record<string, unknown>).recents)) {
+        try { localStorage.setItem(RECENTS_KEY, JSON.stringify((parsed as Record<string, unknown>).recents)); } catch { /* ignore */ }
+      }
+    } catch { /* best-effort only */ }
+
+    return { ok:true, added, merged, total: loadEntries().length };
+  } catch (e) {
+    return { ok:false, message: (e instanceof Error) ? e.message : 'Import failed' };
+  }
+}
