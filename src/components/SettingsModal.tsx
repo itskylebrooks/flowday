@@ -208,7 +208,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           </div>
             {isTG && (
             <div className="mt-2 flex justify-center">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/12 text-white/85 ring-1 ring-sky-500/35 font-semibold tracking-wide hover:bg-sky-500/20 transition">TG Version</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/30 text-white/85 ring-1 ring-sky-500/60 font-semibold tracking-wide hover:bg-sky-500/50 transition">TG Version</span>
             </div>
           )}
         </div>
@@ -266,13 +266,14 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               </div>
             </form>
           </div>
-          {/* Data transfer card (Export / Import) */}
+          {/* Data transfer card (Export / Import) - web-only */}
+          {!isTG && (
           <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm font-semibold mb-0.5">Data transfer</div>
                 <hr className="border-t border-white/6 my-3" />
-                <div className="text-[11px] text-white/40 mt-1">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
+                <div className="text-[11px] text-center text-white/40 mt-1">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
               </div>
             </div>
             <div className="w-full">
@@ -310,6 +311,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               )}
             </div>
           </div>
+          )}
 
           {/* Reminders card (only Daily reminder shown) */}
           <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
