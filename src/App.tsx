@@ -425,13 +425,23 @@ export default function App() {
             onPointerCancel={()=>{ if(isTG) { enableVerticalSwipes(); } }}
             onWheel={()=> { if(isTG && sliderRef.current) { disableVerticalSwipes(); if (sliderRef.current._wheelTO) clearTimeout(sliderRef.current._wheelTO); sliderRef.current._wheelTO = setTimeout(()=> enableVerticalSwipes(), 260); } }}
             className={
-              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 ' +
+              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 relative overflow-hidden ' +
               (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed')
             }
-            style={{ background: (editable && entry.emojis.length>0) ? rainbowGradientCSS() : undefined,
-                    boxShadow: (editable && entry.emojis.length>0) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
+            style={{ boxShadow: (editable && entry.emojis.length>0) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
             aria-disabled={!(editable && entry.emojis.length>0)}
-          />
+          >
+            {/* Gradient overlay: animate opacity+scale when activated (at least one emoji present) */}
+            <div
+              aria-hidden
+              className={"absolute inset-0 rounded-full transition-opacity duration-400 ease-out transform-gpu"}
+              style={{
+                background: rainbowGradientCSS(),
+                opacity: (editable && entry.emojis.length>0) ? 1 : 0,
+                transform: (editable && entry.emojis.length>0) ? 'scale(1)' : 'scale(0.985)'
+              }}
+            />
+          </div>
           {!editable && (
             <div className="mt-1 text-center text-xs text-white/40">
               Read-only · you can edit today or yesterday
