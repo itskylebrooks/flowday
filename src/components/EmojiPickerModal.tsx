@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { getEmojiCategories, searchEmojis } from '../lib/emojiAll';
+import { t } from '../lib/i18n';
 
 export default function EmojiPickerModal({
   open, onClose, onPick, recents,
@@ -34,7 +35,7 @@ export default function EmojiPickerModal({
   <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar">
           {Object.keys(categories).map((name) => (
             <button key={name} onClick={()=>{ setTab(name); setQ(''); }} className={'rounded-full px-3 py-1 text-sm ' + (tab===name? 'bg-white/10 text-white' : 'text-white/70 hover:text-white')}>
-              {name}
+              {name === 'Recent' ? t('Recent') : name === 'Search' ? t('Search') : name}
             </button>
           ))}
         </div>
@@ -44,10 +45,10 @@ export default function EmojiPickerModal({
               autoFocus
               value={q}
               onChange={(e)=>setQ(e.target.value)}
-              placeholder="Search emojis (e.g. happy, heart, cat)"
+              placeholder={t('Search emojis (e.g. happy, heart, cat)')}
               className="w-full rounded-md bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 ring-1 ring-white/10 outline-none focus:ring-white/20"
             />
-            {!q && <div className="mt-1 text-xs text-white/50">Type keywords to search by name, shortcode, or category</div>}
+            {!q && <div className="mt-1 text-xs text-white/50">{t('Type keywords to search by name, shortcode, or category')}</div>}
           </div>
         )}
         <div key={tab + (tab==='Search'? ':'+q:'')} className="max-h-72 grid grid-cols-8 gap-2 overflow-y-auto p-1 cat-swap">
@@ -58,7 +59,7 @@ export default function EmojiPickerModal({
           ))}
         </div>
         <div className="mt-3 flex justify-end">
-          <button onClick={beginClose} className="rounded-md px-3 py-1 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5">Close</button>
+          <button onClick={beginClose} className="rounded-md px-3 py-1 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5">{t('Close')}</button>
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { todayISO } from '../lib/utils';
 import { useRef, useState, useMemo } from 'react';
 import { sharePoster } from '../lib/sharePoster';
 import { toPng } from 'html-to-image';
+import { t } from '../lib/i18n';
 
 export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode, animKey }:
   { recent7: Entry[]; monthHues: number[]; monthEmpty: boolean; mode: 'week' | 'month'; onToggleMode: () => void; animKey: string }) {
@@ -90,7 +91,7 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
       <div className="flex flex-col flex-grow items-center justify-center select-none" ref={posterRef}>
         <div className={(posterMode ? 'active ' : '') + 'poster-meta mb-2'}>
           <div className="text-center poster-label text-[26px] leading-[1.05] text-white/95">{formatToday()}</div>
-          <div className="mt-1 text-center poster-sub text-white/70 tracking-wider">My flowday</div>
+          <div className="mt-1 text-center poster-sub text-white/70 tracking-wider">{t('My flowday')}</div>
         </div>
         <div className="relative">
           <div key={animKey + '-' + mode} className="flow-anim w-full flex items-center justify-center">
@@ -114,7 +115,7 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           onClick={onToggleMode}
           className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition"
         >
-          {mode === 'week' ? 'Switch to month' : 'Switch to week'}
+          {mode === 'week' ? t('Switch to month') : t('Switch to week')}
         </button>
         <button
           onClick={handlePosterButton}
@@ -122,10 +123,10 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition disabled:opacity-40"
         >
           {isAndroidTelegram
-            ? (posterMode ? 'Hide poster text' : 'Show poster text')
+            ? (posterMode ? t('Hide poster text') : t('Show poster text'))
             : isTelegram
-              ? (exporting ? 'Exporting…' : 'Share poster')
-              : (exporting ? 'Exporting…' : 'Save as poster')}
+              ? (exporting ? t('Exporting…') : t('Share poster'))
+              : (exporting ? t('Exporting…') : t('Save as poster'))}
         </button>
       </div>
       {/* Android Telegram screenshot instruction overlay (no layout shift) */}
@@ -138,7 +139,7 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           aria-hidden={!posterMode}
         >
           <span className="px-2">
-            Take a screenshot to share this poster. This is the simplest solution for Android Telegram right now.
+            {t('Take a screenshot to share this poster. This is the simplest solution for Android Telegram right now.')}
           </span>
         </div>
       )}

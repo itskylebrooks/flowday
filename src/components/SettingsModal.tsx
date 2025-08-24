@@ -4,6 +4,7 @@ import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
+import { t, useLanguage } from '../lib/i18n';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
@@ -13,11 +14,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [reminders, setReminders] = useState(()=> loadReminders());
-  // simple language state stored locally as a placeholder
-  const [language, setLanguage] = useState<string>(() => {
-    try { return (localStorage.getItem('flowday_lang') || 'English'); } catch { return 'English'; }
-  });
+  const [language, setLanguage] = useLanguage();
   const [langModalOpen, setLangModalOpen] = useState(false);
+  const langNames: Record<string, string> = { en: t('English'), ru: t('Russian'), de: t('German') };
   const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
@@ -47,14 +46,14 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     if (e) e.preventDefault();
     if (!dirty || saving) return;
     setSaving(true);
-  if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
+  if (username.trim().length < 4) { setSaving(false); alert(t('Username must be at least 4 characters.')); return; }
   const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
     // If cloud enabled, attempt remote username update
     if (isCloudEnabled()) {
       const r = await updateCloudUsername(stored.username);
       if (!r.ok && r.error === 'username-taken') {
         setSaving(false);
-        alert('Username already taken. Please choose another.');
+        alert(t('Username already taken. Please choose another.'));
         return;
       }
     }
@@ -141,18 +140,18 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="absolute left-0 top-1/2 -translate-y-1/2" style={{ width:48, height:48 }}>
                 <button
                   type="button"
-                  aria-label="Open guide"
+                  aria-label={t('Open guide')}
                   onClick={onShowGuide}
                   className="w-12 h-12 flex items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 text-white/60 hover:text-white hover:bg-white/10 transition"
                 >
                   <span className="text-xl font-semibold">?</span>
                 </button>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">App guide</div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">{t('App guide')}</div>
               </div>
             )}
-            <span className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Settings</span>
+            <span className="text-lg font-semibold tracking-wide bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">{t('Settings')}</span>
             {/* Avatar */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2" title="Your Flowday avatar (auto-generated)">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2" title={t('Your Flowday avatar (auto-generated)')}>
               <div className="relative group" style={{ width:48, height:48 }}>
                 <div
                   className="w-full h-full rounded-full ring-1 ring-white/15 shadow-inner overflow-hidden"
@@ -163,13 +162,13 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     {topEmoji}
                   </div>
                 </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">Your month</div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full text-[10px] text-white/40 font-medium whitespace-nowrap pointer-events-none select-none">{t('Your month')}</div>
               </div>
             </div>
           </div>
           {isTG && (
             <div className="mt-2 flex justify-center">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG Version</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">{t('TG Version')}</span>
             </div>
           )}
         </div>
@@ -179,30 +178,30 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
             <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-sm font-medium mb-1">Account</div>
-                  <p className="text-[11px] text-white/40">Manage your username and sync preferences.</p>
+                  <div className="text-sm font-medium mb-1">{t('Account')}</div>
+                  <p className="text-[11px] text-white/40">{t('Manage your username and sync preferences.')}</p>
                 </div>
               </div>
             <form onSubmit={handleSave} className="mt-3 space-y-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
+                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">{t('Username')}</label>
                 <div className="flex items-center gap-2">
                   <input
                     value={username}
                     onChange={handleChange}
                     maxLength={24}
                     className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
-                    placeholder="user"
+                    placeholder={t('user')}
                   />
                   <button
                     type="submit"
                     disabled={!dirty || saving || !username.trim()}
                     className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
                   >
-                    {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
+                    {saving ? t('Saving…') : savedFlash ? t('Saved') : t('Save')}
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
+                <p className="mt-1 text-[11px] text-white/40">{t('Lowercase, 24 chars max. Global uniqueness.')}</p>
               </div>
 
               <div className="pt-1 grid gap-2">
@@ -213,14 +212,14 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 <button
                   type="button"
                   onClick={() => {
-                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
+                    if (!window.confirm(t('Delete all Flowday local data? This cannot be undone.'))) return;
                     clearAllData();
-                    alert('Local data cleared. App will reload.');
+                    alert(t('Local data cleared. App will reload.'));
                     window.location.reload();
                   }}
                   className="text-xs text-red-300 hover:underline"
                 >
-                  Delete all local data
+                  {t('Delete all local data')}
                 </button>
               </div>
             </form>
@@ -228,13 +227,13 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
           {/* Reminders card */}
           <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
-            <div className="text-sm font-medium mb-2">Reminders</div>
-            <p className="text-[11px] text-white/40 mb-3">Control daily reminders for your Flowday entries.</p>
+            <div className="text-sm font-medium mb-2">{t('Reminders')}</div>
+            <p className="text-[11px] text-white/40 mb-3">{t('Control daily reminders for your Flowday entries.')}</p>
             <div>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-medium">Daily reminder</div>
-                  <div className="text-xs text-white/40 mt-1">Arrives in the evening 🌆</div>
+                  <div className="text-sm font-medium">{t('Daily reminder')}</div>
+                  <div className="text-xs text-white/40 mt-1">{t('Arrives in the evening 🌆')}</div>
                 </div>
                 <div>
                   <button
@@ -254,7 +253,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                         : 'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')
                     }
                   >
-                    <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
+                    <span className="mr-3 text-sm">{dailyEnabled ? t('On') : t('Off')}</span>
                     <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
                       <span
                         className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
@@ -265,7 +264,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
               </div>
               {!isCloudEnabled() && (
-                <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
+                <div className="text-[11px] text-white/40 mt-3">{t('Only users with a cloud account can enable reminders. Sign in above to enable.')}</div>
               )}
             </div>
           </div>
@@ -274,25 +273,25 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium">Language</div>
-                <div className="text-[11px] text-white/40">App language and regional settings (placeholder)</div>
+                <div className="text-sm font-medium">{t('Language')}</div>
+                <div className="text-[11px] text-white/40">{t('App language and regional settings (placeholder)')}</div>
               </div>
               <button onClick={()=> setLangModalOpen(true)} className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 ring-white/15 hover:bg-white/5">
-                {language}
+                {langNames[language]}
               </button>
             </div>
           </div>
     </div>
 
-  <LanguageModal open={langModalOpen} onClose={()=>setLangModalOpen(false)} current={language} onChoose={(l)=>{ setLanguage(l); try{ localStorage.setItem('flowday_lang', l); } catch(e){ console.debug('lang write failed', e); } }} />
+  <LanguageModal open={langModalOpen} onClose={()=>setLangModalOpen(false)} current={language} onChoose={(l)=>{ setLanguage(l); }} />
 
   <div className="mt-5 flex justify-center">
-          <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">Done</button>
+          <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">{t('Done')}</button>
         </div>
         <div className="mt-6 text-center text-[10px] leading-relaxed text-white/45">
           <div className="font-medium text-white/55">{APP_VERSION_LABEL}</div>
-          <div className="mt-1">© {new Date().getFullYear()} Kyle Brooks. All rights reserved.</div>
-          <div className="mt-0.5">Icons by Remix Design.</div>
+          <div className="mt-1">{t('© {year} Kyle Brooks. All rights reserved.').replace('{year}', String(new Date().getFullYear()))}</div>
+          <div className="mt-0.5">{t('Icons by Remix Design.')}</div>
         </div>
       </div>
     </div>
@@ -301,7 +300,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
 // Small inline modal to select language (placeholder)
 function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: string; onChoose: (lang: string) => void }) {
-  const options = ['English', 'Русский', 'Deutsch', 'Español', 'Français'];
+  const options: [string, string][] = [
+    ['en', t('English')],
+    ['ru', t('Russian')],
+    ['de', t('German')]
+  ];
   const [mounted, setMounted] = useState(open);
   const [active, setActive] = useState(open);
   const ANIM = 260; // ms
@@ -343,26 +346,26 @@ function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; on
         style={{ ...panelStyle, minWidth: '220px', maxWidth: '90vw', padding: '14px 14px 12px 14px' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="text-[13px] font-semibold mb-2 text-white/90">Choose language</div>
+        <div className="text-[13px] font-semibold mb-2 text-white/90">{t('Select language')}</div>
         <div className="space-y-1">
-          {options.map(o => (
+          {options.map(([code, label]) => (
             <button
-              key={o}
-              onClick={() => { onChoose(o); onClose(); }}
+              key={code}
+              onClick={() => { onChoose(code); onClose(); }}
               className={
                 `w-full text-left px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors ` +
-                (o === current
+                (code === current
                   ? 'bg-white/7 text-white ring-1 ring-white/12'
                   : 'hover:bg-white/4 text-white/70')
               }
               style={{ letterSpacing: '0.01em' }}
             >
-              {o}
+              {label}
             </button>
           ))}
         </div>
         <div className="mt-3 text-right">
-          <button onClick={onClose} className="text-xs text-white/40 px-2 py-1 hover:text-white/70 transition">Close</button>
+          <button onClick={onClose} className="text-xs text-white/40 px-2 py-1 hover:text-white/70 transition">{t('Close')}</button>
         </div>
       </div>
     </div>
@@ -381,7 +384,7 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       <div className="space-y-2">
         <div className="w-full">
           <div className="w-full text-center text-[12px] px-3 py-1.5 rounded-md bg-white/6 text-white/60 ring-1 ring-white/8">
-            Cloud sync is currently only available in the Telegram version.
+            {t('Cloud sync is currently only available in the Telegram version.')}
           </div>
         </div>
       </div>
@@ -390,19 +393,19 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
   async function handleSignIn() {
     setWorking(true);
     const desired = loadUser().username;
-    if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
+    if (desired.trim().length < 4) { setWorking(false); alert(t('Username must be at least 4 characters.')); return; }
     const r = await signInToCloud(desired);
     setWorking(false);
     if (r.ok) { setEnabled(true); }
     else {
-      if (r.error === 'username-taken') alert('Username already taken. Choose another.');
-      else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
-      else alert('Sign in failed. Try again.');
+      if (r.error === 'username-taken') alert(t('Username already taken. Please choose another.'));
+      else if (r.error === 'username-too-short') alert(t('Username must be at least 4 characters.'));
+      else alert(t('Sign in failed. Try again.'));
     }
   }
   async function handleDelete() {
     if (!enabled) return;
-    if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
+    if (!window.confirm(t('Delete cloud account and all synced data? This cannot be undone. Local data will remain.'))) return;
     setWorking(true);
     const ok = await deleteCloudAccount();
     setWorking(false);
@@ -413,17 +416,17 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       {!enabled && (
         <button type="button" disabled={working} onClick={handleSignIn}
           className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
-          {working ? 'Signing in…' : 'Sign in & enable sync'}
+          {working ? t('Signing in…') : t('Sign in & enable sync')}
         </button>
       )}
       {enabled && (
         <button type="button" disabled={working} onClick={handleDelete}
           className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
-          {working ? 'Deleting…' : 'Delete cloud account'}
+          {working ? t('Deleting…') : t('Delete cloud account')}
         </button>
       )}
       <p className="text-[10px] leading-relaxed text-white/35">
-        {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
+        {enabled ? t('Cloud sync enabled. Your entries sync across Telegram devices.') : t('Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.')}
       </p>
     </div>
   );

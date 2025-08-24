@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry } from '../lib/types';
 import { emojiStats, clamp } from '../lib/utils';
+import { t } from '../lib/i18n';
 
 export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
@@ -355,8 +356,8 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
 
   return (
     <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
-      <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
-      <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
+      <div className="mt-4 text-center text-sm text-white/80">{t('Emoji Constellations')}</div>
+      <div className="text-center text-xs text-white/50">{t('Tap an emoji to highlight connections')}</div>
       {/* Animated canvas wrapper only */}
   <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap" style={{touchAction:'none'}}>
         <svg
@@ -398,8 +399,8 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       })}
       </g>
         </svg>
-        {nodes.length===0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-label="No data yet">
+          {nodes.length===0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-label={t('No data yet')}>
             <div className="font-poster text-white/18" style={{ fontSize: 170, lineHeight: 1 }}>?</div>
           </div>
         )}
@@ -412,7 +413,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
             </span>
           ) : (
             // Invisible placeholder to keep height stable
-            <span className="opacity-0">placeholder</span>
+            <span className="opacity-0">{t('placeholder')}</span>
           )}
         </div>
       </div>
@@ -451,13 +452,13 @@ function ConstellationControls({ onAction }: { onAction: (a:'in'|'out'|'reset')=
   const btnCls = "w-12 h-12 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition";
   return (
     <div className="mt-3 flex justify-center gap-3 text-white select-none">
-      <button aria-label="Zoom out" onClick={()=>onAction('out')} className={btnCls}>
+      <button aria-label={t('Zoom out')} onClick={()=>onAction('out')} className={btnCls}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M5 11V13H19V11H5Z"/></svg>
       </button>
-      <button aria-label="Reset view" onClick={()=>onAction('reset')} className={btnCls}>
+      <button aria-label={t('Reset view')} onClick={()=>onAction('reset')} className={btnCls}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM15.4462 9.96803L9.96803 15.4462C9.38559 15.102 8.89798 14.6144 8.55382 14.032L14.032 8.55382C14.6144 8.89798 15.102 9.38559 15.4462 9.96803Z"/></svg>
       </button>
-      <button aria-label="Zoom in" onClick={()=>onAction('in')} className={btnCls}>
+      <button aria-label={t('Zoom in')} onClick={()=>onAction('in')} className={btnCls}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>
       </button>
     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { t } from '../lib/i18n';
 
 interface GuideModalProps {
   open: boolean;
@@ -117,11 +118,11 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
         onClick={(e)=> { e.stopPropagation(); }}
       >
         <div className="absolute top-2 right-2">
-          <button aria-label="Close guide" onClick={()=>{ if(!closing) onClose(); }} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition">
+          <button aria-label={t('Close guide')} onClick={()=>{ if(!closing) onClose(); }} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition">
             ✕
           </button>
         </div>
-        <div className="text-[11px] tracking-wide uppercase text-white/40 mb-2">Quick guide</div>
+        <div className="text-[11px] tracking-wide uppercase text-white/40 mb-2">{t('Quick guide')}</div>
         <div className="relative min-h-[120px]">
           {renderedSteps.map(layer => {
             const data = STEPS[layer.idx];
@@ -130,14 +131,14 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
               : (layer.dir === 'forward' ? 'guide-step-exit-forward' : 'guide-step-exit-back');
             return (
               <div key={layer.key} className={`guide-step-layer ${stateClass}`}>
-                <h2 className="text-lg font-semibold mb-3 text-white/90">{data.title}</h2>
-                <p className="text-sm text-white/65 leading-relaxed">{data.body}</p>
+                <h2 className="text-lg font-semibold mb-3 text-white/90">{t(data.title)}</h2>
+                <p className="text-sm text-white/65 leading-relaxed">{t(data.body)}</p>
               </div>
             );
           })}
         </div>
         <div className="mt-5 flex items-center justify-between text-xs text-white/45">
-          <div>Step {step+1} / {STEPS.length}</div>
+          <div>{t('Step')} {step+1} / {STEPS.length}</div>
           <div className="flex gap-1">
             {STEPS.map((_,i)=> <span key={i} className={`h-1.5 w-1.5 rounded-full ${i===step? 'bg-white':'bg-white/25'}`}/>) }
           </div>
@@ -147,12 +148,12 @@ export default function GuideModal({ open, onClose }: GuideModalProps) {
             <button
               onClick={()=> queueStep(Math.max(0, step-1))}
               className="flex-1 rounded-md px-3 py-2 text-sm font-medium bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/80 transition"
-            >Back</button>
+            >{t('Back')}</button>
           )}
           <button
             onClick={()=> { if(last) onClose(); else queueStep(Math.min(STEPS.length-1, step+1)); }}
             className="flex-1 rounded-md px-3 py-2 text-sm font-medium bg-white/15 hover:bg-white/25 ring-1 ring-white/15 text-white transition"
-          >{last? 'Finish':'Next'}</button>
+          >{last? t('Finish'):t('Next')}</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { motion } from 'motion/react'
 import { auraBackground } from '../lib/utils';
+import { t } from '../lib/i18n';
 
 export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: number }) {
   const size = 224, cx = size/2, cy = size/2, R = 70;
@@ -51,7 +52,7 @@ export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: numb
           ))}
         </motion.div>
       </div>
-      <div className="mt-2 text-xs text-white/60">Tap aura to edit emojis</div>
+      <div className="mt-2 text-xs text-white/60">{t('Tap aura to edit emojis')}</div>
     </div>
   );
 }

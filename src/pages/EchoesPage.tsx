@@ -4,6 +4,7 @@ import cassetteEject from '../assets/audio/cassette-eject.mp3';
 import { createCassettePool, playCassetteInsert, playCassetteEject } from '../lib/sounds';
 import type { Entry } from '../lib/types';
 import { hsl } from '../lib/utils';
+import { t } from '../lib/i18n';
 
 // Compute a contrasting reel (dot) color based on hue brightness so bright hues (e.g. yellows)
 // get darker reels instead of even brighter, improving legibility of reel shapes.
@@ -119,7 +120,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
           </div>
         ))}
         {!byMonth.length && (
-          <div className="mt-10 text-center text-sm text-white/45">No songs for this year.</div>
+          <div className="mt-10 text-center text-sm text-white/45">{t('No songs for this year.')}</div>
         )}
       </div>
 
@@ -142,7 +143,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
               </div>
               <div className="relative z-10 text-center px-2 font-tape h-full w-full flex flex-col">
                 {(() => {
-                  const title = active.song?.title || 'Untitled';
+                  const title = active.song?.title || t('Untitled');
                   const len = title.length;
                   let cls = 'text-base md:text-lg';
                   if (len > 34) cls = 'text-sm md:text-base';
@@ -170,7 +171,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
               </div>
             </div>
             <div className="flex justify-center">
-              <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">Close</button>
+              <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">{t('Close')}</button>
             </div>
           </div>
         </div>
