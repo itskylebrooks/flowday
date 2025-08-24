@@ -52,140 +52,13 @@ Both exportable as minimal posters.
 
 **Echoes** – Days with songs show as cassette cards. Open one for spinning reels, date stamp, title & artist.
 
-## Sharing & Posters
+## Telegram Sync
 
-Export weekly or monthly flows (PNG).  
-In Telegram: share directly.  
-Future: collaborative “blends” with friends — never a scrolling feed.
+Flowday integrates with Telegram Mini App for enhanced sharing and syncing. Your entries remain local by default, with optional cloud sync to keep your data safe and accessible across devices.
 
-## Settings
+## Export & Import
 
-- Username (auto from Telegram when inside mini app)  
-- Reminders (placeholder for now)  
-- Local data wipe  
-
-## Privacy
-
-- Entries stored locally with versioned schema  
-- Invalid data sanitized  
-- No network required for core use  
-- Future sync (e.g. Supabase) will be optional  
-
-```ts
-// Entry structure (v2)
-{
-  date: 'YYYY-MM-DD',
-  emojis: string[],       // max 3
-  hue?: number,           // only if emojis present
-  song?: { title?: string; artist?: string },
-  updatedAt: number
-}
-```
-
-
-## Tech Stack
-
-* React + TypeScript + Vite
-* Tailwind CSS
-* LocalStorage with migrations
-* Vitest + Testing Library
-* html-to-image for exports
-* Telegram Mini App wrappers (haptics, safe area, share)
-
-## Telegram Mini App
-
-Inside Telegram:
-
-* SDK detection + init
-* Haptics on slider hue changes
-* Share posters through Telegram sheet
-
-Outside Telegram: all enhancements no-op.
-
-## Supabase Sync (Telegram)
-
-Serverless API routes (see `api/`) perform Telegram `initData` HMAC verification, then read/write Supabase using a **newer-wins** strategy so the most recently edited version of a day (client vs cloud) prevails.
-
-### Required Tables (outline)
-
-```sql
-create table if not exists public.users (
-  telegram_id bigint primary key,
-  username text,
-  first_name text,
-  last_name text,
-  language_code text,
-  tz text,
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.entries (
-  telegram_id bigint references public.users(telegram_id) on delete cascade,
-  date date not null,
-  emojis text[] not null default array[]::text[],
-  hue int,
-  song_title text,
-  song_artist text,
-  updated_at timestamptz not null,
-  primary key (telegram_id, date),
-  check (array_length(emojis,1) <= 3),
-  check (hue is null or (hue >= 0 and hue <= 360))
-);
-
-create table if not exists public.reminders (
-  telegram_id bigint primary key references public.users(telegram_id) on delete cascade,
-  payload jsonb,
-  updated_at timestamptz default now()
-);
-
-create index if not exists entries_user_updated_idx on public.entries(telegram_id, updated_at desc);
-```
-
-### Newer-Wins RPC Function
-
-`api/sync-push` calls a Postgres function so conflict resolution happens inside the database transaction.
-
-```sql
-create or replace function public.flowday_upsert_entries(p_user bigint, p_rows jsonb)
-returns void language plpgsql as $$
-declare r jsonb; begin
-  for r in select * from jsonb_array_elements(p_rows) loop
-    insert into public.entries(telegram_id, date, emojis, hue, song_title, song_artist, updated_at)
-    values (
-      p_user,
-      (r->>'date')::date,
-      coalesce((select array(select jsonb_array_elements_text(r->'emojis'))), array[]::text[]),
-      case when (r ? 'hue') then (r->>'hue')::int else null end,
-      nullif(r->>'song_title',''),
-      nullif(r->>'song_artist',''),
-      (r->>'updated_at')::timestamptz
-    )
-    on conflict (telegram_id, date) do update set
-      emojis = excluded.emojis,
-      hue = excluded.hue,
-      song_title = excluded.song_title,
-      song_artist = excluded.song_artist,
-      updated_at = excluded.updated_at
-    where excluded.updated_at > public.entries.updated_at;
-  end loop;
-end; $$;
-```
-
-Grant execute to service role (already implicit) and restrict to server usage only (never expose the service key).
-
-### Rate Limiting (Basic)
-
-Endpoints apply an in-memory per-instance throttle (push: 400ms, pull: 2s). For production scale, replace with a durable store (Redis / Deno KV / Upstash) or Supabase edge functions + Ratelimit.
-
-### Environment Variables
-
-```
-VITE_SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=... (server only)
-BOT_TOKEN=... (server only)
-```
-
-Never expose `SUPABASE_SERVICE_ROLE_KEY` or `BOT_TOKEN` to client bundles.
+You can export all your Flowday data to a file and import it back later. It's a simple way for web users to save and restore their entries—handy if you don't use Telegram sync. Your memories, your control.
 
 ## Development
 
@@ -209,23 +82,21 @@ npm run build
 
 ## Roadmap
 
-* More poster themes
-* Optional cloud sync
-* Collaborative blends
-* Lightweight reactions
-* PWA packaging
+- Blends with friends  
+- Richer overviews of your flows and moods  
+- Language options (localisation)  
 
 Always under 20 seconds to capture.
 
 ## Contributing
 
-PRs welcome — keep UI minimal, add tests for changes, avoid heavy deps.
+PRs welcome — keep UI minimal, add tests for changes, avoid heavy dependencies.
 
 ## License
 
-This code is provided for **personal viewing and inspiration only**.  
+This code is for **personal viewing and inspiration only**.  
 All rights reserved © 2025 Kyle Brooks.  
 
-You may **not** copy, modify, redistribute, or use this project for commercial purposes without explicit permission.  
+No commercial use or redistribution without permission.  
 
 > Flowday is a daily glance inward — memory carried forward in color.
