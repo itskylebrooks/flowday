@@ -6,7 +6,7 @@ import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
-import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
+import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor, hapticFunny } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
 import IconButton from './components/IconButton';
@@ -119,6 +119,8 @@ export default function App() {
   const editable = canEdit(activeDate);
   // Song inputs reveal state
   const [showSong, setShowSong] = useState(false);
+  // Banner glow state for hover / click brighten effect
+  const [bannerGlow, setBannerGlow] = useState(false);
   // Telegram full-screen song editor state
   const [songEditorOpen, setSongEditorOpen] = useState(false);
   // Reset song inputs collapsed when changing the active date
@@ -499,18 +501,34 @@ export default function App() {
           )}
           {/* Celebratory banner for v1.0 - visually matches "Song of the day" button */}
           <div className="mt-6 flex justify-center">
-            <div
+            <button
+              type="button"
               role="status"
               aria-live="polite"
-              className="w-full max-w-xs mx-auto px-5 py-2 rounded-full text-center text-white font-medium text-sm ring-1 ring-white/10"
+              aria-label="Flowday v1.0 released"
+              onClick={() => {
+                // brief glow on click/tap
+                setBannerGlow(true);
+                window.setTimeout(() => setBannerGlow(false), 420);
+                // If in Telegram, play a playful haptic pattern
+                try { if (isTG) hapticFunny(2000); } catch { /* ignore */ }
+              }}
+              onMouseEnter={() => setBannerGlow(true)}
+              onMouseLeave={() => setBannerGlow(false)}
+              className="w-full max-w-xs mx-auto px-5 py-2 rounded-full text-center text-white font-medium text-sm ring-1 focus:outline-none"
               style={{
-                background: 'linear-gradient(90deg, rgba(41,104,75,0.18), rgba(255,169,77,0.18))',
+                background: bannerGlow
+                  ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))'
+                  : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
                 WebkitBackdropFilter: 'saturate(120%)',
-                backdropFilter: 'saturate(120%)'
+                backdropFilter: 'saturate(120%)',
+                border: bannerGlow ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)',
+                boxShadow: bannerGlow ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)' : '0 2px 10px rgba(0,0,0,0.22)',
+                transition: 'box-shadow 200ms ease, background 200ms ease, transform 160ms ease, border 160ms ease'
               }}
             >
               🎉 Flowday v1.0 released! 🎉
-            </div>
+            </button>
           </div>
         </div>
       </div>

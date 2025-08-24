@@ -59,6 +59,25 @@ export function hapticLight(){
   try { tg()?.HapticFeedback?.impactOccurred?.('light'); } catch { /* ignore */ }
 }
 
+// Play a short, playful multi-impact pattern (best-effort; no-op outside Telegram)
+export function hapticFunny(duration = 2000){
+  try {
+    const t = tg();
+    if (!t?.HapticFeedback?.impactOccurred) return;
+    // Pattern offsets (ms) with style strings; stays within `duration` by design
+    const pattern: Array<[number, string]> = [
+      [0, 'light'], [80, 'light'], [200, 'medium'], [340, 'light'], [480, 'heavy'],
+      [700, 'light'], [900, 'medium'], [1150, 'light'], [1400, 'heavy'], [1700, 'light']
+    ];
+    for (const [offset, style] of pattern) {
+      if (offset > duration) continue;
+      setTimeout(() => {
+        try { t.HapticFeedback?.impactOccurred?.(style); } catch { /* ignore */ }
+      }, offset);
+    }
+  } catch { /* ignore */ }
+}
+
 export function disableVerticalSwipes(){
   try { tg()?.disableVerticalSwipes?.(); } catch { /* ignore */ }
 }
