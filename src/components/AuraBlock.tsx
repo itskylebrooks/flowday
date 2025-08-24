@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'motion/react'
-import { auraBackground } from '../utils';
+import { auraBackground } from '../lib/utils';
 
 export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: number }) {
   const size = 224, cx = size/2, cy = size/2, R = 70;

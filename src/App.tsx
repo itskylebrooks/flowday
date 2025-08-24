@@ -1,13 +1,13 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import type { Entry, Page, Song } from './types';
+import type { Entry, Page, Song } from './lib/types';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
 import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './utils';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
-import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './storage';
+import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';

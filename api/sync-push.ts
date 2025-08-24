@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { isValidInitData, parseTGUser, devReason } from '../../api/_tg';
-import { encryptStr } from '../../api/_enc';
-import { allow } from '../../api/_rate';
+import { isValidInitData, parseTGUser, devReason } from './_tg';
+import { encryptStr } from './_enc';
+import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
 
@@ -23,7 +23,7 @@ interface IncomingEntry { date: string; emojis: string[]; hue?: number; song?: {
 interface Req { method?: string; body?: unknown; }
 interface Res { status: (c:number)=>Res; json: (v:unknown)=>void; }
 
-export async function syncPushHandler(req: Req, res: Res) {
+export default async function handler(req: Req, res: Res) {
   try {
   if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
   if (supabaseInitError) return res.status(500).json({ ok:false, error: supabaseInitError });

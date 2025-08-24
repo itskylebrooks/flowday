@@ -1,8 +1,8 @@
-import type { Entry } from '../types';
+import type { Entry } from '../lib/types';
 import WeekTimeline from '../components/WeekTimeline';
 import MonthFlow from '../components/MonthFlow';
-import { loadUser } from '../storage';
-import { todayISO } from '../utils';
+import { loadUser } from '../lib/storage';
+import { todayISO } from '../lib/utils';
 import { useRef, useState, useMemo } from 'react';
 import { sharePoster } from '../lib/sharePoster';
 import { toPng } from 'html-to-image';

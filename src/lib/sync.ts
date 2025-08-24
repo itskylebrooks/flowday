@@ -1,7 +1,6 @@
 // Telegram-aware sync helpers (client-side)
-import type { Entry } from '../types';
-import { postJSON } from "../apiClient";
-import { loadEntries, saveEntries, loadReminders, saveReminders } from '../storage';
+import type { Entry } from './types';
+import { loadEntries, saveEntries, loadReminders, saveReminders } from './storage';
 
 const SYNC_KEY = 'flowday_last_sync_iso_v1';
 const CLOUD_FLAG_KEY = 'flowday_cloud_enabled_v1';
@@ -47,6 +46,14 @@ export function mergeByNewer(local: Entry[], incoming: Entry[]): Entry[] {
   return [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
 }
 
+interface JsonResponse { ok?: boolean; [k:string]: unknown }
+
+async function postJSON(path: string, body: unknown): Promise<{ res: Response; data: JsonResponse | null }> {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+  let data: JsonResponse | null = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  return { res, data };
+}
 
 let verifyDone = false;
 export async function verifyTelegram(tz?: string) {
@@ -54,7 +61,7 @@ export async function verifyTelegram(tz?: string) {
   const initData = await waitForInitData();
   if (!initData) return; // wait until a later attempt when initData appears
   try {
-    const { data } = await postJSON('/api/telegram/verify', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    const { data } = await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
     verifyDone = true;
     if (data && typeof data === 'object' && 'exists' in data) {
       const existsVal = (data as { exists?: unknown }).exists;
@@ -74,7 +81,7 @@ export async function verifyTelegram(tz?: string) {
       }
       // Attempt to fetch reminders preferences once on verify (best-effort)
       try {
-        const { data: rData } = await postJSON('/api/reminders/get', { initData });
+        const { data: rData } = await postJSON('/api/reminders-get', { initData });
         if (rData?.ok && rData.prefs) {
           const prefs = rData.prefs as { daily_enabled?: boolean; daily_time?: string };
           const local = loadReminders();
@@ -94,7 +101,7 @@ export async function syncPull(): Promise<number | null> {
   if (!initData) return null;
   const since = localStorage.getItem(SYNC_KEY) || '';
   try {
-    const { res, data } = await postJSON('/api/sync/pull', { initData, since });
+    const { res, data } = await postJSON('/api/sync-pull', { initData, since });
     if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
     if (res.status === 429) {
       periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
@@ -139,7 +146,7 @@ async function rawSyncPush(pending: PendingPush[]) {
   if (!initData) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
   const entries = pending.map(p => p.entry);
   try {
-    const { res } = await postJSON('/api/sync/push', { initData, entries });
+    const { res } = await postJSON('/api/sync-push', { initData, entries });
     if (res.status === 410) { disableCloud(); stopPeriodicPull(); return; }
     if (!res.ok) {
       if ([429,500,502,503,504].includes(res.status)) {
@@ -242,7 +249,7 @@ export async function signInToCloud(username?: string): Promise<{ ok: boolean; e
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const { res, data } = await postJSON('/api/telegram/signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
+      const { res, data } = await postJSON('/api/telegram-signin', { initData, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', username });
       if (res.status === 409) return { ok:false, error:'username-taken' };
       if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
       if (res.ok && data?.ok) {
@@ -264,7 +271,7 @@ export async function deleteCloudAccount(): Promise<boolean> {
   if (!isTG() || !isCloudEnabled()) return false;
   const initData = await waitForInitData(); if (!initData) return false;
   try {
-    const { res, data } = await postJSON('/api/telegram/delete', { initData });
+    const { res, data } = await postJSON('/api/telegram-delete', { initData });
     if (res.ok && data?.ok) { disableCloud(); stopPeriodicPull(); return true; }
   } catch { /* ignore */ }
   return false;
@@ -275,7 +282,7 @@ export async function updateCloudUsername(username: string): Promise<{ ok:boolea
   const initData = await waitForInitData(); if (!initData) return { ok:false, error:'no-initData' };
   if (username.trim().length < 4) return { ok:false, error:'username-too-short' };
   try {
-    const { res, data } = await postJSON('/api/telegram/update-username', { initData, username });
+    const { res, data } = await postJSON('/api/telegram-update-username', { initData, username });
     if (res.status === 409) return { ok:false, error:'username-taken' };
     if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
     if (res.ok && data?.ok) return { ok:true };

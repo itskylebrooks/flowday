@@ -92,21 +92,6 @@ Future: collaborative “blends” with friends — never a scrolling feed.
 * html-to-image for exports
 * Telegram Mini App wrappers (haptics, safe area, share)
 
-## Repository Structure
-
-- `src/` – application code
-  - `apiClient.ts` – thin fetch helpers for API routes
-  - `storage.ts` – versioned local storage helpers
-  - `supabaseClient.ts` – browser Supabase client
-  - `utils.ts` / `types.ts`
-  - `lib/` – remaining domain libraries
-  - `components/` – reusable UI pieces
-  - `pages/` – high level pages
-- `api/` – consolidated serverless functions (`sync`, `telegram`, `reminders`, `share-poster`, `health`)
-- Vercel deployment keeps function count within hobby limits
-- `public/` – static assets
-- `tests/` – Vitest suites
-
 ## Telegram Mini App
 
 Inside Telegram:

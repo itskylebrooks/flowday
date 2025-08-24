@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isValidInitData, parseTGUser, devReason } from '../../api/_tg';
+import { isValidInitData, parseTGUser, devReason } from './_tg';
 
 export const config = { runtime: 'nodejs' };
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -13,7 +13,7 @@ const supabase = (function init(){
 interface Req { method?: string; body?: unknown }
 interface Res { status:(c:number)=>Res; json:(v:unknown)=>void }
 
-export async function telegramUpdateUsernameHandler(req: Req, res: Res) {
+export default async function handler(req: Req, res: Res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok:false, error:'method-not-allowed' });
     if (supabaseInitError) return res.status(500).json({ ok:false, error:supabaseInitError });

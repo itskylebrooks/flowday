@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../storage';
+import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
-import { monthlyStops, emojiStats, hsl, todayISO } from '../utils';
-import type { Entry } from '../types';
+import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
+import type { Entry } from '../lib/types';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);

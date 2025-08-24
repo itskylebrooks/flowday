@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import type { Entry } from '../types';
-import { emojiStats, clamp } from '../utils';
+import type { Entry } from '../lib/types';
+import { emojiStats, clamp } from '../lib/utils';
 
 export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useId } from 'react';
-import { hsl } from '../utils';
+import { hsl } from '../lib/utils';
 
 export default function MonthFlow({ hues, empty=false, className = '' }: { hues: number[]; empty?: boolean; className?: string }) {
   const width = 320, height = 200;
