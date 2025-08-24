@@ -49,14 +49,25 @@ export async function webPushEntry(entry: Entry): Promise<void> {
 
 export async function webPushMany(entries: Entry[]): Promise<void> {
   if (!entries.length) return;
-  const rows = await Promise.all(entries.map(async e => ({
-    date: e.date,
-    emojis_enc: await encryptStr(JSON.stringify(e.emojis)),
-    hue_enc: typeof e.hue === 'number' ? await encryptStr(String(e.hue)) : null,
-    song_title_enc: e.song?.title ? await encryptStr(e.song.title) : null,
-    song_artist_enc: e.song?.artist ? await encryptStr(e.song.artist) : null,
-  })));
-  await supabase.from('entries').insert(rows, { onConflict: 'auth_user_id,date' }).select('updated_at');
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+  const rows = await Promise.all(
+    entries.map(async e => ({
+      date: e.date,
+      emojis_enc: await encryptStr(JSON.stringify(e.emojis)),
+      hue_enc: typeof e.hue === 'number' ? await encryptStr(String(e.hue)) : null,
+      song_title_enc: e.song?.title ? await encryptStr(e.song.title) : null,
+      song_artist_enc: e.song?.artist ? await encryptStr(e.song.artist) : null,
+    }))
+  );
+  const rowsWithUid = rows.map(r => ({ ...r, auth_user_id: uid }));
+  await supabase
+    .from('entries')
+    .upsert(rowsWithUid, { onConflict: 'auth_user_id,date' })
+    .select('updated_at');
   try { localStorage.setItem(SYNC_KEY, new Date().toISOString()); } catch { /* ignore */ }
 }
 
@@ -100,8 +111,17 @@ export async function webLoadReminders(): Promise<RemindersSettings | null> {
 }
 
 export async function webSaveReminders(prefs: RemindersSettings): Promise<void> {
-  await supabase.from('reminders').upsert({
-    daily_enabled: prefs.dailyEnabled,
-    daily_time: prefs.dailyTime,
-  }, { onConflict: 'auth_user_id' });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+  await supabase.from('reminders').upsert(
+    {
+      auth_user_id: uid,
+      daily_enabled: prefs.dailyEnabled,
+      daily_time: prefs.dailyTime,
+    },
+    { onConflict: 'auth_user_id' }
+  );
 }
