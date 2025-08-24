@@ -120,6 +120,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   // Reminder execution logic removed (placeholder) — only settings & persistence remain for now.
 
   // ---- Time helpers (stored internally always as 24h HH:MM) ----
+  
+  // Local helper for UI state
+  const dailyEnabled = reminders.dailyEnabled;
 
   if (!open && !closing) return null;
   return (
@@ -228,22 +231,38 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={dailyEnabled}
+                  aria-disabled={!isCloudEnabled()}
                   onClick={()=> {
                     if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
-                    const v={...reminders,dailyEnabled: !reminders.dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
+                    const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
                   }}
                   disabled={!isCloudEnabled()}
-                  aria-disabled={!isCloudEnabled()}
-                  className={"flex-1 text-left px-3 py-2 rounded-md ring-1 transition text-sm font-medium " + (reminders.dailyEnabled? 'bg-white/12 ring-white/25 text-white':'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8') + ' ' + (isCloudEnabled() ? '' : 'disabled:opacity-50 disabled:cursor-not-allowed')}
-                >Daily reminder</button>
-                <span className="text-xs text-white/70">Triggers at 7pm Berlin time</span>
+                  className={
+                    "flex-1 px-3 py-2 rounded-md ring-1 transition text-sm font-medium flex items-center justify-between " +
+                    (dailyEnabled
+                      ? 'bg-emerald-600/15 ring-emerald-400/25 text-white'
+                      : 'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8') +
+                    ' ' + (isCloudEnabled() ? '' : 'disabled:opacity-50 disabled:cursor-not-allowed')
+                  }
+                >
+                  <span className="text-left">Daily reminder</span>
+                  {/* Toggle indicator */}
+                  <span className="ml-3 flex items-center" aria-hidden>
+                    <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
+                      <span
+                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
+                        style={{ transform: dailyEnabled ? 'translateX(1.4rem)' : 'translateX(0)' }}
+                      />
+                    </span>
+                  </span>
+                </button>
+                <span className={"text-xs " + (dailyEnabled ? 'text-white/90' : 'text-white/70')}>Arrive in the evening</span>
               </div>
               {!isCloudEnabled() && (
                 <div className="text-[11px] text-white/40">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
               )}
-              <p className="text-[11px] text-white/35 leading-relaxed">
-                Reminders don't work for now and will be implemented in a future update.
-              </p>
             </div>
           </div>
           {/* Removed Memories section */}
