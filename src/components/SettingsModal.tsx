@@ -14,10 +14,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [savedFlash, setSavedFlash] = useState(false);
   const [reminders, setReminders] = useState(()=> loadReminders());
   // simple language state stored locally as a placeholder
-  const [language, setLanguage] = useState<string>(() => {
-    try { return (localStorage.getItem('flowday_lang') || 'English'); } catch { return 'English'; }
-  });
-  const [langModalOpen, setLangModalOpen] = useState(false);
+  // language selection removed — app is English-only for Telegram deployment
   const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
@@ -226,10 +223,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             </form>
           </div>
 
-          {/* Reminders card */}
+          {/* Reminders card (only Daily reminder shown) */}
           <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
-            <div className="text-sm font-medium mb-2">Reminders</div>
-            <p className="text-[11px] text-white/40 mb-3">Control daily reminders for your Flowday entries.</p>
             <div>
               <div className="flex items-center justify-between">
                 <div>
@@ -270,21 +265,10 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             </div>
           </div>
 
-          {/* Language card */}
-          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium">Language</div>
-                <div className="text-[11px] text-white/40">App language and regional settings (placeholder)</div>
-              </div>
-              <button onClick={()=> setLangModalOpen(true)} className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 ring-white/15 hover:bg-white/5">
-                {language}
-              </button>
-            </div>
-          </div>
+          {/* Language selection removed */}
     </div>
 
-  <LanguageModal open={langModalOpen} onClose={()=>setLangModalOpen(false)} current={language} onChoose={(l)=>{ setLanguage(l); try{ localStorage.setItem('flowday_lang', l); } catch(e){ console.debug('lang write failed', e); } }} />
+  {/* LanguageModal removed */}
 
   <div className="mt-5 flex justify-center">
           <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">Done</button>
@@ -299,75 +283,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   );
 }
 
-// Small inline modal to select language (placeholder)
-function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: string; onChoose: (lang: string) => void }) {
-  const options = ['English', 'Русский', 'Deutsch', 'Español', 'Français'];
-  const [mounted, setMounted] = useState(open);
-  const [active, setActive] = useState(open);
-  const ANIM = 260; // ms
-
-  useEffect(() => {
-    let t: number | undefined;
-    if (open) {
-      setMounted(true);
-      // next frame to ensure transition runs
-      requestAnimationFrame(() => setActive(true));
-    } else {
-      setActive(false);
-      t = window.setTimeout(() => setMounted(false), ANIM + 20);
-    }
-    return () => { if (t) window.clearTimeout(t); };
-  }, [open]);
-
-  if (!mounted) return null;
-
-  const wrapperStyle: React.CSSProperties = {
-    opacity: active ? 1 : 0,
-    transform: active ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.96)',
-    transition: `opacity ${ANIM}ms cubic-bezier(.2,.9,.2,1), transform ${ANIM}ms cubic-bezier(.2,.9,.2,1)`
-  };
-  const panelStyle: React.CSSProperties = {
-    transform: active ? 'scale(1)' : 'scale(0.985) translateY(-6px)',
-    opacity: active ? 1 : 0,
-    transition: `opacity ${ANIM}ms cubic-bezier(.2,.9,.2,1), transform ${ANIM}ms cubic-bezier(.2,.9,.2,1)`
-  };
-
-  return (
-    <div
-      className={`fixed inset-0 z-60 flex items-center justify-center backdrop-blur-sm ${!active ? 'pointer-events-none' : ''}`}
-      onClick={active ? onClose : undefined}
-      style={wrapperStyle}
-    >
-      <div
-        className="bg-[#111] rounded-lg w-64 ring-1 ring-white/10 shadow-lg settings-panel"
-        style={{ ...panelStyle, minWidth: '220px', maxWidth: '90vw', padding: '14px 14px 12px 14px' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="text-[13px] font-semibold mb-2 text-white/90">Choose language</div>
-        <div className="space-y-1">
-          {options.map(o => (
-            <button
-              key={o}
-              onClick={() => { onChoose(o); onClose(); }}
-              className={
-                `w-full text-left px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors ` +
-                (o === current
-                  ? 'bg-white/7 text-white ring-1 ring-white/12'
-                  : 'hover:bg-white/4 text-white/70')
-              }
-              style={{ letterSpacing: '0.01em' }}
-            >
-              {o}
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 text-right">
-          <button onClick={onClose} className="text-xs text-white/40 px-2 py-1 hover:text-white/70 transition">Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Language selection UI removed
 
 // Subcomponent to handle cloud account actions
 function CloudAccountSection({ isTG }: { isTG?: boolean }) {
