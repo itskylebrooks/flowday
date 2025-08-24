@@ -87,7 +87,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
   function monthLabel(ym: string): string {
     const [,m] = ym.split('-').map(Number);
     const d = new Date(targetYear, m-1, 1);
-    return d.toLocaleDateString(undefined, { month: 'long' });
+  return d.toLocaleDateString('en', { month: 'long' });
   }
 
   return (
@@ -128,7 +128,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
           <div className={"settings-panel bg-[#111] w-full max-w-sm mx-auto rounded-2xl p-6 relative " + (closing ? 'closing':'')} onClick={e=>e.stopPropagation()}>
             {(() => {
               const d = new Date(active.date);
-              const weekday = d.toLocaleDateString(undefined, { weekday: 'long' });
+              const weekday = d.toLocaleDateString('en', { weekday: 'long' });
               return <div className="text-center mb-3 text-sm font-medium tracking-wide text-white/85">{weekday}</div>;
             })()}
             <div className="rounded-xl mb-4 relative overflow-hidden h-[200px] px-6 py-4 flex flex-col cassette-preview" style={{
@@ -154,7 +154,7 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
                 <div className="flex-1" />
                 {(() => {
                   const d = new Date(active.date);
-                  const month = d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
+                  const month = d.toLocaleDateString('en', { month: 'short' }).toUpperCase();
                   const day = d.getDate();
                   const yr = ('' + d.getFullYear()).slice(-2);
                   const formatted = `${month} ${day} \u2019${yr}`; // e.g. AUG 22 ’25

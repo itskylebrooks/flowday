@@ -25,7 +25,7 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
   function formatToday(): string {
     const iso = todayISO();
     const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   async function handlePosterButton() {

@@ -343,7 +343,7 @@ export default function App() {
   function formatActiveDate(): string {
     const d = new Date(activeDate + 'T00:00:00');
     return d
-      .toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'short' })
+  .toLocaleDateString('en', { weekday: 'long', day: '2-digit', month: 'short' })
       .replace(',', ' ·');
   }
 
