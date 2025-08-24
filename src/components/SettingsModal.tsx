@@ -213,18 +213,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           <div className="py-4">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-medium">Reminders</div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={()=> { const nextFmt: '24' | '12' = reminders.timeFormat==='24' ? '12':'24'; const v={...reminders,timeFormat: nextFmt}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); }}
-                  className="text-[11px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/60"
-                >{reminders.timeFormat==='24'?'24h':'12h'}</button>
-                <button
-                  type="button"
-                  onClick={()=> { setReminders(loadReminders()); remindersDirtyRef.current=false; }}
-                  className="text-[11px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-white/60"
-                >Reset</button>
-              </div>
             </div>
             <div className="space-y-3">
               {/* Daily row */}
