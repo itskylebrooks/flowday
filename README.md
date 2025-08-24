@@ -84,7 +84,7 @@ npm run build
 
 - Blends with friends  
 - Richer overviews of your flows and moods  
-- Language options (localisation)  
+- Language options (localization)  
 
 Always under 20 seconds to capture.
 
