@@ -13,6 +13,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [reminders, setReminders] = useState(()=> loadReminders());
+  // simple language state stored locally as a placeholder
+  const [language, setLanguage] = useState<string>(() => {
+    try { return (localStorage.getItem('flowday_lang') || 'English'); } catch { return 'English'; }
+  });
+  const [langModalOpen, setLangModalOpen] = useState(false);
   const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
@@ -169,10 +174,16 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           )}
         </div>
 
-        <div className="divide-y divide-white/10">
-          <div className="py-3">
-            <div className="text-sm font-medium mb-2">Account</div>
-            <form onSubmit={handleSave} className="space-y-3">
+        <div className="space-y-4">
+          {/* Account card */}
+          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
+            <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-sm font-medium mb-1">Account</div>
+                  <p className="text-[11px] text-white/40">Manage your username and sync preferences.</p>
+                </div>
+              </div>
+            <form onSubmit={handleSave} className="mt-3 space-y-3">
               <div>
                 <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
                 <div className="flex items-center gap-2">
@@ -193,8 +204,12 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
                 <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
               </div>
+
               <div className="pt-1 grid gap-2">
                 <CloudAccountSection />
+              </div>
+
+              <div className="mt-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -203,62 +218,73 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     alert('Local data cleared. App will reload.');
                     window.location.reload();
                   }}
-                  className="w-full rounded-md bg-red-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-red-500/25 text-red-300 hover:bg-red-600/25 active:bg-red-600/30 transition"
+                  className="text-xs text-red-300 hover:underline"
                 >
                   Delete all local data
                 </button>
               </div>
             </form>
           </div>
-          <div className="py-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-medium">Reminders</div>
-            </div>
-            <div className="space-y-3">
-              {/* Daily row */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={dailyEnabled}
-                  aria-disabled={!isCloudEnabled()}
-                  onClick={()=> {
-                    if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
-                    const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
-                  }}
-                  disabled={!isCloudEnabled()}
-                  className={
-                    "flex-1 px-3 py-2 rounded-md ring-1 transition text-sm font-medium flex items-center justify-between " +
-                    (dailyEnabled
-                      ? 'bg-emerald-600/15 ring-emerald-400/25 text-white'
-                      : 'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8') +
-                    ' ' + (isCloudEnabled() ? '' : 'disabled:opacity-50 disabled:cursor-not-allowed')
-                  }
-                >
-                  <span className="text-left">Daily reminder</span>
-                  {/* Toggle indicator */}
-                  <span className="ml-3 flex items-center" aria-hidden>
+
+          {/* Reminders card */}
+          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
+            <div className="text-sm font-medium mb-2">Reminders</div>
+            <p className="text-[11px] text-white/40 mb-3">Control daily reminders for your Flowday entries.</p>
+            <div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Daily reminder</div>
+                  <div className="text-xs text-white/40 mt-1">Arrives in the evening 🌆</div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={dailyEnabled}
+                    aria-disabled={!isCloudEnabled()}
+                    onClick={()=> {
+                      if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
+                      const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
+                    }}
+                    disabled={!isCloudEnabled()}
+                    className={
+                      "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
+                      (dailyEnabled
+                        ? 'bg-emerald-600/15 ring-emerald-400/25 text-white'
+                        : 'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')
+                    }
+                  >
+                    <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
                     <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
                       <span
                         className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
                         style={{ transform: dailyEnabled ? 'translateX(1.4rem)' : 'translateX(0)' }}
                       />
                     </span>
-                  </span>
-                </button>
-                <span className={"text-xs " + (dailyEnabled ? 'text-white/90' : 'text-white/70')}>Arrive in the evening</span>
+                  </button>
+                </div>
               </div>
               {!isCloudEnabled() && (
-                <div className="text-[11px] text-white/40">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
+                <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
               )}
             </div>
           </div>
-          {/* Removed Memories section */}
-          {/* <div className="py-3">
-            <div className="text-sm font-medium">Reminders</div>
-            <div className="text-xs text-white/60">Daily reminder time, weekly recap</div>
-          </div> */}
-        </div>
+
+          {/* Language card */}
+          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">Language</div>
+                <div className="text-[11px] text-white/40">App language and regional settings (placeholder)</div>
+              </div>
+              <button onClick={()=> setLangModalOpen(true)} className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 ring-white/15 hover:bg-white/5">
+                {language}
+              </button>
+            </div>
+          </div>
+    </div>
+
+  <LanguageModal open={langModalOpen} onClose={()=>setLangModalOpen(false)} current={language} onChoose={(l)=>{ setLanguage(l); try{ localStorage.setItem('flowday_lang', l); } catch(e){ console.debug('lang write failed', e); } }} />
 
   <div className="mt-5 flex justify-center">
           <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">Done</button>
@@ -267,6 +293,29 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           <div className="font-medium text-white/55">{APP_VERSION_LABEL}</div>
           <div className="mt-1">© {new Date().getFullYear()} Kyle Brooks. All rights reserved.</div>
           <div className="mt-0.5">Icons by Remix Design.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Small inline modal to select language (placeholder)
+function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; onClose: () => void; current: string; onChoose: (lang: string) => void }) {
+  if (!open) return null;
+  const options = ['English', 'Русский', 'Deutsch', 'Español', 'Français'];
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#0e0e0e] rounded-xl p-4 w-80 ring-1 ring-white/10" onClick={(e)=>e.stopPropagation()}>
+        <div className="text-sm font-medium mb-3">Choose language</div>
+        <div className="space-y-2">
+          {options.map(o=> (
+            <button key={o} onClick={()=>{ onChoose(o); onClose(); }} className={"w-full text-left px-3 py-2 rounded-md " + (o===current ? 'bg-white/5 text-white' : 'hover:bg-white/3 text-white/70')}>
+              {o}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 text-right">
+          <button onClick={onClose} className="text-xs text-white/40">Close</button>
         </div>
       </div>
     </div>
