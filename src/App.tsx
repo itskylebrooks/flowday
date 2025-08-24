@@ -121,6 +121,19 @@ export default function App() {
   const [showSong, setShowSong] = useState(false);
   // Banner glow state for hover / click brighten effect
   const [bannerGlow, setBannerGlow] = useState(false);
+  // Refs to coordinate glow lifetime with haptic playback
+  const bannerHapticRef = useRef(false);
+  const bannerGlowTORef = useRef<number | null>(null);
+
+  // Cleanup any pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (bannerGlowTORef.current) {
+        clearTimeout(bannerGlowTORef.current);
+        bannerGlowTORef.current = null;
+      }
+    };
+  }, []);
   // Telegram full-screen song editor state
   const [songEditorOpen, setSongEditorOpen] = useState(false);
   // Reset song inputs collapsed when changing the active date
@@ -507,14 +520,23 @@ export default function App() {
               aria-live="polite"
               aria-label="Flowday v1.0 released"
               onClick={() => {
-                // brief glow on click/tap
+                // Ensure any previous timer is cleared
+                if (bannerGlowTORef.current) { clearTimeout(bannerGlowTORef.current); bannerGlowTORef.current = null; }
+                // Start glow and mark haptic-active so hover leave won't cancel it
                 setBannerGlow(true);
-                window.setTimeout(() => setBannerGlow(false), 420);
+                bannerHapticRef.current = true;
+                const dur = 2000;
                 // If in Telegram, play a playful haptic pattern
-                try { if (isTG) hapticFunny(2000); } catch { /* ignore */ }
+                try { if (isTG) hapticFunny(dur); } catch { /* ignore */ }
+                // Clear glow after the haptic duration
+                bannerGlowTORef.current = window.setTimeout(() => {
+                  bannerHapticRef.current = false;
+                  setBannerGlow(false);
+                  bannerGlowTORef.current = null;
+                }, dur);
               }}
               onMouseEnter={() => setBannerGlow(true)}
-              onMouseLeave={() => setBannerGlow(false)}
+              onMouseLeave={() => { if (!bannerHapticRef.current) setBannerGlow(false); }}
               className="w-full max-w-xs mx-auto px-5 py-2 rounded-full text-center text-white font-medium text-sm ring-1 focus:outline-none"
               style={{
                 background: bannerGlow
