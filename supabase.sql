@@ -4,6 +4,7 @@
 create table if not exists public.users (
   telegram_id bigint primary key,
   username text,
+  email text,
   first_name text,
   last_name text,
   language_code text,

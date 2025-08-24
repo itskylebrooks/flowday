@@ -4,6 +4,7 @@ import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
+import { supabase } from '../lib/supabase';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
@@ -13,6 +14,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [reminders, setReminders] = useState(()=> loadReminders());
+  const [email, setEmail] = useState('');
+  const [emailStatus, setEmailStatus] = useState<'idle'|'sent'|'error'>('idle');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const tgidRef = useRef<string | null>(null);
+  useEffect(()=>{ try { tgidRef.current = localStorage.getItem('flowday_tgid'); } catch { tgidRef.current = null; } }, []);
   // simple language state stored locally as a placeholder
   const [language, setLanguage] = useState<string>(() => {
     try { return (localStorage.getItem('flowday_lang') || 'English'); } catch { return 'English'; }
@@ -61,6 +67,21 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     setUsername(stored.username);
     setSaving(false); setDirty(false); setSavedFlash(true);
     setTimeout(()=> setSavedFlash(false), 1400);
+  }
+
+  async function handleSendEmail(e: React.FormEvent){
+    e.preventDefault();
+    if (!email.trim() || sendingEmail) return;
+    setSendingEmail(true);
+    let redirect = window.location.origin;
+    const tgid = tgidRef.current;
+    if (tgid) redirect += `?tgid=${tgid}`;
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirect }
+    });
+    if (error) setEmailStatus('error'); else setEmailStatus('sent');
+    setSendingEmail(false);
   }
 
   // Auto avatar derivation
@@ -203,6 +224,30 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   </button>
                 </div>
                 <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Email (optional)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e=>{ setEmail(e.target.value); setEmailStatus('idle'); }}
+                    className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                    placeholder="you@example.com"
+                    disabled={sendingEmail || emailStatus==='sent'}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendEmail}
+                    disabled={sendingEmail || emailStatus==='sent' || !email.trim()}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                  >
+                    {sendingEmail ? 'Sending…' : emailStatus==='sent' ? 'Sent' : 'Link'}
+                  </button>
+                </div>
+                {emailStatus==='sent' && (<p className="mt-1 text-[11px] text-green-400">Check your inbox for the login link.</p>)}
+                {emailStatus==='error' && (<p className="mt-1 text-[11px] text-red-400">Couldn't send link. Try again later.</p>)}
               </div>
 
               <div className="pt-1 grid gap-2">
