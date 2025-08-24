@@ -1,6 +1,9 @@
 // Telegram-aware sync helpers (client-side)
 import type { Entry } from './types';
 import { loadEntries, saveEntries, loadReminders, saveReminders } from './storage';
+import { isEmailAuthed } from './emailAuth';
+import { supabase } from './supabase';
+import { encryptStr, decryptStr } from './enc';
 
 const SYNC_KEY = 'flowday_last_sync_iso_v1';
 const CLOUD_FLAG_KEY = 'flowday_cloud_enabled_v1';
@@ -95,36 +98,65 @@ export async function verifyTelegram(tz?: string) {
   } catch { /* silent */ }
 }
 export async function syncPull(): Promise<number | null> {
-  if (!isTG()) return null;
-  if (!isCloudEnabled()) return null;
-  const initData = await waitForInitData();
-  if (!initData) return null;
-  const since = localStorage.getItem(SYNC_KEY) || '';
-  try {
-    const { res, data } = await postJSON('/api/sync-pull', { initData, since });
-    if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
-    if (res.status === 429) {
-      periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
-      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
-      return null;
-    } else if (res.ok && periodicIntervalMs !== 60000) {
-      periodicIntervalMs = 60000;
-      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
-    }
-    if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
-    if (typeof data.username === 'string') {
-      try {
-        const raw = localStorage.getItem('flowday_user_v1');
-        if (raw) { const obj = JSON.parse(raw); if (obj && typeof obj === 'object' && obj.username !== data.username) { obj.username = data.username; localStorage.setItem('flowday_user_v1', JSON.stringify(obj)); } }
-      } catch { /* ignore */ }
-    }
-    const pulled = data.entries as Entry[];
-    const local = loadEntries();
-    const merged = mergeByNewer(local, pulled);
-    saveEntries(merged);
-    localStorage.setItem(SYNC_KEY, new Date().toISOString());
-    return pulled.length;
-  } catch { return null; }
+  if (isTG()) {
+    if (!isCloudEnabled()) return null;
+    const initData = await waitForInitData();
+    if (!initData) return null;
+    const since = localStorage.getItem(SYNC_KEY) || '';
+    try {
+      const { res, data } = await postJSON('/api/sync-pull', { initData, since });
+      if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
+      if (res.status === 429) {
+        periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
+        if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
+        return null;
+      } else if (res.ok && periodicIntervalMs !== 60000) {
+        periodicIntervalMs = 60000;
+        if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
+      }
+      if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
+      if (typeof data.username === 'string') {
+        try {
+          const raw = localStorage.getItem('flowday_user_v1');
+          if (raw) { const obj = JSON.parse(raw); if (obj && typeof obj === 'object' && obj.username !== data.username) { obj.username = data.username; localStorage.setItem('flowday_user_v1', JSON.stringify(obj)); } }
+        } catch { /* ignore */ }
+      }
+      const pulled = data.entries as Entry[];
+      const local = loadEntries();
+      const merged = mergeByNewer(local, pulled);
+      saveEntries(merged);
+      localStorage.setItem(SYNC_KEY, new Date().toISOString());
+      return pulled.length;
+    } catch { return null; }
+  } else {
+    if (!isEmailAuthed()) return null;
+    const since = localStorage.getItem(SYNC_KEY) || '1970-01-01T00:00:00Z';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from('entries')
+        .select('date, emojis_enc, hue_enc, song_title_enc, song_artist_enc, updated_at')
+        .eq('auth_user_id', user.id)
+        .gt('updated_at', since)
+        .order('updated_at', { ascending: true });
+      if (error || !data) return null;
+      const pulled: Entry[] = [];
+      for (const r of data) {
+        const emojis = r.emojis_enc ? JSON.parse(await decryptStr(r.emojis_enc)) : [];
+        const hue = r.hue_enc ? Number(await decryptStr(r.hue_enc)) : undefined;
+        const title = r.song_title_enc ? await decryptStr(r.song_title_enc) : undefined;
+        const artist = r.song_artist_enc ? await decryptStr(r.song_artist_enc) : undefined;
+        const song = (title || artist) ? { title, artist } : undefined;
+        pulled.push({ date: r.date, emojis, hue, song, updatedAt: new Date(r.updated_at).getTime() });
+      }
+      const local = loadEntries();
+      const merged = mergeByNewer(local, pulled);
+      saveEntries(merged);
+      localStorage.setItem(SYNC_KEY, new Date().toISOString());
+      return pulled.length;
+    } catch { return null; }
+  }
 }
 
 type PendingPush = { entry: Entry; attempts: number };
@@ -140,36 +172,64 @@ function flushPush() {
 }
 
 async function rawSyncPush(pending: PendingPush[]) {
-  if (!isTG() || !pending.length) return;
-  if (!isCloudEnabled()) { pushQueue = []; return; }
-  const initData = await waitForInitData();
-  if (!initData) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
-  const entries = pending.map(p => p.entry);
-  try {
-    const { res } = await postJSON('/api/sync-push', { initData, entries });
-    if (res.status === 410) { disableCloud(); stopPeriodicPull(); return; }
-    if (!res.ok) {
-      if ([429,500,502,503,504].includes(res.status)) {
-        for (const p of pending) {
-          if (p.attempts < 5) {
-            const delay = Math.min(30000, 1000 * Math.pow(2, p.attempts));
-            pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 });
-            setTimeout(flushPush, delay);
+  if (!pending.length) return;
+  if (isTG()) {
+    if (!isCloudEnabled()) { pushQueue = []; return; }
+    const initData = await waitForInitData();
+    if (!initData) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
+    const entries = pending.map(p => p.entry);
+    try {
+      const { res } = await postJSON('/api/sync-push', { initData, entries });
+      if (res.status === 410) { disableCloud(); stopPeriodicPull(); return; }
+      if (!res.ok) {
+        if ([429,500,502,503,504].includes(res.status)) {
+          for (const p of pending) {
+            if (p.attempts < 5) {
+              const delay = Math.min(30000, 1000 * Math.pow(2, p.attempts));
+              pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 });
+              setTimeout(flushPush, delay);
+            }
           }
         }
+        return;
       }
-      return;
+      if (nextPullAfterPushTO) clearTimeout(nextPullAfterPushTO);
+      nextPullAfterPushTO = setTimeout(()=> { syncPull(); }, 5000);
+    } catch {
+      for (const p of pending) { if (p.attempts < 3) pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 }); }
+      setTimeout(flushPush, RETRY_MS);
     }
-    if (nextPullAfterPushTO) clearTimeout(nextPullAfterPushTO);
-    nextPullAfterPushTO = setTimeout(()=> { syncPull(); }, 5000);
-  } catch {
-    for (const p of pending) { if (p.attempts < 3) pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 }); }
-    setTimeout(flushPush, RETRY_MS);
+  } else {
+    if (!isEmailAuthed()) { pushQueue = []; return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
+    try {
+      const rows = await Promise.all(pending.map(async p => ({
+        auth_user_id: user.id,
+        date: p.entry.date,
+        emojis_enc: await encryptStr(JSON.stringify(p.entry.emojis)),
+        hue_enc: typeof p.entry.hue === 'number' ? await encryptStr(String(p.entry.hue)) : null,
+        song_title_enc: p.entry.song?.title ? await encryptStr(p.entry.song.title) : null,
+        song_artist_enc: p.entry.song?.artist ? await encryptStr(p.entry.song.artist) : null,
+        updated_at: new Date().toISOString(),
+      })));
+      const { error } = await supabase.from('entries').upsert(rows, { onConflict: 'auth_user_id,date' });
+      if (error) {
+        for (const p of pending) { if (p.attempts < 5) pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 }); }
+        setTimeout(flushPush, RETRY_MS);
+        return;
+      }
+      if (nextPullAfterPushTO) clearTimeout(nextPullAfterPushTO);
+      nextPullAfterPushTO = setTimeout(()=> { syncPull(); }, 5000);
+    } catch {
+      for (const p of pending) { if (p.attempts < 3) pushQueue.push({ entry: p.entry, attempts: p.attempts + 1 }); }
+      setTimeout(flushPush, RETRY_MS);
+    }
   }
 }
 
 export function queueSyncPush(entry: Entry) {
-  if (!isTG()) return;
+  if (!hasCloudAccount()) return;
   pushQueue = pushQueue.filter(e => e.entry.date !== entry.date); // dedupe
   pushQueue.push({ entry, attempts: 0 });
   if (pushTimer) clearTimeout(pushTimer);
@@ -177,7 +237,7 @@ export function queueSyncPush(entry: Entry) {
 }
 
 export function queueSyncPushMany(entries: Entry[]) {
-  if (!isTG() || !entries.length) return;
+  if (!hasCloudAccount() || !entries.length) return;
   const setDates = new Set(entries.map(e=>e.date));
   pushQueue = pushQueue.filter(e => !setDates.has(e.entry.date));
   for (const e of entries) pushQueue.push({ entry: e, attempts: 0 });
@@ -186,18 +246,15 @@ export function queueSyncPushMany(entries: Entry[]) {
 }
 
 export async function initialFullSyncIfNeeded() {
-  if (!isTG()) return;
-  if (!isCloudEnabled()) return;
-  await waitForInitData();
+  if (!hasCloudAccount()) return;
+  if (isTG()) await waitForInitData();
   const FLAG = 'flowday_initial_sync_done_v1';
   if (localStorage.getItem(FLAG)) return; // already performed
-  // Perform pull first to avoid overwriting cloud data
-  const pulled = await syncPull(); // returns count or null
+  const pulled = await syncPull();
   const local = loadEntries();
   if ((pulled === 0 || pulled === null) && local.length) {
-    // Cloud empty (or unknown) but we have local entries -> push all
-  queueSyncPushMany(local);
-  flushPush();
+    queueSyncPushMany(local);
+    flushPush();
   }
   localStorage.setItem(FLAG, '1');
 }
@@ -206,8 +263,7 @@ export async function initialFullSyncIfNeeded() {
 let periodicTimer: ReturnType<typeof setInterval> | null = null;
 let periodicIntervalMs = 60000;
 export function startPeriodicPull() {
-  if (!isTG()) return;
-  if (!isCloudEnabled()) return;
+  if (!hasCloudAccount()) return;
   if (periodicTimer) return;
   periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs);
 }
@@ -239,6 +295,14 @@ export function startStartupSyncLoop() {
 export function isCloudEnabled(): boolean { return !!localStorage.getItem(CLOUD_FLAG_KEY); }
 export function enableCloud() { localStorage.setItem(CLOUD_FLAG_KEY,'1'); localStorage.removeItem('flowday_initial_sync_done_v1'); }
 export function disableCloud() { localStorage.removeItem(CLOUD_FLAG_KEY); localStorage.removeItem(SYNC_KEY); localStorage.removeItem('flowday_initial_sync_done_v1'); }
+
+// Unified check for whether the current user has an active cloud account. In the
+// Telegram Mini App this relies on the legacy localStorage flag. For the open
+// web build we consider a Supabase email session as proof of a cloud account.
+export function hasCloudAccount(): boolean {
+  if (isTG()) return isCloudEnabled();
+  return isEmailAuthed();
+}
 
 export async function signInToCloud(username?: string): Promise<{ ok: boolean; error?: string }> {
   if (!isTG()) return { ok:false, error:'not-telegram' };
@@ -278,14 +342,29 @@ export async function deleteCloudAccount(): Promise<boolean> {
 }
 
 export async function updateCloudUsername(username: string): Promise<{ ok:boolean; error?:string }> {
-  if (!isTG() || !isCloudEnabled()) return { ok:false, error:'not-enabled' };
-  const initData = await waitForInitData(); if (!initData) return { ok:false, error:'no-initData' };
-  if (username.trim().length < 4) return { ok:false, error:'username-too-short' };
-  try {
-    const { res, data } = await postJSON('/api/telegram-update-username', { initData, username });
-    if (res.status === 409) return { ok:false, error:'username-taken' };
-    if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
-    if (res.ok && data?.ok) return { ok:true };
-  } catch { /* ignore */ }
-  return { ok:false, error:'unknown' };
+  if (isTG()) {
+    if (!isCloudEnabled()) return { ok:false, error:'not-enabled' };
+    const initData = await waitForInitData(); if (!initData) return { ok:false, error:'no-initData' };
+    if (username.trim().length < 4) return { ok:false, error:'username-too-short' };
+    try {
+      const { res, data } = await postJSON('/api/telegram-update-username', { initData, username });
+      if (res.status === 409) return { ok:false, error:'username-taken' };
+      if (res.status === 400 && data?.error === 'username-too-short') return { ok:false, error:'username-too-short' };
+      if (res.ok && data?.ok) return { ok:true };
+    } catch { /* ignore */ }
+    return { ok:false, error:'unknown' };
+  } else {
+    if (!isEmailAuthed()) return { ok:false, error:'not-enabled' };
+    if (username.trim().length < 4) return { ok:false, error:'username-too-short' };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { ok:false, error:'not-enabled' };
+      const { error } = await supabase.from('users').update({ username }).eq('auth_user_id', user.id);
+      if ((error as any)?.code === '23505') return { ok:false, error:'username-taken' };
+      if (error) return { ok:false, error:'unknown' };
+      return { ok:true };
+    } catch {
+      return { ok:false, error:'unknown' };
+    }
+  }
 }

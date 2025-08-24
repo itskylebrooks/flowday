@@ -7,8 +7,10 @@ import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
-import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
+import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY, loadReminders, saveReminders } from './lib/storage';
+import { supabase } from './lib/supabase';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
+import { isEmailAuthed } from './lib/emailAuth';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
@@ -18,6 +20,7 @@ export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
   const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
+  const [emailAuthed, setEmailAuthed] = useState(isEmailAuthed());
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
@@ -34,6 +37,11 @@ export default function App() {
     const id = setInterval(poll, 500);
     return ()=> clearInterval(id);
   }, [tgPlatform]);
+
+  useEffect(() => {
+    const id = setInterval(() => setEmailAuthed(isEmailAuthed()), 1000);
+    return () => clearInterval(id);
+  }, []);
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
   const HEADER_H = 56; // tailwind h-14
   const FOOTER_H = 56; // tailwind h-14
@@ -110,6 +118,54 @@ export default function App() {
   document.removeEventListener('visibilitychange', onVisibility as EventListener);
     };
   }, [isTG]);
+
+  useEffect(() => {
+    if (isTG) return;
+    if (!emailAuthed) return;
+    (async () => {
+      await initialFullSyncIfNeeded();
+      startPeriodicPull();
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from('reminders')
+            .select('daily_enabled,daily_time')
+            .eq('auth_user_id', user.id)
+            .maybeSingle();
+          if (data) {
+            const merged = { ...loadReminders(), dailyEnabled: data.daily_enabled, dailyTime: data.daily_time };
+            saveReminders(merged);
+          }
+        }
+      } catch { /* ignore */ }
+    })();
+    const onEntriesUpdated = () => {
+      try {
+        const next = loadEntries();
+        const cur = entriesRef.current || [];
+        if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+    const onStorage = (e: StorageEvent) => {
+      try {
+        if (e.key === STORAGE_KEY) {
+          const next = loadEntries();
+          const cur = entriesRef.current || [];
+          if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('storage', onStorage as EventListener);
+    const onVisibility = () => { if (document.visibilityState === 'visible') void syncPull(); };
+    document.addEventListener('visibilitychange', onVisibility as EventListener);
+    return () => {
+      window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+      window.removeEventListener('storage', onStorage as EventListener);
+      document.removeEventListener('visibilitychange', onVisibility as EventListener);
+    };
+  }, [isTG, emailAuthed]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);

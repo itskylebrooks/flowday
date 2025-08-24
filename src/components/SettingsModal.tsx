@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '../lib/storage';
-import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
+import { hasCloudAccount, signInToCloud, deleteCloudAccount, updateCloudUsername, initialFullSyncIfNeeded, startPeriodicPull } from '../lib/sync';
+import { signInWithEmail, signOutEmail, currentUserEmail, deleteEmailAccount } from '../lib/emailAuth';
+import { supabase } from '../lib/supabase';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -39,6 +41,22 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     }
   }, [open]);
 
+  useEffect(() => {
+    if (isTG) return;
+    if (!hasCloudAccount()) return;
+    void (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase.from('reminders').select('daily_enabled,daily_time').eq('auth_user_id', user.id).maybeSingle();
+        if (data) {
+          const next = { ...loadReminders(), dailyEnabled: data.daily_enabled, dailyTime: data.daily_time };
+          setReminders(next); saveReminders(next);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [open, isTG]);
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setUsername(e.target.value);
     setDirty(true);
@@ -50,7 +68,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
   const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
     // If cloud enabled, attempt remote username update
-    if (isCloudEnabled()) {
+    if (hasCloudAccount()) {
       const r = await updateCloudUsername(stored.username);
       if (!r.ok && r.error === 'username-taken') {
         setSaving(false);
@@ -99,19 +117,33 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   }, [entries]);
 
   const pushRemindersToCloud = useCallback(async (updated = reminders) => {
-    if (!isCloudEnabled()) return;
+    if (!hasCloudAccount()) return;
     try {
-      interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
-      const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
-      if (!initData) return;
-      const body = {
-        initData,
-        daily_enabled: updated.dailyEnabled,
-        daily_time: updated.dailyTime
-      };
-      await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+      if (isTG) {
+        interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
+        const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
+        if (!initData) return;
+        const body = {
+          initData,
+          daily_enabled: updated.dailyEnabled,
+          daily_time: updated.dailyTime
+        };
+        await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase.from('reminders').upsert(
+          {
+            auth_user_id: user.id,
+            daily_enabled: updated.dailyEnabled,
+            daily_time: updated.dailyTime,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'auth_user_id' }
+        );
+      }
     } catch { /* ignore */ }
-  }, [reminders]);
+  }, [reminders, isTG]);
 
   // Persist reminders when modal closes if changed
   useEffect(()=>{
@@ -184,29 +216,31 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
               </div>
             <form onSubmit={handleSave} className="mt-3 space-y-3">
-              <div>
-                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    value={username}
-                    onChange={handleChange}
-                    maxLength={24}
-                    className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
-                    placeholder="user"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!dirty || saving || !username.trim()}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
-                  >
-                    {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
-                  </button>
+              {(isTG || hasCloudAccount()) && (
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={username}
+                      onChange={handleChange}
+                      maxLength={24}
+                      className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                      placeholder="user"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!dirty || saving || !username.trim()}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                    >
+                      {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
                 </div>
-                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
-              </div>
+              )}
 
               <div className="pt-1 grid gap-2">
-                <CloudAccountSection />
+                <CloudAccountSection isTG={isTG} />
               </div>
 
               <div className="mt-1">
@@ -241,12 +275,12 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     type="button"
                     role="switch"
                     aria-checked={dailyEnabled}
-                    aria-disabled={!isCloudEnabled()}
+                    aria-disabled={!hasCloudAccount()}
                     onClick={()=> {
-                      if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
+                      if (!hasCloudAccount()) return; // only cloud users may enable daily reminders
                       const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
                     }}
-                    disabled={!isCloudEnabled()}
+                    disabled={!hasCloudAccount()}
                     className={
                       "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
                       (dailyEnabled
@@ -264,7 +298,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   </button>
                 </div>
               </div>
-              {!isCloudEnabled() && (
+              {!hasCloudAccount() && (
                 <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
               )}
             </div>
@@ -322,11 +356,30 @@ function LanguageModal({ open, onClose, current, onChoose }: { open: boolean; on
   );
 }
 
-// Subcomponent to handle cloud account actions
-function CloudAccountSection() {
-  const [enabled, setEnabled] = useState(isCloudEnabled());
+// Subcomponent to handle cloud account actions for Telegram or email-based sign-in
+function CloudAccountSection({ isTG }: { isTG?: boolean }) {
+  const [enabled, setEnabled] = useState(hasCloudAccount());
   const [working, setWorking] = useState(false);
-  async function handleSignIn() {
+  const [email, setEmail] = useState('');
+  const [linkSent, setLinkSent] = useState(false);
+
+  useEffect(() => {
+    if (enabled) {
+      void (async () => {
+        await initialFullSyncIfNeeded();
+        startPeriodicPull();
+      })();
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!isTG && enabled) {
+      void currentUserEmail().then(e => { if (e) setEmail(e); });
+    }
+  }, [isTG, enabled]);
+
+  // Telegram Mini App branch ------------------------------------------
+  async function handleSignInTG() {
     setWorking(true);
     const desired = loadUser().username;
     if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
@@ -339,7 +392,7 @@ function CloudAccountSection() {
       else alert('Sign in failed. Try again.');
     }
   }
-  async function handleDelete() {
+  async function handleDeleteTG() {
     if (!enabled) return;
     if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
     setWorking(true);
@@ -347,16 +400,110 @@ function CloudAccountSection() {
     setWorking(false);
     if (ok) setEnabled(false);
   }
+
+  // Email web branch ---------------------------------------------------
+  async function handleSendLink() {
+    if (!email) return;
+    setWorking(true);
+    sessionStorage.setItem('flowday_post_auth_redirect', window.location.href);
+    const { error } = await signInWithEmail(email);
+    setWorking(false);
+    if (!error) setLinkSent(true);
+    else alert('Couldn\u2019t send link. Try again.');
+  }
+  async function handleLogoutEmail() {
+    setWorking(true);
+    await signOutEmail();
+    setWorking(false);
+    setEnabled(false);
+    setEmail('');
+    setLinkSent(false);
+  }
+  async function handleDeleteEmail() {
+    if (!enabled) return;
+    if (!window.confirm('Delete your cloud account? Local entries stay on this device.')) return;
+    setWorking(true);
+    const { error } = await deleteEmailAccount();
+    setWorking(false);
+    if (!error) {
+      setEnabled(false); setEmail(''); setLinkSent(false);
+    } else {
+      alert('Delete failed. Try again.');
+    }
+  }
+
+  if (!isTG) {
+    return (
+      <div className="space-y-2">
+        {!enabled && (
+          <>
+            <input
+              type="email"
+              aria-label="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+              placeholder="you@example.com"
+            />
+            <button
+              type="button"
+              disabled={working || !email}
+              onClick={handleSendLink}
+              className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50"
+            >
+              {working ? 'Sending…' : 'Sign in / Log in'}
+            </button>
+            <p className="text-[10px] leading-relaxed text-white/35">
+              Sign in creates a cloud account so entries sync across devices. Magic link will be sent to your email address.
+            </p>
+            {linkSent && (
+              <p className="text-[10px] text-emerald-300">Check your email for the link.</p>
+            )}
+          </>
+        )}
+        {enabled && (
+          <>
+            <input
+              value={email}
+              readOnly
+              aria-label="Email"
+              className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 text-white/60"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={working}
+                onClick={handleLogoutEmail}
+                className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 hover:bg-white/10"
+              >
+                {working ? 'Working…' : 'Log out'}
+              </button>
+              <button
+                type="button"
+                disabled={working}
+                onClick={handleDeleteEmail}
+                className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50"
+              >
+                {working ? 'Working…' : 'Delete account'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Telegram branch UI -------------------------------------------------
   return (
     <div className="space-y-2">
       {!enabled && (
-        <button type="button" disabled={working} onClick={handleSignIn}
+        <button type="button" disabled={working} onClick={handleSignInTG}
           className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
           {working ? 'Signing in…' : 'Sign in & enable sync'}
         </button>
       )}
       {enabled && (
-        <button type="button" disabled={working} onClick={handleDelete}
+        <button type="button" disabled={working} onClick={handleDeleteTG}
           className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
           {working ? 'Deleting…' : 'Delete cloud account'}
         </button>
