@@ -497,6 +497,21 @@ export default function App() {
               </button>
             </div>
           )}
+          {/* Celebratory banner for v1.0 - visually matches "Song of the day" button */}
+          <div className="mt-6 flex justify-center">
+            <div
+              role="status"
+              aria-live="polite"
+              className="w-full max-w-xs mx-auto px-5 py-2 rounded-full text-center text-white font-medium text-sm ring-1 ring-white/10"
+              style={{
+                background: 'linear-gradient(90deg, rgba(41,104,75,0.18), rgba(255,169,77,0.18))',
+                WebkitBackdropFilter: 'saturate(120%)',
+                backdropFilter: 'saturate(120%)'
+              }}
+            >
+              🎉 Flowday v1.0 released! 🎉
+            </div>
+          </div>
         </div>
       </div>
 
