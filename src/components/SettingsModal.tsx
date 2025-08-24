@@ -13,6 +13,12 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [reminders, setReminders] = useState(()=> loadReminders());
+  // Data transfer UI state (export/import)
+  const [mode, setMode] = useState<'merge'|'replace'>('merge');
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   // simple language state stored locally as a placeholder
   // language selection removed — app is English-only for Telegram deployment
   const remindersDirtyRef = useRef(false);
@@ -35,6 +41,42 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   remindersDirtyRef.current = false;
     }
   }, [open]);
+
+  // Data transfer handlers
+  async function handleExport() {
+    try {
+      setExporting(true);
+      const payload = exportAllData();
+      const json = JSON.stringify(payload, null, 2);
+      setPreview(json);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const now = new Date().toISOString().slice(0,10);
+      a.href = url; a.download = `flowday-export-${now}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } catch { alert('Export failed'); }
+    finally { setExporting(false); }
+  }
+  function triggerFilePick() { fileRef.current?.click(); }
+  async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    setImporting(true);
+    try {
+      const res = importAllData(txt, { merge: mode === 'merge' });
+      if (!res.ok) alert('Import failed: ' + (res.message || 'unknown'));
+      else {
+        const parts: string[] = [];
+        if (res.added) parts.push(`${res.added} added`);
+        if (res.merged) parts.push(`${res.merged} merged`);
+        parts.push(`${res.total ?? '??'} total locally`);
+        alert('Import completed: ' + parts.join(', '));
+        window.location.reload();
+      }
+    } catch { alert('Import failed'); }
+    finally { setImporting(false); try { e.target.value = ''; } catch {} }
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setUsername(e.target.value);
@@ -164,47 +206,49 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               </div>
             </div>
           </div>
-          {isTG && (
+            {isTG && (
             <div className="mt-2 flex justify-center">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-400 text-white font-semibold tracking-wide">TG Version</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/12 text-white/85 ring-1 ring-sky-500/35 font-semibold tracking-wide hover:bg-sky-500/20 transition">TG Version</span>
             </div>
           )}
         </div>
 
         <div className="space-y-4">
           {/* Account card */}
-          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
+          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
             <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-sm font-medium mb-1">Account</div>
-                  <p className="text-[11px] text-white/40">Manage your username and sync preferences.</p>
-                </div>
+                  <div className="text-sm font-semibold mb-0.5">Account</div>
+
+                
               </div>
-            <form onSubmit={handleSave} className="mt-3 space-y-3">
+            </div>
+            <hr className="border-t border-white/6 my-3" />
+            <form onSubmit={handleSave} className="mt-1 space-y-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-white/45 mb-1">Username</label>
-                <div className="flex items-center gap-2">
+                <label className="block text-[10px] uppercase tracking-wide text-white/45 mb-2">Username</label>
+                <div className="flex items-center gap-3">
                   <input
                     value={username}
                     onChange={handleChange}
                     maxLength={24}
-                    className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+                    className="flex-1 rounded-md bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30"
                     placeholder="user"
                   />
                   <button
                     type="submit"
                     disabled={!dirty || saving || !username.trim()}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium ring-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ring-white/15 text-white/85 hover:bg-white/10"
+                    className="rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/6 text-white/90 ring-1 ring-white/10 hover:bg-white/10"
                   >
                     {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
+                <p className="mt-2 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
               </div>
 
-              <div className="pt-1 grid gap-2">
-                <CloudAccountSection isTG={isTG} />
-              </div>
+                  <div className="pt-1 grid gap-2">
+                    <CloudAccountSection isTG={isTG} />
+                  </div>
 
               <div className="mt-1">
                 <button
@@ -215,54 +259,96 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     alert('Local data cleared. App will reload.');
                     window.location.reload();
                   }}
-                  className="text-xs text-red-300 hover:underline"
+                  className="text-xs text-red-400 hover:underline"
                 >
                   Delete all local data
                 </button>
               </div>
             </form>
           </div>
-
-          {/* Reminders card (only Daily reminder shown) */}
-          <div className="bg-white/3 p-4 rounded-lg ring-1 ring-white/6 shadow-sm">
-            <div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium">Daily reminder</div>
-                  <div className="text-xs text-white/40 mt-1">Arrives in the evening 🌆</div>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={dailyEnabled}
-                    aria-disabled={!isCloudEnabled()}
-                    onClick={()=> {
-                      if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
-                      const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
-                    }}
-                    disabled={!isCloudEnabled()}
-                    className={
-                      "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
-                      (dailyEnabled
-                        ? 'bg-emerald-600/15 ring-emerald-400/25 text-white'
-                        : 'bg-white/5 ring-white/10 text-white/70 hover:bg-white/8')
-                    }
-                  >
-                    <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
-                    <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
-                      <span
-                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
-                        style={{ transform: dailyEnabled ? 'translateX(1.4rem)' : 'translateX(0)' }}
-                      />
-                    </span>
-                  </button>
-                </div>
+          {/* Data transfer card (Export / Import) */}
+          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm font-semibold mb-0.5">Data transfer</div>
+                <hr className="border-t border-white/6 my-3" />
+                <div className="text-[11px] text-white/40 mt-1">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
               </div>
-              {!isCloudEnabled() && (
-                <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders.</div>
+            </div>
+            <div className="w-full">
+              <div className="w-full grid gap-2 mt-2">
+                <button onClick={handleExport} disabled={exporting}
+                  className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+                  {exporting ? 'Exporting…' : 'Export all data (JSON)'}
+                </button>
+
+                <div className="flex gap-2">
+                  <button type="button" onClick={triggerFilePick}
+                    className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+                    {importing ? 'Importing…' : 'Import from file'}
+                  </button>
+                  <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
+                  <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
+                    <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
+                    <span>Merge (keep newest per day)</span>
+                  </label>
+                  <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
+                    <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
+                    <span>Replace local</span>
+                  </label>
+                </div>
+
+              </div>
+              {preview && (
+                <details className="mt-2 text-left text-[11px] text-white/40">
+                  <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
+                  <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
+                </details>
               )}
             </div>
+          </div>
+
+          {/* Reminders card (only Daily reminder shown) */}
+          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">Daily reminder</div>
+                  <div className="text-[12px] text-white/40 mt-1">Arrives in the evening 🌆</div>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={dailyEnabled}
+                  aria-disabled={!isCloudEnabled()}
+                  onClick={()=> {
+                    if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
+                    const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
+                  }}
+                  disabled={!isCloudEnabled()}
+                  className={
+                    "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
+                    (dailyEnabled
+                      ? 'bg-emerald-600 text-white ring-emerald-400/20'
+                      : 'bg-white/6 ring-white/10 text-white/70 hover:bg-white/8')
+                  }
+                >
+                  <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
+                  <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
+                    <span
+                      className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
+                      style={{ transform: dailyEnabled ? 'translateX(1.4rem)' : 'translateX(0)' }}
+                    />
+                  </span>
+                </button>
+              </div>
+            </div>
+            {!isCloudEnabled() && (
+              <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders.</div>
+            )}
           </div>
 
           {/* Language selection removed */}
@@ -270,9 +356,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
   {/* LanguageModal removed */}
 
-  <div className="mt-5 flex justify-center">
-          <button onClick={beginClose} className="rounded-md px-4 py-1.5 text-sm font-medium text-white/85 ring-1 ring-white/15 hover:bg-white/5">Done</button>
-        </div>
+  <div className="mt-5">
+    <button onClick={beginClose} className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 bg-emerald-500/30 ring-1 ring-emerald-500/60 hover:bg-emerald-500/50 transition">Done</button>
+  </div>
         <div className="mt-6 text-center text-[10px] leading-relaxed text-white/45">
           <div className="font-medium text-white/55">{APP_VERSION_LABEL}</div>
           <div className="mt-1">© {new Date().getFullYear()} Kyle Brooks. All rights reserved.</div>
@@ -290,62 +376,8 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
   const [enabled, setEnabled] = useState(isCloudEnabled());
   const [working, setWorking] = useState(false);
   // Web-only import/export state & handlers (hooks must be top-level)
-  const [mode, setMode] = useState<'merge'|'replace'>('merge');
-  const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-
-  async function handleExport() {
-    try {
-      setExporting(true);
-      const payload = exportAllData();
-      const json = JSON.stringify(payload, null, 2);
-      setPreview(json);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const now = new Date().toISOString().slice(0,10);
-      a.href = url;
-      a.download = `flowday-export-${now}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Export failed');
-    } finally { setExporting(false); }
-  }
-
-  function triggerFilePick() { fileRef.current?.click(); }
-
-  async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const txt = await f.text();
-    await doImport(txt);
-    try { e.target.value = ''; } catch { /* ignore */ }
-  }
-
-  async function doImport(text: string) {
-    setImporting(true);
-    try {
-      const res = importAllData(text, { merge: mode === 'merge' });
-      if (!res.ok) {
-        alert('Import failed: ' + (res.message || 'unknown'));
-      } else {
-        const parts: string[] = [];
-        if (res.added) parts.push(`${res.added} added`);
-        if (res.merged) parts.push(`${res.merged} merged`);
-        parts.push(`${res.total ?? '??'} total locally`);
-        alert('Import completed: ' + parts.join(', '));
-        // Reload so the running app picks up the new localStorage state immediately
-        window.location.reload();
-      }
-    } catch (e) {
-      alert('Import failed');
-    } finally { setImporting(false); }
-  }
+  // Cloud account sign-in UI is below for Telegram builds. Web-only import/export is provided
+  // by the Data transfer card in the parent SettingsModal.
 
   // If this is not the Telegram build, don't expose cloud sign-in UI.
   // Show a short informational notice instead.
@@ -354,44 +386,11 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       <div className="space-y-2">
         <div className="w-full">
           <div className="w-full flex justify-center">
-            <div className="text-[12px] text-center px-3 py-1.5 rounded-md bg-[#24A1DE] text-white tracking-wide">
+            <div className="text-[12px] text-center px-3 py-1.5 rounded-md bg-sky-500/30 text-white/85 ring-1 ring-sky-500/60 tracking-wide hover:bg-sky-500/50 transition">
               Cloud sync is only available in the Telegram version.
             </div>
           </div>
         </div>
-        <div className="w-full grid gap-2 mt-2">
-          <button onClick={handleExport} disabled={exporting}
-            className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-            {exporting ? 'Exporting…' : 'Export all data (JSON)'}
-          </button>
-
-          <div className="flex gap-2">
-            <button type="button" onClick={triggerFilePick}
-              className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-              {importing ? 'Importing…' : 'Import from file'}
-            </button>
-            <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
-          </div>
-
-          <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
-            <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
-              <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
-              <span>Merge (keep newest per day)</span>
-            </label>
-            <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
-              <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
-              <span>Replace local</span>
-            </label>
-          </div>
-
-          <div className="text-[10px] text-white/35">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
-        </div>
-        {preview && (
-          <details className="mt-2 text-left text-[11px] text-white/40">
-            <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
-            <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
-          </details>
-        )}
       </div>
     );
   }
