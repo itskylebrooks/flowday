@@ -13,11 +13,21 @@ import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
+import LoginPage from './pages/LoginPage';
+import { supabase } from './lib/supabase';
 
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
   const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
+  const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
+
+  // Track Supabase auth session for email-based logins
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => setSession(sess));
+    return () => { sub.subscription.unsubscribe(); };
+  }, []);
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
@@ -60,6 +70,27 @@ export default function App() {
   const entriesRef = useRef<Entry[]>(entries);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
+  // When logging in via email link that contains a Telegram ID, link the accounts
+  useEffect(() => {
+    if (!session) return;
+    const url = new URL(window.location.href);
+    const tgid = url.searchParams.get('tgid');
+    if (!tgid) return;
+    fetch('/api/link-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ tgid })
+    }).catch(() => {});
+    url.searchParams.delete('tgid');
+    window.history.replaceState({}, '', url.toString());
+  }, [session]);
+
+  if (!isTG && !session && import.meta.env.MODE !== 'test') {
+    return <LoginPage />;
+  }
   // Telegram verification + initial cloud sync (telegram only)
   // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
   // appears later (e.g. opening in another device) without requiring a manual reload.
@@ -107,9 +138,42 @@ export default function App() {
     return () => {
   window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
   window.removeEventListener('storage', onStorage as EventListener);
-  document.removeEventListener('visibilitychange', onVisibility as EventListener);
+    document.removeEventListener('visibilitychange', onVisibility as EventListener);
     };
   }, [isTG]);
+
+  // Email auth sync setup (non-Telegram)
+  useEffect(() => {
+    if (isTG || !session) return;
+    localStorage.setItem('flowday_cloud_enabled_v1','1');
+    (async () => {
+      await initialFullSyncIfNeeded();
+      startPeriodicPull();
+    })();
+    const onEntriesUpdated = () => {
+      try {
+        const next = loadEntries();
+        const cur = entriesRef.current || [];
+        if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+    const onStorage = (e: StorageEvent) => {
+      try {
+        if (!e.key) return;
+        if (e.key === STORAGE_KEY) {
+          const next = loadEntries();
+          const cur = entriesRef.current || [];
+          if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('storage', onStorage as EventListener);
+    return () => {
+      window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+      window.removeEventListener('storage', onStorage as EventListener);
+    };
+  }, [session, isTG]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
