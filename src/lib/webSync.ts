@@ -57,22 +57,24 @@ export async function webPushMany(entries: Entry[]): Promise<void> {
   } = await supabase.auth.getUser();
   const uid = user?.id;
   if (!uid) return;
+  const nowIso = new Date().toISOString();
   const rows = await Promise.all(
     entries.map(async e => ({
+      auth_user_id: uid,
       date: e.date,
       emojis_enc: await encryptStr(JSON.stringify(e.emojis)),
       hue_enc: typeof e.hue === 'number' ? await encryptStr(String(e.hue)) : null,
       song_title_enc: e.song?.title ? await encryptStr(e.song.title) : null,
       song_artist_enc: e.song?.artist ? await encryptStr(e.song.artist) : null,
+      updated_at: nowIso,
     }))
   );
-  const rowsWithUid = rows.map(r => ({ ...r, auth_user_id: uid }));
   const { error } = await supabase
     .from('entries')
-    .upsert(rowsWithUid, { onConflict: 'auth_user_id,date' })
+    .upsert(rows, { onConflict: 'auth_user_id,date' })
     .select('updated_at');
   if (error) { console.warn('[webPushMany] upsert failed', error); return; }
-  try { localStorage.setItem(SYNC_KEY, new Date().toISOString()); } catch { /* ignore */ }
+  try { localStorage.setItem(SYNC_KEY, nowIso); } catch { /* ignore */ }
 }
 
 export async function webInitialFullSyncIfNeeded(localEntries: Entry[]): Promise<void> {
@@ -123,6 +125,7 @@ export async function webSaveReminders(prefs: RemindersSettings): Promise<void> 
   } = await supabase.auth.getUser();
   const uid = user?.id;
   if (!uid) return;
+  const nowIso = new Date().toISOString();
   const { error } = await supabase
     .from('reminders')
     .upsert(
@@ -130,6 +133,7 @@ export async function webSaveReminders(prefs: RemindersSettings): Promise<void> 
         auth_user_id: uid,
         daily_enabled: prefs.dailyEnabled,
         daily_time: prefs.dailyTime,
+        updated_at: nowIso,
       },
       { onConflict: 'auth_user_id' }
     );

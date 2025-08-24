@@ -88,6 +88,13 @@ export default function App() {
   const webStopRef = useRef<(() => void) | null>(null);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
+  function pushEntryCloudAware(next: Entry) {
+    if (cloudMode === 'telegram') {
+      queueSyncPush(next);
+    } else if (cloudMode === 'email') {
+      void webPushEntry(next);
+    }
+  }
   // Cloud sync management
   useEffect(() => {
     if (cloudMode === 'telegram') {
@@ -292,11 +299,7 @@ export default function App() {
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
     setShowAura(true);
   setEntries((old) => upsertEntry(old, next));
-  if (cloudMode === 'telegram') {
-    queueSyncPush(next);
-  } else if (cloudMode === 'email') {
-    void webPushEntry(next);
-  }
+  pushEntryCloudAware(next);
     if (isTG) {
       // Throttle haptics: only fire if >140ms since last or hue moved >=12 degrees
       const now = performance.now();
@@ -335,11 +338,7 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  if (cloudMode === 'telegram') {
-    queueSyncPush(next);
-  } else if (cloudMode === 'email') {
-    void webPushEntry(next);
-  }
+  pushEntryCloudAware(next);
   }
 
   function removeEmojiAt(index: number) {
@@ -354,11 +353,7 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  if (cloudMode === 'telegram') {
-    queueSyncPush(next);
-  } else if (cloudMode === 'email') {
-    void webPushEntry(next);
-  }
+  pushEntryCloudAware(next);
   }
 
   function updateSong(partial: Partial<Song>) {
@@ -374,11 +369,7 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  if (cloudMode === 'telegram') {
-    queueSyncPush(next);
-  } else if (cloudMode === 'email') {
-    void webPushEntry(next);
-  }
+  pushEntryCloudAware(next);
   }
 
   function formatActiveDate(): string {

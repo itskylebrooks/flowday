@@ -25,6 +25,10 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const remindersDirtyRef = useRef(false);
   const [session, setSession] = useState<Session | null>(null);
   const cloudMode: CloudMode = detectCloudMode({ inTelegram: !!isTG, emailSession: !!session });
+  const hasCloudAccount =
+    cloudMode === 'telegram'
+      ? isCloudEnabled()
+      : cloudMode === 'email' && !!session;
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
   useEffect(() => {
@@ -270,12 +274,12 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     type="button"
                     role="switch"
                     aria-checked={dailyEnabled}
-                    aria-disabled={!isCloudEnabled()}
+                    aria-disabled={!hasCloudAccount}
                     onClick={()=> {
-                      if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
+                      if (!hasCloudAccount) return;
                       const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
                     }}
-                    disabled={!isCloudEnabled()}
+                    disabled={!hasCloudAccount}
                     className={
                       "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
                       (dailyEnabled
@@ -293,7 +297,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   </button>
                 </div>
               </div>
-              {!isCloudEnabled() && (
+              {!hasCloudAccount && (
                 <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders. Sign in above to enable.</div>
               )}
             </div>
