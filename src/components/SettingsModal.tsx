@@ -4,7 +4,9 @@ import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { initSessionFromStorage, clearStoredSession } from '../lib/webAuth';
+import { clearStoredSession } from '../lib/webAuth';
+import { detectCloudMode, type CloudMode } from '../lib/cloudMode';
+import { webSaveReminders, webLoadReminders } from '../lib/webSync';
 import type { Entry } from '../lib/types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -22,8 +24,15 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   });
   const [langModalOpen, setLangModalOpen] = useState(false);
   const remindersDirtyRef = useRef(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const cloudMode: CloudMode = detectCloudMode({ inTelegram: !!isTG, emailSession: !!session });
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => { listener.subscription.unsubscribe(); };
+  }, []);
   const CLOSE_DURATION = 280; // ms (match CSS .28s)
   function beginClose(){
     if (closing) return; // prevent double trigger
@@ -37,10 +46,12 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
       setUsername(current.username);
       setDirty(false); setSaving(false); setSavedFlash(false);
   // refresh reminders
-  setReminders(loadReminders());
+  const localR = loadReminders();
+  setReminders(localR);
   remindersDirtyRef.current = false;
+  if (cloudMode === 'email') { void webLoadReminders().then(r => { if (r) { setReminders(r); saveReminders(r); } }); }
     }
-  }, [open]);
+  }, [open, cloudMode]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setUsername(e.target.value);
@@ -102,19 +113,23 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   }, [entries]);
 
   const pushRemindersToCloud = useCallback(async (updated = reminders) => {
-    if (!isCloudEnabled()) return;
-    try {
-      interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
-      const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
-      if (!initData) return;
-      const body = {
-        initData,
-        daily_enabled: updated.dailyEnabled,
-        daily_time: updated.dailyTime
-      };
-      await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
-    } catch { /* ignore */ }
-  }, [reminders]);
+    if (cloudMode === 'telegram') {
+      if (!isCloudEnabled()) return;
+      try {
+        interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
+        const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
+        if (!initData) return;
+        const body = {
+          initData,
+          daily_enabled: updated.dailyEnabled,
+          daily_time: updated.dailyTime
+        };
+        await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+      } catch { /* ignore */ }
+    } else if (cloudMode === 'email') {
+      try { await webSaveReminders(updated); } catch { /* ignore */ }
+    }
+  }, [reminders, cloudMode]);
 
   // Persist reminders when modal closes if changed
   useEffect(()=>{
@@ -210,7 +225,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 </div>
               </form>
 
-              <AccountSection isTG={isTG} />
+              <AccountSection isTG={isTG} session={session} setSession={setSession} />
 
               <div className="mt-1">
                 <button
@@ -371,20 +386,14 @@ function TelegramAccountSection() {
   );
 }
 
-function EmailAccountSection() {
-  const [session, setSession] = useState<Session | null>(null);
+function EmailAccountSection({ session, setSession }: { session: Session | null; setSession: (s: Session | null) => void }) {
   const [email, setEmail] = useState('');
   const [working, setWorking] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
 
-  useEffect(() => {
-    initSessionFromStorage().finally(async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) { setSession(data.session); setEmail(data.session.user.email ?? ''); }
-    });
-  }, []);
+  useEffect(() => { if (session) setEmail(session.user.email ?? ''); }, [session]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -414,8 +423,9 @@ function EmailAccountSection() {
   async function handleDelete() {
     if (!session) return;
     if (!window.confirm('Delete your cloud account? Local entries stay on this device.')) return;
-    const userId = session.user.id;
-    try { await supabase.from('users').delete().eq('auth_user_id', userId); } catch { /* ignore */ }
+    try {
+      await fetch('/api/web-delete-account', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } });
+    } catch { /* ignore */ }
     await handleLogout();
   }
 
@@ -466,6 +476,6 @@ function EmailAccountSection() {
   );
 }
 
-function AccountSection({ isTG }: { isTG?: boolean }) {
-  return isTG ? <TelegramAccountSection /> : <EmailAccountSection />;
+function AccountSection({ isTG, session, setSession }: { isTG?: boolean; session: Session | null; setSession: (s: Session | null) => void }) {
+  return isTG ? <TelegramAccountSection /> : <EmailAccountSection session={session} setSession={setSession} />;
 }

@@ -8,16 +8,22 @@ import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
-import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
+import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull, mergeByNewer } from './lib/sync';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
 import AuraBlock from './components/AuraBlock';
+import { detectCloudMode, type CloudMode } from './lib/cloudMode';
+import { initSessionFromStorage } from './lib/webAuth';
+import { webInitialFullSyncIfNeeded, startWebPeriodicPull, webPushEntry, webPullSince } from './lib/webSync';
+import { supabase } from './lib/supabase';
 
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
   const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
+  const [emailSession, setEmailSession] = useState(false);
+  const [cloudMode, setCloudMode] = useState<CloudMode>('none');
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
@@ -34,6 +40,21 @@ export default function App() {
     const id = setInterval(poll, 500);
     return ()=> clearInterval(id);
   }, [tgPlatform]);
+
+  useEffect(() => {
+    initSessionFromStorage().finally(async () => {
+      const { data } = await supabase.auth.getSession();
+      setEmailSession(!!data.session);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
+      setEmailSession(!!session);
+    });
+    return () => { listener.subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    setCloudMode(detectCloudMode({ inTelegram: isTG, emailSession }));
+  }, [isTG, emailSession]);
   // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
   const HEADER_H = 56; // tailwind h-14
   const FOOTER_H = 56; // tailwind h-14
@@ -58,58 +79,71 @@ export default function App() {
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
   const entriesRef = useRef<Entry[]>(entries);
+  const webStopRef = useRef<(() => void) | null>(null);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
-  // Telegram verification + initial cloud sync (telegram only)
-  // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
-  // appears later (e.g. opening in another device) without requiring a manual reload.
-  useEffect(()=> {
-    if (!isTG) return;
-    startStartupSyncLoop(); // resilient verification loop
-    (async ()=> {
-      await verifyTelegram();
-      if (isCloudEnabled()) {
-        await initialFullSyncIfNeeded();
-        startPeriodicPull();
-      }
-    })();
-    // Listen for storage-level updates dispatched by background sync so UI updates live
+  // Cloud sync management
+  useEffect(() => {
+    if (cloudMode === 'telegram') {
+      startStartupSyncLoop();
+      (async () => {
+        await verifyTelegram();
+        if (isCloudEnabled()) {
+          await initialFullSyncIfNeeded();
+          startPeriodicPull();
+        }
+      })();
+    }
+    if (cloudMode === 'email') {
+      (async () => {
+        await webInitialFullSyncIfNeeded(entriesRef.current);
+        webStopRef.current = startWebPeriodicPull();
+      })();
+    }
     const onEntriesUpdated = () => {
       try {
         const next = loadEntries();
         const cur = entriesRef.current || [];
-        const a = JSON.stringify(cur);
-        const b = JSON.stringify(next);
-        if (a !== b) setEntries(next);
+        if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
       } catch { /* ignore */ }
     };
     window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
-
-    // Also listen for cross-window/localStorage changes which fire 'storage' events
     const onStorage = (e: StorageEvent) => {
       try {
         if (!e.key) return;
         if (e.key === STORAGE_KEY) {
-          try {
-            const next = loadEntries();
-            const cur = entriesRef.current || [];
-            if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
-          } catch { /* ignore */ }
+          const next = loadEntries();
+          const cur = entriesRef.current || [];
+          if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
         }
       } catch { /* ignore */ }
     };
     window.addEventListener('storage', onStorage as EventListener);
-
-    // When the document becomes visible (reopen Telegram), attempt a pull so UI refreshes
-    const onVisibility = () => { if (document.visibilityState === 'visible') void syncPull(); };
-    document.addEventListener('visibilitychange', onVisibility as EventListener);
-
-    return () => {
-  window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
-  window.removeEventListener('storage', onStorage as EventListener);
-  document.removeEventListener('visibilitychange', onVisibility as EventListener);
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (cloudMode === 'telegram') {
+        void syncPull();
+      } else if (cloudMode === 'email') {
+        (async () => {
+          let last: string | undefined;
+          try { last = localStorage.getItem('flowday_web_last_sync_iso_v1') || undefined; } catch { /* ignore */ }
+          const pulled = await webPullSince(last);
+          if (pulled.length) {
+            const local = loadEntries();
+            const merged = mergeByNewer(local, pulled);
+            saveEntries(merged);
+          }
+        })();
+      }
     };
-  }, [isTG]);
+    document.addEventListener('visibilitychange', onVisibility as EventListener);
+    return () => {
+      window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
+      window.removeEventListener('storage', onStorage as EventListener);
+      document.removeEventListener('visibilitychange', onVisibility as EventListener);
+      if (webStopRef.current) { webStopRef.current(); webStopRef.current = null; }
+    };
+  }, [cloudMode, entriesRef]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
@@ -252,7 +286,11 @@ export default function App() {
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
     setShowAura(true);
   setEntries((old) => upsertEntry(old, next));
-  queueSyncPush(next);
+  if (cloudMode === 'telegram') {
+    queueSyncPush(next);
+  } else if (cloudMode === 'email') {
+    void webPushEntry(next);
+  }
     if (isTG) {
       // Throttle haptics: only fire if >140ms since last or hue moved >=12 degrees
       const now = performance.now();
@@ -291,7 +329,11 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+  if (cloudMode === 'telegram') {
+    queueSyncPush(next);
+  } else if (cloudMode === 'email') {
+    void webPushEntry(next);
+  }
   }
 
   function removeEmojiAt(index: number) {
@@ -306,7 +348,11 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+  if (cloudMode === 'telegram') {
+    queueSyncPush(next);
+  } else if (cloudMode === 'email') {
+    void webPushEntry(next);
+  }
   }
 
   function updateSong(partial: Partial<Song>) {
@@ -322,7 +368,11 @@ export default function App() {
     }
     next.updatedAt = Date.now();
   setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+  if (cloudMode === 'telegram') {
+    queueSyncPush(next);
+  } else if (cloudMode === 'email') {
+    void webPushEntry(next);
+  }
   }
 
   function formatActiveDate(): string {
