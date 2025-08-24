@@ -4,8 +4,10 @@ import { loadUser, saveUser, loadReminders, saveReminders, clearAllData } from '
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
+import type { Session } from '@supabase/supabase-js';
+import { sendMagicLink, signOut as emailSignOut, deleteAccount as deleteEmailAccount, useResendTimer } from '../lib/emailAuth';
 
-export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
+export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG, session, setSession }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean; session: Session | null; setSession: (s: Session | null) => void }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -206,7 +208,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               </div>
 
               <div className="pt-1 grid gap-2">
-                <CloudAccountSection />
+                {isTG ? <CloudAccountSection /> : <EmailAccountSection session={session} setSession={setSession} />}
               </div>
 
               <div className="mt-1">
@@ -365,5 +367,83 @@ function CloudAccountSection() {
         {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
       </p>
     </div>
+  );
+}
+
+function EmailAccountSection({ session, setSession }: { session: Session | null; setSession: (s: Session | null) => void }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+  const { seconds, start } = useResendTimer(60);
+
+  useEffect(() => {
+    if (session?.user?.email) setEmail(session.user.email);
+  }, [session]);
+
+  const disabled = sent && seconds > 0;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Invalid email');
+      return;
+    }
+    setError('');
+    const { error } = await sendMagicLink(email);
+    if (error) {
+      setError("Couldn't send link. Try again.");
+      return;
+    }
+    setSent(true);
+    start();
+  }
+
+  async function handleLogout() {
+    await emailSignOut();
+    setSession(null);
+    setSent(false);
+  }
+
+  async function handleDelete() {
+    if (!session) return;
+    if (!window.confirm('Delete your cloud account? Local entries stay on this device.')) return;
+    await deleteEmailAccount(session.user.id);
+    setSession(null);
+    setSent(false);
+  }
+
+  if (session) {
+    return (
+      <div className="space-y-2">
+        <input value={email} disabled aria-label="Email" className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 text-white/70" />
+        <button type="button" onClick={handleLogout} className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white hover:bg-white/10">Log out</button>
+        <button type="button" onClick={handleDelete} className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25">Delete account</button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2 w-full">
+      <div>
+        <input
+          type="email"
+          aria-label="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onBlur={() => { if (email && !/^\S+@\S+\.\S+$/.test(email)) setError('Invalid email'); }}
+          disabled={sent}
+          className="w-full rounded-md bg-white/5 px-3 py-1.5 text-sm outline-none ring-1 ring-white/15 focus:ring-white/30 placeholder:text-white/30"
+          placeholder="you@example.com"
+        />
+        {error && <div className="mt-1 text-xs text-red-400">{error}</div>}
+      </div>
+      <div>
+        <button type="submit" disabled={disabled || !email} className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
+          {sent ? (seconds > 0 ? `Resend link (${seconds})` : 'Resend link') : 'Sign in / Log in'}
+        </button>
+        {sent && <div className="mt-1 text-xs text-emerald-300">Check your inbox for the magic link.</div>}
+      </div>
+      <p className="text-[10px] leading-relaxed text-white/35">Sign in creates a cloud account so entries sync across devices. Magic link will be sent to your email address.</p>
+    </form>
   );
 }

@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import type { Entry, Page, Song } from './lib/types';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
 import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
 import EchoesPage from './pages/EchoesPage';
@@ -60,6 +62,15 @@ export default function App() {
   const entriesRef = useRef<Entry[]>(entries);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
+
+  const [session, setSession] = useState<Session | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_, s) => {
+      setSession(s);
+    });
+    return () => { listener.subscription.unsubscribe(); };
+  }, []);
   // Telegram verification + initial cloud sync (telegram only)
   // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
   // appears later (e.g. opening in another device) without requiring a manual reload.
@@ -570,7 +581,7 @@ export default function App() {
         onClose={closePicker}
         onPick={handlePick}
       />
-  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} />
+  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} session={session} setSession={setSession} />
   <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
   {/* Telegram full-screen song editor overlay */}
   {isTG && songEditorOpen && (
