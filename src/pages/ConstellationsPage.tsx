@@ -484,7 +484,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       </div>
 
       {/* Zoom Controls */}
-      <ConstellationControls onAction={(action)=>{
+  <ConstellationControls width={width} onAction={(action)=>{
         const v = viewRef.current;
         const svg = svgElRef.current;
         if (!svg) return;
@@ -512,20 +512,22 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   );
 }
 
-function ConstellationControls({ onAction }: { onAction: (a:'in'|'out'|'reset')=>void }) {
-  // Enlarged buttons for easier tap targets
-  const btnCls = "w-12 h-12 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition";
+function ConstellationControls({ width, onAction }: { width: number; onAction: (a:'in'|'out'|'reset')=>void }) {
+  // Buttons sized to 1/3 of provided canvas width
+  const btnStyle: React.CSSProperties = { height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' };
   return (
-    <div className="mt-3 flex justify-center gap-3 text-white select-none">
-      <button aria-label="Zoom out" onClick={()=>onAction('out')} className={btnCls}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M5 11V13H19V11H5Z"/></svg>
-      </button>
-      <button aria-label="Reset view" onClick={()=>onAction('reset')} className={btnCls}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM15.4462 9.96803L9.96803 15.4462C9.38559 15.102 8.89798 14.6144 8.55382 14.032L14.032 8.55382C14.6144 8.89798 15.102 9.38559 15.4462 9.96803Z"/></svg>
-      </button>
-      <button aria-label="Zoom in" onClick={()=>onAction('in')} className={btnCls}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>
-      </button>
+    <div className="mt-3 flex justify-center text-white select-none">
+      <div style={{ width }} className="flex gap-3">
+        <button aria-label="Zoom out" onClick={()=>onAction('out')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M5 11V13H19V11H5Z"/></svg>
+        </button>
+        <button aria-label="Reset view" onClick={()=>onAction('reset')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM15.4462 9.96803L9.96803 15.4462C9.38559 15.102 8.89798 14.6144 8.55382 14.032L14.032 8.55382C14.6144 8.89798 15.102 9.38559 15.4462 9.96803Z"/></svg>
+        </button>
+        <button aria-label="Zoom in" onClick={()=>onAction('in')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>
+        </button>
+      </div>
     </div>
   );
 }
