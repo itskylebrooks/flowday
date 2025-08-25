@@ -18,8 +18,7 @@ export default async function handler(req: { method?: string }, res: { status: (
     // Allow GET or POST for convenience
     if (!BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     const commands = [
-      { command: 'start', description: 'Open Flowday' },
-      { command: 'privacy', description: 'Privacy policy' }
+      { command: 'start', description: 'Open Flowday' }
     ];
     const resp = await api('setMyCommands', { commands });
     return res.json(resp);

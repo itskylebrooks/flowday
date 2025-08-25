@@ -73,21 +73,20 @@ export default async function handler(req: Req, res: Res) {
       };
 
       if (text.startsWith('/start')) {
-        if (!MINIAPP_URL || !PRIVACY_URL) {
-          console.error('[tg-webhook] missing urls');
+        if (!MINIAPP_URL) {
+          console.error('[tg-webhook] missing MINIAPP_URL');
           await serviceUnavailable();
           return;
         }
 
         const welcome = `Flowday — your mood diary on Telegram.\nTrack each day with up to 3 emojis, a color, and an optional song. Your data syncs across Telegram devices.`;
 
-        // Build preferred reply_markup with web_app
-        const preferred = {
-          inline_keyboard: [[
-            { text: 'Open Flowday', web_app: { url: MINIAPP_URL } },
-            { text: 'Privacy', url: PRIVACY_URL }
-          ]]
-        };
+        // Build preferred reply_markup with web_app; include Privacy button only if PRIVACY_URL is set
+        const buttons: Array<Record<string, unknown>> = [];
+        buttons.push({ text: 'Open Flowday', web_app: { url: MINIAPP_URL } });
+        if (PRIVACY_URL) buttons.push({ text: 'Privacy', url: PRIVACY_URL });
+
+        const preferred = { inline_keyboard: [[ ...buttons ]] };
 
         try {
           await sendMessage(chat_id, welcome, { reply_markup: preferred });
@@ -95,7 +94,9 @@ export default async function handler(req: Req, res: Res) {
           // Try fallback with plain URL button
           console.error('[tg-webhook] web_app send failed, retrying with url button', (e as Error).message);
           try {
-            const fallback = { inline_keyboard: [[ { text: 'Open Flowday', url: MINIAPP_URL }, { text: 'Privacy', url: PRIVACY_URL } ]] };
+            const fallbackButtons: Array<Record<string, unknown>> = [ { text: 'Open Flowday', url: MINIAPP_URL } ];
+            if (PRIVACY_URL) fallbackButtons.push({ text: 'Privacy', url: PRIVACY_URL });
+            const fallback = { inline_keyboard: [[ ...fallbackButtons ]] };
             await sendMessage(chat_id, welcome, { reply_markup: fallback });
           } catch (err) {
             console.error('[tg-webhook] send fallback failed', (err as Error).message);
@@ -104,13 +105,7 @@ export default async function handler(req: Req, res: Res) {
         return;
       }
 
-      if (text.startsWith('/privacy')) {
-        if (!PRIVACY_URL) { console.error('[tg-webhook] missing PRIVACY_URL'); await serviceUnavailable(); return; }
-        const blurb = `Privacy: We store your Telegram ID/username to sync entries; your entries/reminder prefs; and anonymous Mini Apps Analytics for launches/basic events. Details:\n${PRIVACY_URL}`;
-        const maxMsg = truncateKeepLink(blurb, PRIVACY_URL, 4000);
-        try { await sendMessage(chat_id, maxMsg); } catch (e) { console.error('[tg-webhook] privacy send failed', (e as Error).message); }
-        return;
-      }
+  // /privacy command removed — ignored
 
       // ignore other commands/text
       return;
