@@ -8,6 +8,7 @@ import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import ReleaseOverlay from './components/ReleaseOverlay';
+import { APP_VERSION } from './lib/version';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
 import IconButton from './components/IconButton';
@@ -122,8 +123,19 @@ export default function App() {
   const [showSong, setShowSong] = useState(false);
   // Banner / release overlay: whether the release overlay is still blocking the slider
   // The overlay component itself handles its own internal ghost/fade/haptic lifecycle.
+  // Block release until user celebrates the current APP_VERSION.
+  // Use the same storage key used by ReleaseOverlay ('flowday_last_version').
   const [releaseBlocked, setReleaseBlocked] = useState<boolean>(() => {
-    try { return !localStorage.getItem('flowday_v1_celebrated'); } catch { return false; }
+    try {
+      const last = localStorage.getItem('flowday_last_version');
+      if (last === APP_VERSION) return false;
+      const parts = String(APP_VERSION).split('.');
+      const minor = parts.length > 1 ? parseInt(parts[1] || '0', 10) : 0;
+      if (Number.isNaN(minor)) return false;
+      return minor % 5 === 0;
+    } catch {
+      return false;
+    }
   });
 
   // no-op cleanup placeholder (release overlay manages its own timers)
