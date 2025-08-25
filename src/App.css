@@ -40,3 +40,18 @@
 .read-the-docs {
   color: #888;
 }
+
+/* One-shot pulse for constellation 'today' star */
+@keyframes fd-pulse-once {
+  0% { opacity: 0.95; transform: scale(0.9); }
+  30% { opacity: 0.9; transform: scale(1.25); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+.fd-pulse-once {
+  animation: fd-pulse-once 1s ease-out 1 forwards;
+}
+
+/* Stronger contrast container backdrop for constellation area */
+.fd-constellation-backdrop {
+  background-color: #05060a; /* near-black but not pure */
+}

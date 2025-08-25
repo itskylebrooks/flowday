@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Entry } from '../lib/types';
-import { emojiStats, clamp } from '../lib/utils';
+import { emojiStats, clamp, last7, isToday, todayISO, hsl } from '../lib/utils';
 
 export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
@@ -18,6 +18,8 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const CANVAS_SIZE = 325;
   const width = CANVAS_SIZE, height = CANVAS_SIZE;
   const NODE_PADDING = 24; // desired padding from edge (in px)
+  // Allow nodes to be dragged slightly beyond the visible canvas (px)
+  const CANVAS_OVERFLOW = 48;
   const nodesRef = useRef<SimNode[]>([]);
   const edgesRef = useRef<SimEdge[]>([]);
   const frameRef = useRef<number | null>(null);
@@ -108,8 +110,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     const d = draggingRef.current;
     if (Math.abs(nx - d.px) + Math.abs(ny - d.py) > 2) d.moved = true;
     const node = nodesRef.current[d.index];
-  node.x = clamp(nx, node.r + NODE_PADDING, width - (node.r + NODE_PADDING));
-  node.y = clamp(ny, node.r + NODE_PADDING, height - (node.r + NODE_PADDING));
+    // allow dragging slightly beyond the visible canvas using CANVAS_OVERFLOW
+    node.x = clamp(nx, node.r + NODE_PADDING - CANVAS_OVERFLOW, width - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
+  node.y = clamp(ny, node.r + NODE_PADDING - CANVAS_OVERFLOW, height - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
     node.vx = 0; node.vy = 0;
     setTick(t => t + 1);
   }
@@ -172,10 +175,10 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
           n.x += n.vx * 60 * dt; // scale velocities for visual speed
           n.y += n.vy * 60 * dt;
           // bounds
-          const minX = n.r + NODE_PADDING;
-          const maxX = width - (n.r + NODE_PADDING);
-          const minY = n.r + NODE_PADDING;
-          const maxY = height - (n.r + NODE_PADDING);
+          const minX = n.r + NODE_PADDING - CANVAS_OVERFLOW;
+          const maxX = width - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
+          const minY = n.r + NODE_PADDING - CANVAS_OVERFLOW;
+          const maxY = height - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
           if (n.x < minX) { n.x = minX; n.vx *= -0.4; }
           if (n.x > maxX) { n.x = maxX; n.vx *= -0.4; }
           if (n.y < minY) { n.y = minY; n.vy *= -0.4; }
@@ -228,6 +231,40 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     const connected = focus != null && (focus === a || focus === b);
     return { op: connected ? 0.5 : 0, sw: connected ? clamp(1 + w * 0.6, 1, 4) : 0 };
   }
+
+  // Visual helpers: recency -> radius/opacity, hue -> fill
+  function daysBetween(aIso: string, bIso: string) {
+    const a = new Date(aIso + 'T00:00:00');
+    const b = new Date(bIso + 'T00:00:00');
+    const ms = Math.abs(a.getTime() - b.getTime());
+    return Math.round(ms / (1000 * 60 * 60 * 24));
+  }
+  function recencyToScaleOpacity(daysAgo: number) {
+    // newer -> slightly bigger & brighter; older -> smaller & faded
+    const scale = clamp(1.15 - daysAgo * 0.01, 0.6, 1.15);
+    const opacity = clamp(1 - daysAgo * 0.03, 0.25, 1);
+    return { scale, opacity };
+  }
+  function hueToFill(h?: number, alpha = 1) {
+    if (typeof h !== 'number') return hsl(220, 14, 60, alpha * 0.9); // fallback bluish
+    return hsl(Math.round(h), 85, 58, alpha);
+  }
+
+  // Build helper maps: last used date & representative hue per emoji
+  const lastUsed = useMemo(() => {
+    const map = new Map<string, { date: string; hue?: number }>();
+    for (const e of entries) {
+      for (const emo of Array.from(new Set(e.emojis))) {
+        const cur = map.get(emo);
+        if (!cur || e.date > cur.date) map.set(emo, { date: e.date, hue: e.hue });
+      }
+    }
+    return map;
+  }, [entries]);
+
+  // Which emojis appeared in the most recent 7 days (for soft teal glow)
+  const recent7Emojis = useMemo(() => new Set<string>(last7(entries).flatMap(e => e.emojis)), [entries]);
+  const todayIso = todayISO();
 
   // width/height defined earlier
 
@@ -358,7 +395,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
       <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
       {/* Animated canvas wrapper only */}
-  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap" style={{touchAction:'none'}}>
+  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           width={width}
@@ -372,27 +409,56 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
           onPointerUp={onBgPointerUp}
           ref={el=> { svgElRef.current = el; }}
         >
+          <defs>
+            <filter id="fd-blur" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="6" />
+            </filter>
+          </defs>
           <g transform={`translate(${tx} ${ty}) scale(${scale})`}>
           {/* Edges: only render when focused, and only those connected to focus */}
           {edges.map((e, idx) => {
             const A = nodes[e.a]; const B = nodes[e.b];
             const { op, sw } = edgeStyle(A.emo, B.emo, e.w);
-            return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="white" strokeWidth={sw} opacity={op}
+            // bright grey connecting lines, thin stroke; opacity controlled by focus
+            return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y}
+              stroke={'rgba(230,230,230,0.95)'} strokeWidth={sw || 0.8} opacity={op}
               className="edge-line" data-connected={op>0} />;
           })}
 
   {nodes.map((n, idx) => {
         const count = freq.get(n.emo) || 1;
         const size = clamp(24 + count * 6, 24, 64);
+        const last = lastUsed.get(n.emo);
+        const daysAgo = last ? daysBetween(todayIso, last.date) : 999;
+        const { scale: recScale, opacity: recOp } = recencyToScaleOpacity(daysAgo);
+        const fill = hueToFill(last?.hue, 0.95);
+        const isRecent7 = recent7Emojis.has(n.emo);
+        const isTodayStar = last?.date === todayIso;
+  const circleR = Math.max(12, (size / 2) * recScale * 1.22);
         return (
           <g key={n.emo} transform={`translate(${n.x}, ${n.y})`}
              onPointerDown={(e) => onPointerDown(e, idx)}
              onPointerMove={onPointerMove}
              onPointerUp={(e) => onPointerUp(e, n.emo)}
              style={{ cursor: 'pointer', pointerEvents:'auto' }}>
+            {/* soft blurred backdrop for star (larger, blurred for smooth edges) */}
+            <circle r={circleR * 1.33} fill={fill} opacity={recOp * 0.36} filter="url(#fd-blur)" />
+            {/* crisp colored circle on top */}
+            <circle r={circleR} fill={fill} opacity={recOp * 0.6}
+              style={{ mixBlendMode: 'screen', filter: isRecent7 ? 'drop-shadow(0 0 8px rgba(64,201,186,0.45))' : undefined }} />
+            {/* subtle outline only for today's star (white) */}
+            {isTodayStar && (
+              <circle r={circleR + 1} fill="none" stroke={'rgba(255,255,255,0.95)'} strokeWidth={1.1} />
+            )}
+            {/* Emoji text on top */}
             <text textAnchor="middle" dominantBaseline="central" fontSize={size}
-                  stroke="black" strokeWidth={0.6} strokeOpacity={0.25}>{n.emo}</text>
-            <text textAnchor="middle" dominantBaseline="central" fontSize={size}>{n.emo}</text>
+                  stroke="black" strokeWidth={0.6} strokeOpacity={0.25} style={{ opacity: recOp }}>{n.emo}</text>
+            <text textAnchor="middle" dominantBaseline="central" fontSize={size} style={{ opacity: recOp }}>{n.emo}</text>
+            {/* one-shot pulse for today */}
+            {isTodayStar && (
+              <circle r={circleR + 2} fill="none" stroke={'rgba(255,255,255,0.9)'} strokeWidth={1.2}
+                className="fd-pulse-once" />
+            )}
           </g>
         );
       })}
