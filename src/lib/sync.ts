@@ -6,6 +6,11 @@ const SYNC_KEY = 'flowday_last_sync_iso_v1';
 const CLOUD_FLAG_KEY = 'flowday_cloud_enabled_v1';
 const RETRY_MS = 6_000;
 
+// Runtime guards / state
+let remindersFetched = false;
+let pullInflight: Promise<number | null> | null = null;
+let lifecycleInstalled = false;
+
 // Narrow window typing for Telegram detection without using any
 interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
 function isTG(): boolean { return !!(window as unknown as TGWin).Telegram?.WebApp; }
@@ -55,76 +60,142 @@ async function postJSON(path: string, body: unknown): Promise<{ res: Response; d
   return { res, data };
 }
 
+// Only poll when it makes sense
+function shouldPoll(): boolean {
+  if (!isTG() || !isCloudEnabled()) return false;
+  if (typeof document !== 'undefined' && 'visibilityState' in document) {
+    if (document.visibilityState !== 'visible') return false;
+  }
+  if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+    if ((navigator as unknown as { onLine?: boolean }).onLine === false) return false;
+  }
+  return true;
+}
+
+function installLifecycleGuards() {
+  if (lifecycleInstalled) return;
+  lifecycleInstalled = true;
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (shouldPoll()) void syncPull(); });
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => { if (shouldPoll()) void syncPull(); });
+    window.addEventListener('offline', () => { /* pause implicitly via shouldPoll() */ });
+  }
+}
+
 let verifyDone = false;
 export async function verifyTelegram(tz?: string) {
   if (!isTG() || verifyDone) return;
   const initData = await waitForInitData();
   if (!initData) return; // wait until a later attempt when initData appears
+
   try {
-    const { data } = await postJSON('/api/verify-telegram', { initData, tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
+    const { res, data } = await postJSON('/api/verify-telegram', {
+      initData,
+      tz: tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    });
+    if (!res.ok || !data || typeof data !== 'object') return;
+
     verifyDone = true;
-    if (data && typeof data === 'object' && 'exists' in data) {
-      const existsVal = (data as { exists?: unknown }).exists;
-      if (existsVal === true) localStorage.setItem(CLOUD_FLAG_KEY,'1');
-      const serverUsername = (data as { username?: unknown }).username;
-      if (typeof serverUsername === 'string') {
-        try {
-          const raw = localStorage.getItem('flowday_user_v1');
-          if (raw) {
-            const obj = JSON.parse(raw);
-            if (obj && typeof obj === 'object' && obj.username !== serverUsername) {
-              obj.username = serverUsername;
-              localStorage.setItem('flowday_user_v1', JSON.stringify(obj));
-            }
-          }
-        } catch { /* ignore */ }
-      }
-      // Attempt to fetch reminders preferences once on verify (best-effort)
+
+    if ('exists' in data) {
+      const existsVal = (data as { exists?: unknown }).exists === true;
+      if (existsVal) localStorage.setItem(CLOUD_FLAG_KEY, '1');
+    }
+
+    const serverUsername = (data as { username?: unknown }).username;
+    if (typeof serverUsername === 'string') {
       try {
-        const { data: rData } = await postJSON('/api/reminders-get', { initData });
-        if (rData?.ok && rData.prefs) {
+        const raw = localStorage.getItem('flowday_user_v1');
+        if (raw) {
+          const obj = JSON.parse(raw);
+          if (obj && typeof obj === 'object' && obj.username !== serverUsername) {
+            obj.username = serverUsername;
+            localStorage.setItem('flowday_user_v1', JSON.stringify(obj));
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Fetch reminders once, only when we are actually cloud-enabled
+    if (!remindersFetched && isCloudEnabled()) {
+      try {
+        const { res: rRes, data: rData } = await postJSON('/api/reminders-get', { initData });
+        if (rRes.ok && rData?.ok && rData.prefs) {
           const prefs = rData.prefs as { daily_enabled?: boolean; daily_time?: string };
           const local = loadReminders();
           const merged = { ...local };
           if (typeof prefs.daily_enabled === 'boolean') merged.dailyEnabled = prefs.daily_enabled;
           if (typeof prefs.daily_time === 'string') merged.dailyTime = prefs.daily_time;
           saveReminders(merged);
+          remindersFetched = true;
         }
       } catch { /* ignore */ }
     }
-  } catch { /* silent */ }
+  } catch {
+    // silent; allow future retries
+  }
 }
+
 export async function syncPull(): Promise<number | null> {
-  if (!isTG()) return null;
-  if (!isCloudEnabled()) return null;
-  const initData = await waitForInitData();
-  if (!initData) return null;
-  const since = localStorage.getItem(SYNC_KEY) || '';
-  try {
-    const { res, data } = await postJSON('/api/sync-pull', { initData, since });
-    if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
-    if (res.status === 429) {
-      periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
-      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
+  if (!isTG() || !isCloudEnabled()) return null;
+  if (!shouldPoll()) return null;
+
+  if (pullInflight) return pullInflight;
+
+  pullInflight = (async () => {
+    const initData = await waitForInitData();
+    if (!initData) return null;
+
+    const since = localStorage.getItem(SYNC_KEY) || '';
+    try {
+      const { res, data } = await postJSON('/api/sync-pull', { initData, since });
+      if (res.status === 410) { disableCloud(); stopPeriodicPull(); return null; }
+      if (res.status === 429) {
+        periodicIntervalMs = Math.min(120000, Math.round(periodicIntervalMs * 1.5));
+        if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(() => { if (shouldPoll()) void syncPull(); }, periodicIntervalMs); }
+        return null;
+      } else if (res.ok && periodicIntervalMs !== 60000) {
+        periodicIntervalMs = 60000;
+        if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(() => { if (shouldPoll()) void syncPull(); }, periodicIntervalMs); }
+      }
+      if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
+
+      if (typeof data.username === 'string') {
+        try {
+          const raw = localStorage.getItem('flowday_user_v1');
+          if (raw) {
+            const obj = JSON.parse(raw);
+            if (obj && typeof obj === 'object' && obj.username !== data.username) {
+              obj.username = data.username;
+              localStorage.setItem('flowday_user_v1', JSON.stringify(obj));
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
+      const pulled = data.entries as Entry[];
+      if (!pulled.length) {
+        // even if no changes, update the since marker to avoid re-fetching the same window
+        localStorage.setItem(SYNC_KEY, new Date().toISOString());
+        return 0;
+      }
+      const local = loadEntries();
+      const merged = mergeByNewer(local, pulled);
+      saveEntries(merged);
+      localStorage.setItem(SYNC_KEY, new Date().toISOString());
+      return pulled.length;
+    } catch {
       return null;
-    } else if (res.ok && periodicIntervalMs !== 60000) {
-      periodicIntervalMs = 60000;
-      if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs); }
     }
-    if (!res.ok || !data?.ok || !Array.isArray(data.entries)) return null;
-    if (typeof data.username === 'string') {
-      try {
-        const raw = localStorage.getItem('flowday_user_v1');
-        if (raw) { const obj = JSON.parse(raw); if (obj && typeof obj === 'object' && obj.username !== data.username) { obj.username = data.username; localStorage.setItem('flowday_user_v1', JSON.stringify(obj)); } }
-      } catch { /* ignore */ }
-    }
-    const pulled = data.entries as Entry[];
-    const local = loadEntries();
-    const merged = mergeByNewer(local, pulled);
-    saveEntries(merged);
-    localStorage.setItem(SYNC_KEY, new Date().toISOString());
-    return pulled.length;
-  } catch { return null; }
+  })();
+
+  try {
+    return await pullInflight;
+  } finally {
+    pullInflight = null;
+  }
 }
 
 type PendingPush = { entry: Entry; attempts: number };
@@ -142,6 +213,14 @@ function flushPush() {
 async function rawSyncPush(pending: PendingPush[]) {
   if (!isTG() || !pending.length) return;
   if (!isCloudEnabled()) { pushQueue = []; return; }
+  if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
+    if ((navigator as unknown as { onLine?: boolean }).onLine === false) {
+      // Requeue and retry soon when back online
+      for (const p of pending) pushQueue.push(p);
+      setTimeout(flushPush, RETRY_MS);
+      return;
+    }
+  }
   const initData = await waitForInitData();
   if (!initData) { pushQueue.push(...pending); setTimeout(flushPush, 500); return; }
   const entries = pending.map(p => p.entry);
@@ -209,7 +288,8 @@ export function startPeriodicPull() {
   if (!isTG()) return;
   if (!isCloudEnabled()) return;
   if (periodicTimer) return;
-  periodicTimer = setInterval(()=> { syncPull(); }, periodicIntervalMs);
+  installLifecycleGuards();
+  periodicTimer = setInterval(() => { if (shouldPoll()) void syncPull(); }, periodicIntervalMs);
 }
 export function stopPeriodicPull() { if (periodicTimer) { clearInterval(periodicTimer); periodicTimer = null; } }
 
