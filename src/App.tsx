@@ -6,7 +6,8 @@ import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
-import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor, hapticFunny } from './lib/telegram';
+import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
+import ReleaseOverlay from './components/ReleaseOverlay';
 import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
 import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
 import IconButton from './components/IconButton';
@@ -119,20 +120,15 @@ export default function App() {
   const editable = canEdit(activeDate);
   // Song inputs reveal state
   const [showSong, setShowSong] = useState(false);
-  // Banner glow state for hover / click brighten effect
-  const [bannerGlow, setBannerGlow] = useState(false);
-  // Refs to coordinate glow lifetime with haptic playback
-  const bannerHapticRef = useRef(false);
-  const bannerGlowTORef = useRef<number | null>(null);
+  // Banner / release overlay: whether the release overlay is still blocking the slider
+  // The overlay component itself handles its own internal ghost/fade/haptic lifecycle.
+  const [releaseBlocked, setReleaseBlocked] = useState<boolean>(() => {
+    try { return !localStorage.getItem('flowday_v1_celebrated'); } catch { return false; }
+  });
 
-  // Cleanup any pending timeouts on unmount
+  // no-op cleanup placeholder (release overlay manages its own timers)
   useEffect(() => {
-    return () => {
-      if (bannerGlowTORef.current) {
-        clearTimeout(bannerGlowTORef.current);
-        bannerGlowTORef.current = null;
-      }
-    };
+    return () => {};
   }, []);
   // Telegram full-screen song editor state
   const [songEditorOpen, setSongEditorOpen] = useState(false);
@@ -441,21 +437,26 @@ export default function App() {
             onWheel={()=> { if(isTG && sliderRef.current) { disableVerticalSwipes(); if (sliderRef.current._wheelTO) clearTimeout(sliderRef.current._wheelTO); sliderRef.current._wheelTO = setTimeout(()=> enableVerticalSwipes(), 260); } }}
             className={
               'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 relative overflow-hidden ' +
-              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed')
+              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed') +
+              (releaseBlocked ? ' pointer-events-none' : '')
             }
-            style={{ boxShadow: (editable && entry.emojis.length>0) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
-            aria-disabled={!(editable && entry.emojis.length>0)}
+            style={{ boxShadow: (editable && entry.emojis.length>0 && !releaseBlocked) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
+            aria-disabled={releaseBlocked || !(editable && entry.emojis.length>0)}
           >
             {/* Gradient overlay: animate opacity+scale when activated (at least one emoji present) */}
             <div
               aria-hidden
               className={"absolute inset-0 rounded-full transition-opacity duration-400 ease-out transform-gpu"}
-              style={{
+                style={{
                 background: rainbowGradientCSS(),
-                opacity: (editable && entry.emojis.length>0) ? 1 : 0,
+                opacity: releaseBlocked ? 0 : ((editable && entry.emojis.length>0) ? 1 : 0),
                 transform: (editable && entry.emojis.length>0) ? 'scale(1)' : 'scale(0.985)'
               }}
             />
+            {/* Externalized release overlay component (blocks slider until celebrated) */}
+            {releaseBlocked && (
+              <ReleaseOverlay enabled={true} persistKey={'flowday_v1_celebrated'} onCelebrate={() => setReleaseBlocked(false)} />
+            )}
           </div>
           {!editable && (
             <div className="mt-1 text-center text-xs text-white/40">
@@ -513,45 +514,7 @@ export default function App() {
             </div>
           )}
           {/* Celebratory banner for v1.0 - visually matches "Song of the day" button */}
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              role="status"
-              aria-live="polite"
-              aria-label="Flowday v1.0 released"
-              onClick={() => {
-                // Ensure any previous timer is cleared
-                if (bannerGlowTORef.current) { clearTimeout(bannerGlowTORef.current); bannerGlowTORef.current = null; }
-                // Start glow and mark haptic-active so hover leave won't cancel it
-                setBannerGlow(true);
-                bannerHapticRef.current = true;
-                const dur = 2000;
-                // If in Telegram, play a playful haptic pattern
-                try { if (isTG) hapticFunny(dur); } catch { /* ignore */ }
-                // Clear glow after the haptic duration
-                bannerGlowTORef.current = window.setTimeout(() => {
-                  bannerHapticRef.current = false;
-                  setBannerGlow(false);
-                  bannerGlowTORef.current = null;
-                }, dur);
-              }}
-              onMouseEnter={() => setBannerGlow(true)}
-              onMouseLeave={() => { if (!bannerHapticRef.current) setBannerGlow(false); }}
-              className="w-full max-w-xs mx-auto px-5 py-2 rounded-full text-center text-white font-medium text-sm ring-1 focus:outline-none"
-              style={{
-                background: bannerGlow
-                  ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))'
-                  : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
-                WebkitBackdropFilter: 'saturate(120%)',
-                backdropFilter: 'saturate(120%)',
-                border: bannerGlow ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)',
-                boxShadow: bannerGlow ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)' : '0 2px 10px rgba(0,0,0,0.22)',
-                transition: 'box-shadow 200ms ease, background 200ms ease, transform 160ms ease, border 160ms ease'
-              }}
-            >
-              🎉 Flowday v1.0 released! 🎉
-            </button>
-          </div>
+          
         </div>
       </div>
 
