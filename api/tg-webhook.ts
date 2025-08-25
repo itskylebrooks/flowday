@@ -13,7 +13,6 @@ interface Res { status: (c:number)=>Res; json: (v:unknown)=>void; }
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const MINIAPP_URL = process.env.MINIAPP_URL;
-const PRIVACY_URL = process.env.PRIVACY_URL;
 
 const TELEGRAM_API = (method: string) => `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
 
@@ -81,12 +80,12 @@ export default async function handler(req: Req, res: Res) {
 
         const welcome = `Flowday — your mood diary on Telegram.\nTrack each day with up to 3 emojis, a color, and an optional song. Your data syncs across Telegram devices.`;
 
-        // Build preferred reply_markup with web_app; include Privacy button only if PRIVACY_URL is set
-        const buttons: Array<Record<string, unknown>> = [];
-        buttons.push({ text: 'Open Flowday', web_app: { url: MINIAPP_URL } });
-        if (PRIVACY_URL) buttons.push({ text: 'Privacy', url: PRIVACY_URL });
-
-        const preferred = { inline_keyboard: [[ ...buttons ]] };
+        // Build preferred reply_markup with web_app
+        const preferred = {
+          inline_keyboard: [[
+            { text: 'Open Flowday', web_app: { url: MINIAPP_URL } }
+          ]]
+        };
 
         try {
           await sendMessage(chat_id, welcome, { reply_markup: preferred });
@@ -94,9 +93,7 @@ export default async function handler(req: Req, res: Res) {
           // Try fallback with plain URL button
           console.error('[tg-webhook] web_app send failed, retrying with url button', (e as Error).message);
           try {
-            const fallbackButtons: Array<Record<string, unknown>> = [ { text: 'Open Flowday', url: MINIAPP_URL } ];
-            if (PRIVACY_URL) fallbackButtons.push({ text: 'Privacy', url: PRIVACY_URL });
-            const fallback = { inline_keyboard: [[ ...fallbackButtons ]] };
+            const fallback = { inline_keyboard: [[ { text: 'Open Flowday', url: MINIAPP_URL } ]] };
             await sendMessage(chat_id, welcome, { reply_markup: fallback });
           } catch (err) {
             console.error('[tg-webhook] send fallback failed', (err as Error).message);
@@ -105,7 +102,7 @@ export default async function handler(req: Req, res: Res) {
         return;
       }
 
-  // /privacy command removed — ignored
+  // /privacy command removed; ignore other commands/text
 
       // ignore other commands/text
       return;
