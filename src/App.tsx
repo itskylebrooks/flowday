@@ -455,7 +455,7 @@ export default function App() {
             />
             {/* Externalized release overlay component (blocks slider until celebrated) */}
             {releaseBlocked && (
-              <ReleaseOverlay enabled={true} persistKey={'flowday_v1_celebrated'} onCelebrate={() => setReleaseBlocked(false)} />
+              <ReleaseOverlay enabled={true} onCelebrate={() => setReleaseBlocked(false)} />
             )}
           </div>
           {!editable && (
