@@ -12,11 +12,19 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
   const labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']; // Monday → Sunday
 
   // Build Monday→Sunday ISO dates for the current week
-  const today = new Date(todayISO() + 'T00:00:00');
-  const dowSun0 = today.getDay(); // 0..6, 0=Sun
-  const monOffset = (dowSun0 + 6) % 7; // distance back to Monday
-  const mondayISO = addDays(todayISO(), -monOffset);
-  const weekISOs = Array.from({ length: 7 }, (_, i) => addDays(mondayISO, i));
+  // If caller provided a 7-day `entries` slice (recent7 from App), prefer those dates so
+  // WeekTimeline aligns exactly with the data window (this fixes last-week navigation).
+  // Otherwise fall back to computing the Monday->Sunday range for the current week.
+  let weekISOs: string[];
+  if (Array.isArray(entries) && entries.length === 7 && entries.every(e => typeof e.date === 'string')) {
+    weekISOs = entries.map(e => e.date);
+  } else {
+    const today = new Date(todayISO() + 'T00:00:00');
+    const dowSun0 = today.getDay(); // 0..6, 0=Sun
+    const monOffset = (dowSun0 + 6) % 7; // distance back to Monday
+    const mondayISO = addDays(todayISO(), -monOffset);
+    weekISOs = Array.from({ length: 7 }, (_, i) => addDays(mondayISO, i));
+  }
 
   // Map colors per day, default to gray when no hue selected
   const gray = 'hsl(0 0% 30%)';
