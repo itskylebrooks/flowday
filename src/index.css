@@ -74,6 +74,12 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 /* Use centralized page motion tokens for consistency */
 .animate-fadeInMove { animation: fadeInMove var(--motion-page-duration) var(--motion-page-ease) both; }
 .animate-fadeSwap { animation: fadeSwap var(--motion-page-duration) var(--motion-page-ease) both; }
+/* Longer, smoother day-switch animation for emoji/aura (matches aura/triangle timing) */
+.animate-emoji-day-swap { animation: fadeSwap 0.62s cubic-bezier(.4,0,.2,1) both; }
+
+/* When doing a day swap, extend inner transitions for triangle and aura to match */
+.emoji-trans-container.animate-emoji-day-swap .triangle-view { transition: transform .65s cubic-bezier(.4,0,.2,1), opacity .65s ease; }
+.emoji-trans-container.animate-emoji-day-swap .aura-view { transition: transform .72s cubic-bezier(.4,0,.2,1), opacity .68s ease; }
 
 /* Header/date: fade in from top (used for top nav title swaps) */
 @keyframes fadeFromTop {

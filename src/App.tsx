@@ -402,7 +402,7 @@ export default function App() {
         <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
-      <div key={activeDate} className={"emoji-trans-container w-full flex items-center justify-center animate-fadeSwap " + (showAura ? 'aura-active':'')}
+            <div key={activeDate} className={"emoji-trans-container w-full flex items-center justify-center animate-emoji-day-swap " + (showAura ? 'aura-active':'')}
         style={{maxWidth:280}}>
               <div className="triangle-view flex items-center justify-center w-full" onClick={()=>{ if(entry.emojis.length>0 && editable){ /* maybe future */ }}}>
                 <EmojiTriangle
