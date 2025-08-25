@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
@@ -12,6 +12,8 @@ const supabase = (function init(){
 
 interface Req { method?: string; headers?: Record<string,string|undefined>; body?: unknown }
 interface Res { status:(c:number)=>Res; json:(v:unknown)=>void }
+
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export default async function handler(req: Req, res: Res) {
   try {
@@ -34,24 +36,23 @@ export default async function handler(req: Req, res: Res) {
 
     // Fetch enabled daily reminders (minimal schema: no legacy last_sent fields)
     const { data, error } = await supabase.from('reminders')
-      .select('telegram_id,daily_enabled,updated_at')
+      .select('telegram_id,daily_enabled,last_sent_on')
       .eq('daily_enabled', true)
       .limit(1000);
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
 
-  type Row = { telegram_id: number; daily_enabled: boolean; updated_at: string | null };
+  type Row = { telegram_id: number; daily_enabled: boolean; last_sent_on: string | null };
   const rows: Row[] = (data as unknown as Row[]) || [];
 
+    const today = new Date().toISOString().slice(0,10); // UTC date YYYY-MM-DD
     let sent = 0;
     const errors: Array<{ id: number; message: string }> = [];
-    const today = new Date().toISOString().slice(0,10); // UTC date
 
     for (const r of rows) {
-  // Use updated_at as the last-sent marker (minimal schema). If updated today, skip.
-  const lastSentDate = r.updated_at ? r.updated_at.slice(0,10) : null;
-  if (lastSentDate === today) continue; // already sent today
+      const lastSent = r.last_sent_on || null; // 'YYYY-MM-DD' or null
+      if (lastSent === today) continue; // already sent today
       const chatId = r.telegram_id;
-  const text = `✨ Your flow is waiting
+      const text = `✨ Your flow is waiting
 
 Pick today’s colors & emojis — it only takes 20 seconds.
 Every drop adds to your week’s ribbon, your month’s mix, your sky of constellations.
@@ -63,22 +64,42 @@ Every drop adds to your week’s ribbon, your month’s mix, your sky of constel
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: chatId, text }),
         });
-        if (!resp.ok) {
+        if (resp.status === 429) {
+          // Respect rate limit and retry once
+          const ra = Number(resp.headers.get('retry-after') || '1');
+          await sleep(Math.min(ra * 1000, 5000));
+          const retry = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text }),
+          });
+          if (!retry.ok) {
+            const body = await retry.text().catch(()=>'<no-body>');
+            errors.push({ id: chatId, message: `telegram-send-failed-429-retry ${retry.status} ${body}` });
+            continue;
+          }
+        } else if (!resp.ok) {
           const body = await resp.text().catch(()=>'<no-body>');
+          // If user blocked the bot or chat not found, auto-disable reminders for this id
+          if (resp.status === 403 || (resp.status === 400 && /chat not found/i.test(body))) {
+            await supabase.from('reminders').update({ daily_enabled: false }).eq('telegram_id', chatId);
+          }
           errors.push({ id: chatId, message: `telegram-send-failed ${resp.status} ${body}` });
           continue;
         }
-
-        // Mark as sent for today
-  const now = new Date().toISOString();
-  // Only update columns present in the minimal schema. Use updated_at as the marker for last send.
-  const { error: upErr } = await supabase.from('reminders').update({ updated_at: now }).eq('telegram_id', chatId);
+        // Mark as sent for today. Guard so we don't overwrite if another worker updated.
+        const { error: upErr } = await supabase
+          .from('reminders')
+          .update({ last_sent_on: today })
+          .eq('telegram_id', chatId)
+          .or(`last_sent_on.is.null,last_sent_on.lt.${today}`);
         if (upErr) {
           errors.push({ id: chatId, message: 'db-update-failed' });
           continue;
         }
-
         sent++;
+        // Gentle pace to avoid bursts
+        await sleep(35);
       } catch (e) {
         errors.push({ id: chatId, message: (e as Error)?.message || 'unknown' });
       }

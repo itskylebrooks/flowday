@@ -3,8 +3,8 @@ import { isValidInitData, parseTGUser } from './_tg';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
@@ -23,11 +23,11 @@ export default async function handler(req: Req, res: Res) {
     if (!process.env.BOT_TOKEN) return res.status(500).json({ ok:false, error:'missing-bot-token' });
     if (!isValidInitData(initData, process.env.BOT_TOKEN)) return res.status(401).json({ ok:false, error:'invalid-hmac' });
     const u = parseTGUser(initData); if (!u?.id) return res.status(400).json({ ok:false, error:'invalid-user' });
-  const { data, error } = await supabase.from('reminders').select('daily_enabled,updated_at').eq('telegram_id', u.id).limit(1).maybeSingle();
+  const { data, error } = await supabase.from('reminders').select('daily_enabled,last_sent_on').eq('telegram_id', u.id).limit(1).maybeSingle();
     if (error) return res.status(500).json({ ok:false, error:'db-error' });
     if (!data) return res.json({ ok:true, exists:false });
     // Normalize response keys for the client (daily enabled + last update timestamp)
-    const prefs = { daily_enabled: !!data.daily_enabled, last_sent_at: data.updated_at ?? null };
+    const prefs = { daily_enabled: !!data.daily_enabled, last_sent_at: data.last_sent_on ?? null };
     res.json({ ok:true, exists:true, prefs });
   } catch (e) {
     console.error('[reminders-get] unexpected', (e as Error)?.message);
