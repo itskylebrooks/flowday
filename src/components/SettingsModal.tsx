@@ -454,6 +454,9 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       <p className="text-[10px] leading-relaxed text-white/35">
         {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
       </p>
+      <p className="text-[10px] leading-relaxed text-white/35">
+        Synced data (entries, username, reminders) is stored securely on Supabase and never shared with third parties.
+      </p>
     </div>
   );
 }
