@@ -5,8 +5,8 @@ import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
 // RPC removed (legacy plaintext); direct encrypted upserts only.
 const supabase = (function init(){
@@ -48,25 +48,41 @@ export default async function handler(req: Req, res: Res) {
     // Sanitize & limit payload (defense-in-depth)
     const todayPlus = Date.now() + 2*86400000; // allow up to +2 days future (clock drift)
     const minDate = new Date('2023-01-01T00:00:00Z').getTime();
-    const clean: IncomingEntry[] = (entries as unknown[]).slice(0, 50).map(r => {
-      const obj = r as Partial<IncomingEntry>;
-      const dateValid = typeof obj.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(obj.date);
-      const dateStr = dateValid ? obj.date as string : 'invalid';
-      const dateMs = dateValid ? Date.parse(dateStr+'T00:00:00Z') : NaN;
-      if (!dateValid || isNaN(dateMs) || dateMs < minDate || dateMs > todayPlus) return { date:'invalid', emojis:[], updatedAt:0 } as IncomingEntry;
-      let emojis = Array.isArray(obj.emojis) ? obj.emojis.filter(e => typeof e === 'string').map(e=>e.trim()).filter(Boolean) : [];
-      // Deduplicate & cap
-      emojis = Array.from(new Set(emojis)).slice(0,3);
-      const hue = typeof obj.hue === 'number' && emojis.length>0 ? Math.min(360, Math.max(0, Math.round(obj.hue))) : undefined;
-      const song = obj.song && typeof obj.song === 'object' ? {
-        title: typeof obj.song.title === 'string' ? obj.song.title.slice(0,48).trim() : undefined,
-        artist: typeof obj.song.artist === 'string' ? obj.song.artist.slice(0,40).trim() : undefined,
-      } : undefined;
-      // Treat empty song object as undefined
-      const normalizedSong = (song && !(song.title || song.artist)) ? undefined : song;
-      const updatedAt = typeof obj.updatedAt === 'number' ? obj.updatedAt : Date.now();
-      return { date: dateStr, emojis, hue, song: normalizedSong, updatedAt };
-    }).filter(e => e.date !== 'invalid');
+    const sanitized: IncomingEntry[] = (entries as unknown[])
+      .slice(0, 50)
+      .map(r => {
+        const obj = r as Partial<IncomingEntry>;
+        const dateValid = typeof obj.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(obj.date);
+        const dateStr = dateValid ? (obj.date as string) : 'invalid';
+        const dateMs = dateValid ? Date.parse(dateStr + 'T00:00:00Z') : NaN;
+        if (!dateValid || isNaN(dateMs) || dateMs < minDate || dateMs > todayPlus) return { date: 'invalid', emojis: [], updatedAt: 0 } as IncomingEntry;
+
+        let emojis = Array.isArray(obj.emojis) ? obj.emojis.filter(e => typeof e === 'string').map(e => e.trim()).filter(Boolean) : [];
+        // Deduplicate & cap
+        emojis = Array.from(new Set(emojis)).slice(0, 3);
+
+        const hue = typeof obj.hue === 'number' && emojis.length > 0 ? Math.min(360, Math.max(0, Math.round(obj.hue))) : undefined;
+        const song = obj.song && typeof obj.song === 'object' ? {
+          title: typeof obj.song.title === 'string' ? obj.song.title.slice(0, 48).trim() : undefined,
+          artist: typeof obj.song.artist === 'string' ? obj.song.artist.slice(0, 40).trim() : undefined,
+        } : undefined;
+        const normalizedSong = (song && !(song.title || song.artist)) ? undefined : song;
+
+        const nowPlus = todayPlus;
+        const upd = typeof obj.updatedAt === 'number' ? Math.floor(obj.updatedAt) : Date.now();
+        const updatedAt = Math.min(Math.max(0, upd), nowPlus);
+
+        return { date: dateStr, emojis, hue, song: normalizedSong, updatedAt };
+      })
+      .filter(e => e.date !== 'invalid');
+
+    // Deduplicate by date, keep the most recent updatedAt per day
+    const dedup = new Map<string, IncomingEntry>();
+    for (const e of sanitized) {
+      const prev = dedup.get(e.date);
+      if (!prev || e.updatedAt > prev.updatedAt) dedup.set(e.date, e);
+    }
+    const clean: IncomingEntry[] = Array.from(dedup.values());
 
   if (!clean.length) return res.json({ ok:true, count: 0 });
 
@@ -122,10 +138,13 @@ export default async function handler(req: Req, res: Res) {
           }
         }
 
-        for (const urow of updates) {
-          const { error: updErr } = await supabase.from('entries').update(urow.fields).eq('telegram_id', u.id).eq('date', urow.date);
+        const updResponses = await Promise.all(
+          updates.map(urow => supabase.from('entries').update(urow.fields).eq('telegram_id', u.id).eq('date', urow.date))
+        );
+        for (const resp of updResponses) {
+          const updErr = (resp as { error?: { message?: string } }).error;
           if (updErr) {
-            console.error('[sync-push] update failed for', urow.date, updErr.message);
+            console.error('[sync-push] update failed', updErr.message || 'unknown');
             return res.status(500).json({ ok:false, error:'db-update-failed' });
           }
         }

@@ -5,8 +5,8 @@ import { allow } from './_rate';
 
 export const config = { runtime: 'nodejs' };
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let supabaseInitError: string | null = null;
 const supabase = (function init(){
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { supabaseInitError = 'missing-supabase-env'; return null as unknown as ReturnType<typeof createClient>; }
@@ -38,15 +38,13 @@ export default async function handler(req: Req, res: Res) {
   if (userErr) return res.status(500).json({ ok:false, error:'user-check-failed' });
   if (!userRow) return res.status(410).json({ ok:false, error:'user-missing' });
 
-  // Rate limit pulls: one every 2s per user id
-  // We'll know ID only after validation, so delay rate check until after parsing user.
+  if (!allow('pull:'+u.id, 2000)) return res.status(429).json({ ok:false, error:'rate-limited', ...devReason('rate') });
+
   let query = supabase.from('entries')
       .select('date, emojis_enc, hue_enc, song_title_enc, song_artist_enc, updated_at')
       .eq('telegram_id', u.id);
 
-  if (!allow('pull:'+u.id, 2000)) return res.status(429).json({ ok:false, error:'rate-limited', ...devReason('rate') });
-
-    if (since && typeof since === 'string') query = query.gt('updated_at', since);
+  if (since && typeof since === 'string') query = query.gt('updated_at', since);
 
     const { data, error } = await query.order('date', { ascending: true });
     if (error) {
