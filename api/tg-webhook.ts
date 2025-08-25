@@ -49,65 +49,74 @@ function truncateKeepLink(text: string, link: string, max = 4000) {
 }
 
 export default async function handler(req: Req, res: Res) {
-  // Always return 200 quickly to satisfy Telegram
-  try { res.status(200).json({ ok: true }); } catch {/* best-effort */}
+  try {
+    // Only POST updates come from Telegram
+    if (req.method !== 'POST') {
+      return res.status(200).json({ ok: true });
+    }
 
-  // Process in background; don't throw from here. Log failures.
-  (async () => {
-    try {
-      if (req.method !== 'POST') return;
-      const update = (req.body as Update) || {};
-      const msg = update.message;
-      if (!msg || !msg.text) return; // ignore non-text
-      const chat = msg.chat;
-      if (!chat || chat.type !== 'private') return; // only private chats
-      if (!msg.from || msg.from.is_bot) return;
+    const update = (req.body as Update) || {};
+    const msg = update.message;
+    if (!msg || !msg.text) {
+      return res.status(200).json({ ok: true });
+    }
 
-      const text = msg.text.trim();
-      const chat_id = chat.id;
+    const chat = msg.chat;
+    if (!chat || chat.type !== 'private') {
+      return res.status(200).json({ ok: true });
+    }
+    if (!msg.from || msg.from.is_bot) {
+      return res.status(200).json({ ok: true });
+    }
 
-      // Helper to send fallback service-unavailable message
-      const serviceUnavailable = async () => {
-        try { await sendMessage(chat_id, 'Service temporarily unavailable.'); } catch (e) { console.error('[tg-webhook] fallback-send-failed', (e as Error).message); }
-      };
+    const text = msg.text.trim();
+    const chat_id = chat.id;
 
-      if (text.startsWith('/start')) {
-        if (!MINIAPP_URL) {
-          console.error('[tg-webhook] missing MINIAPP_URL');
-          await serviceUnavailable();
-          return;
+    if (text.startsWith('/start')) {
+      if (!MINIAPP_URL) {
+        console.error('[tg-webhook] missing MINIAPP_URL');
+        try { await sendMessage(chat_id, 'Service temporarily unavailable.'); } catch (e) {
+          console.error('[tg-webhook] fallback-send-failed', (e as Error).message);
         }
-
-        const welcome = `Flowday — your mood diary on Telegram.\nTrack each day with up to 3 emojis, a color, and an optional song. Your data syncs across Telegram devices.`;
-
-        // Build preferred reply_markup with web_app
-        const preferred = {
-          inline_keyboard: [[
-            { text: 'Open Flowday', web_app: { url: MINIAPP_URL } }
-          ]]
-        };
-
-        try {
-          await sendMessage(chat_id, welcome, { reply_markup: preferred });
-        } catch (e) {
-          // Try fallback with plain URL button
-          console.error('[tg-webhook] web_app send failed, retrying with url button', (e as Error).message);
-          try {
-            const fallback = { inline_keyboard: [[ { text: 'Open Flowday', url: MINIAPP_URL } ]] };
-            await sendMessage(chat_id, welcome, { reply_markup: fallback });
-          } catch (err) {
-            console.error('[tg-webhook] send fallback failed', (err as Error).message);
-          }
-        }
-        return;
+        return res.status(200).json({ ok: true });
       }
 
-  // /privacy command removed; ignore other commands/text
+      const welcome =
+        `Flowday — your mood diary on Telegram.\n` +
+        `Track each day with up to 3 emojis, a color, and an optional song. ` +
+        `Your data syncs across Telegram devices.`;
 
-      // ignore other commands/text
-      return;
-    } catch (e) {
-      console.error('[tg-webhook] unexpected', (e as Error).message);
+      // Preferred: web_app button
+      const preferred = {
+        inline_keyboard: [[
+          { text: 'Open Flowday', web_app: { url: MINIAPP_URL } }
+        ]]
+      };
+
+      try {
+        await sendMessage(chat_id, welcome, { reply_markup: preferred });
+      } catch (e) {
+        // Fallback: plain URL button (older clients)
+        console.error('[tg-webhook] web_app send failed, retrying with url button', (e as Error).message);
+        const fallback = {
+          inline_keyboard: [[
+            { text: 'Open Flowday', url: MINIAPP_URL }
+          ]]
+        };
+        try {
+          await sendMessage(chat_id, welcome, { reply_markup: fallback });
+        } catch (err) {
+          console.error('[tg-webhook] send fallback failed', (err as Error).message);
+        }
+      }
+
+      return res.status(200).json({ ok: true });
     }
-  })();
+
+    // Ignore other commands/text for now
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('[tg-webhook] unexpected', (e as Error).message);
+    try { return res.status(200).json({ ok: true }); } catch { /* no-op */ }
+  }
 }
