@@ -1,5 +1,6 @@
 import type { Entry, UserProfile, RemindersSettings } from './types';
 import { clamp } from './utils';
+import { track } from './analytics';
 
 // ---------------- Versioned Entry Storage ----------------
 // Historical formats:
@@ -123,6 +124,29 @@ export function saveEntries(list: Entry[]) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('flowday:entries-updated', { detail: { entries: list } }));
     }
+  } catch { /* ignore */ }
+  try { emitEntryUpsertedDebounced(list); } catch { /* ignore */ }
+}
+
+// Debounced emission for entry-upserted: pick the most-recently-updated entry
+let __entryUpsertTimer: number | null = null;
+export function emitEntryUpsertedDebounced(list: Entry[]) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (!Array.isArray(list) || list.length === 0) return;
+    // find most recently updated entry
+    let latest = list[0];
+    for (let i = 1; i < list.length; i++) {
+      const cur = list[i];
+      if (cur.updatedAt > latest.updatedAt) latest = cur;
+    }
+    if (!latest) return;
+    const payload = { date: latest.date, emojisCount: Array.isArray(latest.emojis) ? latest.emojis.length : 0, hasSong: !!latest.song };
+    if (__entryUpsertTimer) window.clearTimeout(__entryUpsertTimer);
+    __entryUpsertTimer = window.setTimeout(() => {
+      try { track('entry-upserted', payload); } catch {}
+      __entryUpsertTimer = null;
+    }, 500);
   } catch { /* ignore */ }
 }
 export const RECENTS_KEY = 'flowday_recent_emojis_v1';
@@ -269,6 +293,7 @@ export interface ExportPayload {
 }
 
 export function exportAllData(): ExportPayload {
+  try { track('export-started'); } catch {}
   const entries = loadEntries();
   const user = loadUser();
   const reminders = loadReminders();
@@ -281,6 +306,7 @@ export function exportAllData(): ExportPayload {
     reminders,
     recents,
   };
+  try { track('export-finished', { count: entries.length }); } catch {}
   return payload;
 }
 
@@ -296,6 +322,7 @@ function mergeEntriesByNewer(local: Entry[], incoming: Entry[]): Entry[] {
 
 export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: boolean; message?: string; added?: number; merged?: number; total?: number } {
   try {
+    try { track('import-started'); } catch {}
     // Accept both already-parsed objects and JSON strings
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!parsed) return { ok:false, message: 'Invalid payload' };
@@ -359,8 +386,11 @@ export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: b
       }
     } catch { /* best-effort only */ }
 
-    return { ok:true, added, merged, total: loadEntries().length };
+  const result = { ok:true, added, merged, total: loadEntries().length };
+  try { track('import-finished', { mode: opts?.merge ? 'merge' : 'replace', added, merged, total: result.total }); } catch {}
+  return result;
   } catch (e) {
-    return { ok:false, message: (e instanceof Error) ? e.message : 'Import failed' };
+  try { track('import-finished', { mode: opts?.merge ? 'merge' : 'replace', added: 0, merged: 0, total: 0 }); } catch {}
+  return { ok:false, message: (e instanceof Error) ? e.message : 'Import failed' };
   }
 }

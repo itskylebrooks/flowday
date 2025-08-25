@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
 import { loadUser, saveUser, loadReminders, saveReminders, clearAllData, exportAllData, importAllData } from '../lib/storage';
 import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
+import { track } from '../lib/analytics';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -329,6 +330,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   onClick={()=> {
                     if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
                     const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
+                    try { track('reminder-toggle', { enabled: !!v.dailyEnabled }); } catch {}
                   }}
                   disabled={!isCloudEnabled()}
                   className={
@@ -428,6 +430,8 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
       else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
       else alert('Sign in failed. Try again.');
     }
+  // Emit analytics on success
+  try { if (!working && enabled) track('cloud-signin'); } catch {}
   }
   async function handleDelete() {
     if (!enabled) return;
@@ -436,6 +440,7 @@ function CloudAccountSection({ isTG }: { isTG?: boolean }) {
     const ok = await deleteCloudAccount();
     setWorking(false);
     if (ok) setEnabled(false);
+  try { if (ok) track('cloud-delete'); } catch {}
   }
   return (
     <div className="space-y-2">
