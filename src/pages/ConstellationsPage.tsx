@@ -262,6 +262,37 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     return map;
   }, [entries]);
 
+  // Compute circular mean hue across all entries per emoji (used when emoji not chosen today)
+  const mixedHueByEmoji = useMemo(() => {
+    const buckets = new Map<string, number[]>();
+    for (const e of entries) {
+      if (typeof e.hue !== 'number') continue;
+      const huesForEntry = (e.hue + 360) % 360;
+      for (const emo of Array.from(new Set(e.emojis))) {
+        const arr = buckets.get(emo) || [];
+        arr.push(huesForEntry);
+        buckets.set(emo, arr);
+      }
+    }
+    function circMean(hues: number[]) {
+      if (!hues.length) return undefined;
+      let x = 0, y = 0;
+      for (const h of hues) {
+        const r = (h * Math.PI) / 180;
+        x += Math.cos(r);
+        y += Math.sin(r);
+      }
+      const ang = Math.atan2(y, x) * (180 / Math.PI);
+      return (ang + 360) % 360;
+    }
+    const out = new Map<string, number>();
+    for (const [emo, hs] of buckets.entries()) {
+      const m = circMean(hs);
+      if (typeof m === 'number' && !Number.isNaN(m)) out.set(emo, m);
+    }
+    return out;
+  }, [entries]);
+
   // Which emojis appeared in the most recent 7 days (for soft teal glow)
   const recent7Emojis = useMemo(() => new Set<string>(last7(entries).flatMap(e => e.emojis)), [entries]);
   const todayIso = todayISO();
@@ -430,10 +461,13 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
         const size = clamp(24 + count * 6, 24, 64);
         const last = lastUsed.get(n.emo);
         const daysAgo = last ? daysBetween(todayIso, last.date) : 999;
-        const { scale: recScale, opacity: recOp } = recencyToScaleOpacity(daysAgo);
-        const fill = hueToFill(last?.hue, 0.95);
-        const isRecent7 = recent7Emojis.has(n.emo);
-        const isTodayStar = last?.date === todayIso;
+  const { scale: recScale, opacity: recOp } = recencyToScaleOpacity(daysAgo);
+  const isRecent7 = recent7Emojis.has(n.emo);
+  const isTodayStar = last?.date === todayIso;
+  // If this emoji wasn't chosen today, mix all historical hues for it; else use today's hue
+  const mixed = mixedHueByEmoji.get(n.emo);
+  const fillHue = (isTodayStar ? last?.hue : (typeof mixed === 'number' ? mixed : last?.hue));
+  const fill = hueToFill(fillHue, 0.95);
   const circleR = Math.max(12, (size / 2) * recScale * 1.22);
         return (
           <g key={n.emo} transform={`translate(${n.x}, ${n.y})`}
