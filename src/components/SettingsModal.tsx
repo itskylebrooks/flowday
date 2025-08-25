@@ -6,7 +6,7 @@ import { track } from '../lib/analytics';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
-export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
+export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG, onOpenPrivacy }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean; onOpenPrivacy?: () => void }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -252,18 +252,29 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                   </div>
 
               <div className="mt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
-                    clearAllData();
-                    alert('Local data cleared. App will reload.');
-                    window.location.reload();
-                  }}
-                  className="text-xs text-red-400 hover:underline"
-                >
-                  Delete all local data
-                </button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
+                      clearAllData();
+                      alert('Local data cleared. App will reload.');
+                      window.location.reload();
+                    }}
+                    className="text-xs text-red-400 hover:underline"
+                  >
+                    Delete all local data
+                  </button>
+                  </div>
+                  <div>
+                    {onOpenPrivacy && (
+                      <button type="button" onClick={() => { onOpenPrivacy(); }} className="text-xs text-white/60 hover:underline">
+                        Privacy Policy
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </form>
           </div>

@@ -4,6 +4,8 @@ import FlowsPage from './pages/FlowsPage';
 import ConstellationsPage from './pages/ConstellationsPage';
 import EchoesPage from './pages/EchoesPage';
 import SettingsModal from './components/SettingsModal';
+import PrivacyTelegramPage from './pages/PrivacyTelegramPage';
+import PrivacyWebPage from './pages/PrivacyWebPage';
 import GuideModal from './components/GuideModal';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
@@ -48,6 +50,8 @@ export default function App() {
   const MAX_ARTIST = 40;
   const [page, setPage] = useState<Page>('today');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [privacyClosing, setPrivacyClosing] = useState(false);
   const [guideOpen, setGuideOpen] = useState(()=> {
     try { return localStorage.getItem('flowday_seen_guide_v1') ? false : true; } catch { return true; }
   });
@@ -394,7 +398,7 @@ export default function App() {
 
   {/* Content area sized between fixed bars (no scroll) */}
   <div className="absolute inset-x-0 overflow-hidden page-stack" style={{ top: contentTop, bottom: contentBottom }}>
-      <div className="page-view from-left" data-active={page==='today'}>
+  <div className="page-view from-left" data-active={page==='today'}>
         <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
@@ -529,6 +533,7 @@ export default function App() {
           
         </div>
       </div>
+      
 
   <div className="page-view from-left" data-active={page==='flows'}>
         {page==='flows' && (
@@ -600,8 +605,24 @@ export default function App() {
         onClose={closePicker}
         onPick={handlePick}
       />
-  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} />
+  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} onOpenPrivacy={() => { setPrivacyOpen(true); }} />
   <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
+  {privacyOpen && (
+    <div className={"fixed inset-0 z-50 flex items-stretch sm:items-center justify-center settings-overlay backdrop-blur-sm" + (privacyClosing ? ' closing' : '')} onClick={() => {
+        if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320);
+      }}>
+      <div className={"w-full h-full sm:h-auto max-w-none sm:max-w-sm rounded-none sm:rounded-2xl bg-[#111] p-6 pt-7 pb-8 ring-1 ring-white/10 overflow-y-auto settings-panel" + (privacyClosing ? ' closing' : '')}
+           style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }} onClick={(e)=> e.stopPropagation()}>
+        <div className="mb-2">
+          {isTG ? (
+            <PrivacyTelegramPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
+          ) : (
+            <PrivacyWebPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
+          )}
+        </div>
+      </div>
+    </div>
+  )}
   {/* Telegram full-screen song editor overlay */}
   {isTG && songEditorOpen && (
     <SongEditorOverlay
