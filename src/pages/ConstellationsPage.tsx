@@ -21,7 +21,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const worldWidth = WORLD_SIZE, worldHeight = WORLD_SIZE;
 
   // Default initial zoom level (world units -> rendered zoom). >1 = zoomed in
-  const DEFAULT_SCALE = 1.6;
+  const DEFAULT_SCALE = 2.0;
 
   const NODE_PADDING = 24; // desired padding from edge (in world units)
   // Allow nodes to be dragged slightly beyond the visible canvas (world units)
@@ -414,7 +414,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   // Determine world coords at cursor to anchor zoom
   const v = viewRef.current;
   const zoomFactor = Math.exp(-e.deltaY * 0.0015); // smooth exponential zoom
-  const newScale = clamp(v.scale * zoomFactor, 0.55, 2.75);
+  const newScale = clamp(v.scale * zoomFactor, 0.55, 3.5);
     // Keep point (x,y) under cursor stable.
   // Compute svg user coords (in world units) of cursor, then set tx so that
   // svgUser = world.x * newScale + tx
@@ -475,7 +475,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       const dx = arr[0].x - arr[1].x; const dy = arr[0].y - arr[1].y;
       const dist = Math.hypot(dx, dy) || 1;
       const v = viewRef.current;
-      const scale = clamp(pinch.initialScale * (dist / pinch.initialDist), 0.55, 2.75);
+  const scale = clamp(pinch.initialScale * (dist / pinch.initialDist), 0.55, 3.5);
       v.scale = scale;
       // Keep anchor world point fixed at original screen midpoint.
       const rect = svg.getBoundingClientRect();
@@ -651,7 +651,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
           return;
         }
         const factor = action === 'in' ? 1.25 : 1/1.25;
-        const targetScale = clamp(v.scale * factor, 0.55, 2.75);
+  const targetScale = clamp(v.scale * factor, 0.55, 3.5);
         // Maintain center anchor
         const worldCx = (centerScreenX - rect.left - v.tx) / v.scale;
         const worldCy = (centerScreenY - rect.top - v.ty) / v.scale;
