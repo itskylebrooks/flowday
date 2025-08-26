@@ -11,18 +11,18 @@ interface Props {
 
 export default function ReleaseOverlay({ enabled = true, duration = 2000, onCelebrate }: Props) {
   // Show overlay only when enabled AND the app version has changed since last seen
-  // and the minor (middle) version digit is 0 or 5 (e.g. x.0.x or x.5.x).
+  // and the patch (third) version digit is 0 (e.g. x.y.0).
   const LAST_VERSION_KEY = 'flowday_last_version';
   const [overlayMounted, setOverlayMounted] = useState<boolean>(() => {
     try {
       if (!enabled) return false;
       const last = localStorage.getItem(LAST_VERSION_KEY);
       if (last === APP_VERSION) return false; // already seen
-      const parts = String(APP_VERSION).split('.');
-      const minor = parts.length > 1 ? parseInt(parts[1] || '0', 10) : 0;
-      if (Number.isNaN(minor)) return false;
-      // show only when minor is 0 or 5 (multiples of 5)
-      return minor % 5 === 0;
+  const parts = String(APP_VERSION).split('.');
+  const patch = parts.length > 2 ? parseInt(parts[2] || '0', 10) : 0;
+  if (Number.isNaN(patch)) return false;
+  // show only when patch is 0 (e.g. 1.0.0 or 1.2.0)
+  return patch === 0;
     } catch {
       return false;
     }
