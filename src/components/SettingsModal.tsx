@@ -325,7 +325,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           </div>
           )}
 
-          {/* Reminders card (only Daily reminder shown) */}
+          {/* Reminders card (only Daily reminder shown) - Telegram only */}
+          {isTG && (
           <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -365,6 +366,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders, since they run from our server.</div>
             )}
           </div>
+          )}
 
           {/* Language selection removed */}
     </div>
