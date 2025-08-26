@@ -362,7 +362,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               </div>
             </div>
             {!isCloudEnabled() && (
-              <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders.</div>
+              <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders, since they run from our server.</div>
             )}
           </div>
 
