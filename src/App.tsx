@@ -129,14 +129,17 @@ export default function App() {
   // The overlay component itself handles its own internal ghost/fade/haptic lifecycle.
   // Block release until user celebrates the current APP_VERSION.
   // Use the same storage key used by ReleaseOverlay ('flowday_last_version').
+  // Match ReleaseOverlay: only block when the current app patch version is 0
+  // and the user hasn't seen the release yet (stored in localStorage).
   const [releaseBlocked, setReleaseBlocked] = useState<boolean>(() => {
     try {
-      const last = localStorage.getItem('flowday_last_version');
-      if (last === APP_VERSION) return false;
+      const LAST_VERSION_KEY = 'flowday_last_version';
+      const last = localStorage.getItem(LAST_VERSION_KEY);
+      if (last === APP_VERSION) return false; // already seen
       const parts = String(APP_VERSION).split('.');
-      const minor = parts.length > 1 ? parseInt(parts[1] || '0', 10) : 0;
-      if (Number.isNaN(minor)) return false;
-      return minor % 5 === 0;
+      const patch = parts.length > 2 ? parseInt(parts[2] || '0', 10) : 0;
+      if (Number.isNaN(patch)) return false;
+      return patch === 0;
     } catch {
       return false;
     }
