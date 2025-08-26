@@ -14,11 +14,20 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   // Force-directed layout state (kept outside React state for perf)
   interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
   interface SimEdge { a: number; b: number; w: number; }
-  // Canvas dimensions (slightly smaller to reduce footprint)
-  const CANVAS_SIZE = 325;
-  const width = CANVAS_SIZE, height = CANVAS_SIZE;
-  const NODE_PADDING = 24; // desired padding from edge (in px)
-  // Allow nodes to be dragged slightly beyond the visible canvas (px)
+  // Rendered (visible) canvas size in px (must NOT change per UI constraint)
+  const RENDER_SIZE = 325;
+  const renderWidth = RENDER_SIZE, renderHeight = RENDER_SIZE;
+
+  // Internal world dimensions (much larger area where emojis can move).
+  // This expands the draggable/physics area while the visible SVG remains the same.
+  const WORLD_SIZE = 1200; // much larger logical canvas
+  const worldWidth = WORLD_SIZE, worldHeight = WORLD_SIZE;
+
+  // Default initial zoom level (world units -> rendered zoom). >1 = zoomed in
+  const DEFAULT_SCALE = 1.6;
+
+  const NODE_PADDING = 24; // desired padding from edge (in world units)
+  // Allow nodes to be dragged slightly beyond the visible canvas (world units)
   const CANVAS_OVERFLOW = 48;
   const nodesRef = useRef<SimNode[]>([]);
   const edgesRef = useRef<SimEdge[]>([]);
@@ -44,14 +53,14 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   // (Re)initialize simulation when top emojis change
   useEffect(() => {
     // Precompute sizes (frequency -> size) so we can respect bounds fully (size/2 + padding)
-    const sized = topEmojis.map(([emo]) => {
+  const sized = topEmojis.map(([emo]) => {
       const count = freq.get(emo) || 1;
       const size = clamp(24 + count * 6, 24, 64); // keep logic in sync w/ render
       return { emo, size };
     });
     const maxRadius = sized.reduce((m, s) => Math.max(m, s.size / 2), 0);
-    const R = Math.max(10, Math.min(width, height) / 2 - maxRadius - NODE_PADDING);
-    const cx = width / 2, cy = height / 2;
+  const R = Math.max(10, Math.min(worldWidth, worldHeight) / 2 - maxRadius - NODE_PADDING);
+  const cx = worldWidth / 2, cy = worldHeight / 2;
     const nodes: SimNode[] = sized.map((s, i, arr) => {
       const angle = (i / Math.max(1, arr.length)) * Math.PI * 2; // protect divide by 0
       const x = cx + R * Math.cos(angle);
@@ -71,13 +80,19 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     edgesRef.current = edges;
     // Force immediate render so stale nodes disappear (important when becoming empty)
     setTick(t=>t+1);
-  }, [topEmojis, pair, freq, width, height]);
+  }, [topEmojis, pair, freq]);
 
   // Reset view transform when entries dataset changes (year navigation)
   useEffect(()=> {
     const v = viewRef.current;
-    v.tx = 0; v.ty = 0; v.scale = 1;
-    v.targetTx = 0; v.targetTy = 0; v.targetScale = 1;
+    // Center the world in svg user units. For the world center to appear at svg center:
+    // svgUser_center = worldCenter * scale + tx  => tx = svgUser_center - worldCenter*scale
+    // svgUser_center is worldWidth/2 (since viewBox maps worldWidth->svg width)
+    v.scale = DEFAULT_SCALE;
+    v.tx = (worldWidth / 2) - (worldWidth / 2) * v.scale;
+    v.ty = (worldHeight / 2) - (worldHeight / 2) * v.scale;
+    v.targetScale = v.scale;
+    v.targetTx = v.tx; v.targetTy = v.ty;
     momentumRef.current.active = false;
   }, [entries]);
 
@@ -85,11 +100,15 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean } | null>(null);
 
   function svgToWorld(clientX: number, clientY: number, svg: SVGSVGElement) {
-    const rect = svg.getBoundingClientRect();
-    const { tx, ty, scale } = viewRef.current;
-    const x = (clientX - rect.left - tx) / scale;
-    const y = (clientY - rect.top - ty) / scale;
-    return { x, y };
+  const rect = svg.getBoundingClientRect();
+  // Map client (pixel) -> svg user units (world units) using viewBox -> rect scaling
+  const svgX = (clientX - rect.left) * (worldWidth / rect.width);
+  const svgY = (clientY - rect.top) * (worldHeight / rect.height);
+  const { tx, ty, scale } = viewRef.current; // tx/ty/scale are in world units
+  // Inverse of transform: world = (svgUser - tx) / scale
+  const x = (svgX - tx) / scale;
+  const y = (svgY - ty) / scale;
+  return { x, y };
   }
 
   function onPointerDown(e: React.PointerEvent<SVGGElement>, index: number) {
@@ -111,8 +130,8 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     if (Math.abs(nx - d.px) + Math.abs(ny - d.py) > 2) d.moved = true;
     const node = nodesRef.current[d.index];
     // allow dragging slightly beyond the visible canvas using CANVAS_OVERFLOW
-    node.x = clamp(nx, node.r + NODE_PADDING - CANVAS_OVERFLOW, width - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
-  node.y = clamp(ny, node.r + NODE_PADDING - CANVAS_OVERFLOW, height - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
+    node.x = clamp(nx, node.r + NODE_PADDING - CANVAS_OVERFLOW, worldWidth - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
+  node.y = clamp(ny, node.r + NODE_PADDING - CANVAS_OVERFLOW, worldHeight - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
     node.vx = 0; node.vy = 0;
     setTick(t => t + 1);
   }
@@ -174,11 +193,11 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
           n.vx *= 0.9; n.vy *= 0.9; // friction
           n.x += n.vx * 60 * dt; // scale velocities for visual speed
           n.y += n.vy * 60 * dt;
-          // bounds
+          // bounds in world coordinates
           const minX = n.r + NODE_PADDING - CANVAS_OVERFLOW;
-          const maxX = width - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
+          const maxX = worldWidth - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
           const minY = n.r + NODE_PADDING - CANVAS_OVERFLOW;
-          const maxY = height - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
+          const maxY = worldHeight - (n.r + NODE_PADDING) + CANVAS_OVERFLOW;
           if (n.x < minX) { n.x = minX; n.vx *= -0.4; }
           if (n.x > maxX) { n.x = maxX; n.vx *= -0.4; }
           if (n.y < minY) { n.y = minY; n.vy *= -0.4; }
@@ -218,7 +237,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     }
     frameRef.current = requestAnimationFrame(step);
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
-  }, [topEmojis, width, height]);
+  }, [topEmojis]);
 
   const nodes = nodesRef.current;
   const edges = edgesRef.current;
@@ -307,11 +326,15 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const v = viewRef.current;
   const zoomFactor = Math.exp(-e.deltaY * 0.0015); // smooth exponential zoom
   const newScale = clamp(v.scale * zoomFactor, 0.55, 2.75);
-    // Keep point (x,y) under cursor stable: tx' = cx - x*scale'
-  // We only used x above; recalc world y to avoid extra variable warning
+    // Keep point (x,y) under cursor stable.
+  // Compute svg user coords (in world units) of cursor, then set tx so that
+  // svgUser = world.x * newScale + tx
   const world = svgToWorld(e.clientX, e.clientY, svg);
-  v.tx = e.clientX - svg.getBoundingClientRect().left - world.x * newScale;
-  v.ty = e.clientY - svg.getBoundingClientRect().top - world.y * newScale;
+  const rect = svg.getBoundingClientRect();
+  const svgUserX = (e.clientX - rect.left) * (worldWidth / rect.width);
+  const svgUserY = (e.clientY - rect.top) * (worldHeight / rect.height);
+  v.tx = svgUserX - world.x * newScale;
+  v.ty = svgUserY - world.y * newScale;
     v.scale = newScale;
   // Keep targets in sync so animation loop doesn't fight wheel zoom
   v.targetScale = v.scale;
@@ -367,8 +390,10 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       v.scale = scale;
       // Keep anchor world point fixed at original screen midpoint.
       const rect = svg.getBoundingClientRect();
-      v.tx = pinch.anchorScreen.x - rect.left - pinch.anchorWorld.x * scale;
-      v.ty = pinch.anchorScreen.y - rect.top - pinch.anchorWorld.y * scale;
+      const svgUserX = (pinch.anchorScreen.x - rect.left) * (worldWidth / rect.width);
+      const svgUserY = (pinch.anchorScreen.y - rect.top) * (worldHeight / rect.height);
+      v.tx = svgUserX - pinch.anchorWorld.x * scale;
+      v.ty = svgUserY - pinch.anchorWorld.y * scale;
   // Sync targets to avoid interpolation snapping back
   v.targetScale = v.scale;
   v.targetTx = v.tx;
@@ -379,16 +404,20 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     // Pan (single pointer, no pinch, no node drag)
     const d = panDragRef.current; if (d && d.active && !pinch.active) {
       const v = viewRef.current;
-      const nx = d.startTx + (e.clientX - d.startX);
-      const ny = d.startTy + (e.clientY - d.startY);
+      const rect = svg.getBoundingClientRect();
+      // convert screen delta (px) -> world units
+      const dxWorld = (e.clientX - d.startX) * (worldWidth / rect.width);
+      const dyWorld = (e.clientY - d.startY) * (worldHeight / rect.height);
+      const nx = d.startTx + dxWorld;
+      const ny = d.startTy + dyWorld;
       v.tx = v.targetTx = nx;
       v.ty = v.targetTy = ny;
       const now = performance.now();
       const last = lastPanSampleRef.current;
       if (last && now - last.t > 12) {
-        // compute velocity in px/ms
-        momentumRef.current.vx = (e.clientX - last.x) / (now - last.t);
-        momentumRef.current.vy = (e.clientY - last.y) / (now - last.t);
+        // compute velocity in world-units/ms
+        momentumRef.current.vx = ((e.clientX - last.x) * (worldWidth / rect.width)) / (now - last.t);
+        momentumRef.current.vy = ((e.clientY - last.y) * (worldHeight / rect.height)) / (now - last.t);
         lastPanSampleRef.current = { x: e.clientX, y: e.clientY, t: now };
       }
       setTick(t=>t+1);
@@ -428,9 +457,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       {/* Animated canvas wrapper only */}
   <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
         <svg
-          viewBox={`0 0 ${width} ${height}`}
-          width={width}
-          height={height}
+          viewBox={`0 0 ${worldWidth} ${worldHeight}`}
+          width={renderWidth}
+          height={renderHeight}
           shapeRendering="geometricPrecision"
           textRendering="geometricPrecision"
           style={{ userSelect:'none', touchAction:'none', cursor: panDragRef.current? 'grabbing':'grab' }}
@@ -518,7 +547,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       </div>
 
       {/* Zoom Controls */}
-  <ConstellationControls width={width} onAction={(action)=>{
+  <ConstellationControls width={renderWidth} onAction={(action)=>{
         const v = viewRef.current;
         const svg = svgElRef.current;
         if (!svg) return;
@@ -526,9 +555,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
         const centerScreenX = rect.left + rect.width/2;
         const centerScreenY = rect.top + rect.height/2;
         if (action === 'reset') {
-          v.targetScale = 1;
-          v.targetTx = 0;
-          v.targetTy = 0;
+          v.targetScale = DEFAULT_SCALE;
+          v.targetTx = (worldWidth / 2) - (worldWidth / 2) * DEFAULT_SCALE;
+          v.targetTy = (worldHeight / 2) - (worldHeight / 2) * DEFAULT_SCALE;
           setTick(t=>t+1);
           return;
         }
