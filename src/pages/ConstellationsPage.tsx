@@ -5,11 +5,8 @@ import { emojiStats, clamp, last7, todayISO, hsl } from '../lib/utils';
 export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
 
-  const MAX_NODES = 14;
-  const topEmojis = useMemo(
-    () => [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_NODES),
-    [freq]
-  );
+  // Show all emojis (sorted by frequency). Performance improvements below reduce O(n^2) cost.
+  const topEmojis = useMemo(() => [...freq.entries()].sort((a, b) => b[1] - a[1]), [freq]);
 
   // Force-directed layout state (kept outside React state for perf)
   interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
@@ -50,21 +47,44 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     anchorScreen: { x: number; y: number };
   }>({ active: false, initialDist: 0, initialScale: 1, anchorWorld: { x:0, y:0 }, anchorScreen: { x:0, y:0 } });
 
+  // Throttle renders to ~30fps to avoid React churn when many nodes move
+  const lastRenderRef = useRef<number>(0);
+  function triggerRender() {
+    const now = performance.now();
+    if (now - lastRenderRef.current >= 33) {
+      lastRenderRef.current = now;
+      setTick(t => t + 1);
+    }
+  }
+
   // (Re)initialize simulation when top emojis change
   useEffect(() => {
     // Precompute sizes (frequency -> size) so we can respect bounds fully (size/2 + padding)
-  const sized = topEmojis.map(([emo]) => {
+    const sized = topEmojis.map(([emo]) => {
       const count = freq.get(emo) || 1;
       const size = clamp(24 + count * 6, 24, 64); // keep logic in sync w/ render
       return { emo, size };
     });
     const maxRadius = sized.reduce((m, s) => Math.max(m, s.size / 2), 0);
-  const R = Math.max(10, Math.min(worldWidth, worldHeight) / 2 - maxRadius - NODE_PADDING);
-  const cx = worldWidth / 2, cy = worldHeight / 2;
-    const nodes: SimNode[] = sized.map((s, i, arr) => {
-      const angle = (i / Math.max(1, arr.length)) * Math.PI * 2; // protect divide by 0
-      const x = cx + R * Math.cos(angle);
-      const y = cy + R * Math.sin(angle);
+    const cx = worldWidth / 2, cy = worldHeight / 2;
+  // Determine which emojis are from today so we place them near center
+  const todaySet = new Set<string>();
+  const todayStr = todayISO();
+  for (const e of entries) if (e.date === todayStr) for (const emo of Array.from(new Set(e.emojis))) todaySet.add(emo);
+
+    const centerRadius = Math.min(120, Math.min(worldWidth, worldHeight) / 6);
+    const pad = NODE_PADDING + maxRadius;
+    const nodes: SimNode[] = sized.map((s) => {
+      let x: number, y: number;
+      if (todaySet.has(s.emo)) {
+        // place today's emojis near the center with small random offset
+        x = cx + (Math.random() - 0.5) * centerRadius;
+        y = cy + (Math.random() - 0.5) * centerRadius;
+      } else {
+        // scatter across the whole world while respecting padding
+        x = pad + Math.random() * (worldWidth - pad * 2);
+        y = pad + Math.random() * (worldHeight - pad * 2);
+      }
       return { emo: s.emo, x, y, vx: 0, vy: 0, r: s.size / 2 };
     });
     // Build edges from pair counts referencing node indices
@@ -79,8 +99,8 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     nodesRef.current = nodes;
     edgesRef.current = edges;
     // Force immediate render so stale nodes disappear (important when becoming empty)
-    setTick(t=>t+1);
-  }, [topEmojis, pair, freq]);
+    triggerRender();
+  }, [topEmojis, pair, freq, entries]);
 
   // Reset view transform when entries dataset changes (year navigation)
   useEffect(()=> {
@@ -97,7 +117,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   }, [entries]);
 
   // Drag handling
-  const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean } | null>(null);
+  const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean; group: {index:number; startX:number; startY:number}[] } | null>(null);
+  // Disable inter-node forces so emojis don't gravitate to each other
+  const FORCES_ENABLED = false;
 
   function svgToWorld(clientX: number, clientY: number, svg: SVGSVGElement) {
   const rect = svg.getBoundingClientRect();
@@ -117,7 +139,31 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     if (e.pointerType === 'touch' && touchesRef.current.size > 0) return;
     const svg = e.currentTarget.ownerSVGElement as SVGSVGElement;
     const { x, y } = svgToWorld(e.clientX, e.clientY, svg);
-    draggingRef.current = { index, px: x, py: y, moved: false };
+    // Build dragging group: if this node is focused, include directly connected nodes
+    const nodes = nodesRef.current;
+    const edges = edgesRef.current;
+    const node = nodes[index];
+    const group: {index:number; startX:number; startY:number}[] = [];
+    if (typeof node !== 'undefined' && node && node.emo && node.emo === (focus || node.emo) && focus === node.emo) {
+      // include this node
+      group.push({ index, startX: node.x, startY: node.y });
+      // include directly connected nodes
+      for (const ed of edges) {
+        if (ed.a === index) {
+          const other = nodes[ed.b];
+          group.push({ index: ed.b, startX: other.x, startY: other.y });
+        } else if (ed.b === index) {
+          const other = nodes[ed.a];
+          group.push({ index: ed.a, startX: other.x, startY: other.y });
+        }
+      }
+    } else {
+      group.push({ index, startX: node.x, startY: node.y });
+    }
+    // dedupe group indices
+    const seen = new Set<number>();
+    const uniq = group.filter(g => { if (seen.has(g.index)) return false; seen.add(g.index); return true; });
+    draggingRef.current = { index, px: x, py: y, moved: false, group: uniq };
     (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
   // Cancel momentum when grabbing a node
   momentumRef.current.active = false;
@@ -128,12 +174,40 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     const { x: nx, y: ny } = svgToWorld(e.clientX, e.clientY, svg);
     const d = draggingRef.current;
     if (Math.abs(nx - d.px) + Math.abs(ny - d.py) > 2) d.moved = true;
-    const node = nodesRef.current[d.index];
-    // allow dragging slightly beyond the visible canvas using CANVAS_OVERFLOW
-    node.x = clamp(nx, node.r + NODE_PADDING - CANVAS_OVERFLOW, worldWidth - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
-  node.y = clamp(ny, node.r + NODE_PADDING - CANVAS_OVERFLOW, worldHeight - (node.r + NODE_PADDING) + CANVAS_OVERFLOW);
-    node.vx = 0; node.vy = 0;
-    setTick(t => t + 1);
+    const nodes = nodesRef.current;
+    const primaryIndex = d.index;
+    // primary node snaps to pointer
+    const primary = nodes[primaryIndex];
+    if (primary) {
+      primary.x = clamp(nx, primary.r + NODE_PADDING - CANVAS_OVERFLOW, worldWidth - (primary.r + NODE_PADDING) + CANVAS_OVERFLOW);
+      primary.y = clamp(ny, primary.r + NODE_PADDING - CANVAS_OVERFLOW, worldHeight - (primary.r + NODE_PADDING) + CANVAS_OVERFLOW);
+      primary.vx = 0; primary.vy = 0;
+    }
+    // soft-follow for other group members: give controlled velocity impulse toward the primary node
+    for (const g of d.group) {
+      if (g.index === primaryIndex) continue;
+      const node = nodes[g.index];
+      if (!node) continue;
+      // vector from node -> primary
+      const fx = (primary.x - node.x);
+      const fy = (primary.y - node.y);
+      const dist = Math.hypot(fx, fy) || 0.0001;
+      // reduce strength and cap impulses so followers don't snap or fly across canvas
+      const followStrength = 0.08; // lower -> looser, less chaotic
+      const maxImpulse = 8; // world-units per update
+      // compute impulse proportional to distance but capped
+      const impulseMag = Math.min(dist * followStrength, maxImpulse);
+      const impulseX = (fx / dist) * impulseMag;
+      const impulseY = (fy / dist) * impulseMag;
+      // apply impulse with gentle damping
+      node.vx = node.vx * 0.75 + impulseX;
+      node.vy = node.vy * 0.75 + impulseY;
+      // clamp velocity to avoid runaway
+      const maxVel = 80;
+      const vmag = Math.hypot(node.vx, node.vy);
+      if (vmag > maxVel) { node.vx = (node.vx / vmag) * maxVel; node.vy = (node.vy / vmag) * maxVel; }
+    }
+    triggerRender();
   }
   function onPointerUp(_: React.PointerEvent<SVGGElement>, emo: string) {
     if (!draggingRef.current) return;
@@ -149,7 +223,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     let last = performance.now();
     const nodes = nodesRef.current;
     if (!nodes.length) { // still trigger a repaint for empty state, but no loop
-      setTick(t=>t+1);
+      triggerRender();
       return;
     }
     function step(now: number) {
@@ -161,32 +235,47 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       // Skip physics while dragging to keep node under pointer
       if (!draggingRef.current) {
         // Reset small accumulative force (implicit in velocity updates)
-        // Repulsion (naive O(n^2), fine for <=14 nodes)
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            const a = nodes[i], b = nodes[j];
-            let dx = a.x - b.x; let dy = a.y - b.y; let dist2 = dx*dx + dy*dy;
-            if (dist2 < 1) { dx = (Math.random()-0.5); dy = (Math.random()-0.5); dist2 = dx*dx + dy*dy; }
-            const dist = Math.sqrt(dist2);
-            const rep = 2200 / dist2; // repulsion constant
-            const fx = (dx / dist) * rep;
-            const fy = (dy / dist) * rep;
-            a.vx += fx * dt; a.vy += fy * dt;
-            b.vx -= fx * dt; b.vy -= fy * dt;
+        // Repulsion using spatial hashing (approx O(n)) for better performance with many nodes
+        if (FORCES_ENABLED) {
+          const cellSize = 120; // tuning param: neighborhood radius
+          const grid = new Map<string, number[]>();
+          function keyFor(x:number,y:number){ return Math.floor(x/cellSize)+','+Math.floor(y/cellSize); }
+          for (let i=0;i<nodes.length;i++){ const n=nodes[i]; const k=keyFor(n.x,n.y); const arr=grid.get(k)||[]; arr.push(i); grid.set(k,arr); }
+          const neighborOffsets = [[0,0],[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]];
+          for (let i=0;i<nodes.length;i++){
+            const a = nodes[i];
+            const baseX = Math.floor(a.x/cellSize), baseY = Math.floor(a.y/cellSize);
+            for (const off of neighborOffsets){
+              const k = (baseX+off[0])+','+(baseY+off[1]);
+              const bucket = grid.get(k); if (!bucket) continue;
+              for (const j of bucket){ if (j <= i) continue; const b = nodes[j];
+                let dx = a.x - b.x; let dy = a.y - b.y; let dist2 = dx*dx + dy*dy;
+                if (dist2 < 1e-4) { dx = (Math.random()-0.5); dy = (Math.random()-0.5); dist2 = dx*dx + dy*dy; }
+                const dist = Math.sqrt(dist2);
+                const rep = 2200 / dist2;
+                const fx = (dx / dist) * rep;
+                const fy = (dy / dist) * rep;
+                a.vx += fx * dt; a.vy += fy * dt;
+                b.vx -= fx * dt; b.vy -= fy * dt;
+              }
+            }
           }
         }
         // Spring attraction for co-usage
-        for (const e of edges) {
-          const a = nodes[e.a], b = nodes[e.b];
-            const dx = b.x - a.x; const dy = b.y - a.y; const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
-            const base = 150; const factor = 18; const minL = 40;
-            const target = clamp(base - e.w * factor, minL, base);
-            const k = 0.15; // spring stiffness
-            const f = k * (dist - target);
-            const fx = (dx / dist) * f;
-            const fy = (dy / dist) * f;
-            a.vx += fx * dt; a.vy += fy * dt;
-            b.vx -= fx * dt; b.vy -= fy * dt;
+        if (FORCES_ENABLED) {
+          for (const e of edges) {
+            const a = nodes[e.a], b = nodes[e.b];
+              const dx = b.x - a.x; const dy = b.y - a.y; const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
+              // Increase baseline separation between connected nodes so groups are more spread out.
+              const base = 260; const factor = 6; const minL = 80;
+              const target = clamp(base - e.w * factor, minL, base);
+              const k = 0.12; // spring stiffness (softer springs)
+              const f = k * (dist - target);
+              const fx = (dx / dist) * f;
+              const fy = (dy / dist) * f;
+              a.vx += fx * dt; a.vy += fy * dt;
+              b.vx -= fx * dt; b.vy -= fy * dt;
+          }
         }
         // Integrate
         for (const n of nodes) {
@@ -231,11 +320,11 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       view.tx = lerp(view.tx, view.targetTx, ease);
       view.ty = lerp(view.ty, view.targetTy, ease);
 
-      // Update view (throttle - every frame for smoothness with small node count)
-      setTick(t => t + 1);
+  // Update view (throttle renders)
+  triggerRender();
       frameRef.current = requestAnimationFrame(step);
     }
-    frameRef.current = requestAnimationFrame(step);
+  frameRef.current = requestAnimationFrame(step);
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
   }, [topEmojis]);
 
@@ -340,7 +429,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   v.targetScale = v.scale;
   v.targetTx = v.tx;
   v.targetTy = v.ty;
-    setTick(t=>t+1);
+  triggerRender();
   }
 
   // Background pan handlers on outer svg (not on nodes)
@@ -398,7 +487,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   v.targetScale = v.scale;
   v.targetTx = v.tx;
   v.targetTy = v.ty;
-      setTick(t=>t+1);
+    triggerRender();
       return; // don't also pan
     }
     // Pan (single pointer, no pinch, no node drag)
@@ -420,7 +509,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
         momentumRef.current.vy = ((e.clientY - last.y) * (worldHeight / rect.height)) / (now - last.t);
         lastPanSampleRef.current = { x: e.clientX, y: e.clientY, t: now };
       }
-      setTick(t=>t+1);
+    triggerRender();
     }
   }
   function onBgPointerUp(e: React.PointerEvent<SVGSVGElement>) {
@@ -558,7 +647,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
           v.targetScale = DEFAULT_SCALE;
           v.targetTx = (worldWidth / 2) - (worldWidth / 2) * DEFAULT_SCALE;
           v.targetTy = (worldHeight / 2) - (worldHeight / 2) * DEFAULT_SCALE;
-          setTick(t=>t+1);
+          triggerRender();
           return;
         }
         const factor = action === 'in' ? 1.25 : 1/1.25;
@@ -566,10 +655,10 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
         // Maintain center anchor
         const worldCx = (centerScreenX - rect.left - v.tx) / v.scale;
         const worldCy = (centerScreenY - rect.top - v.ty) / v.scale;
-        v.targetScale = targetScale;
-        v.targetTx = (centerScreenX - rect.left) - worldCx * targetScale;
-        v.targetTy = (centerScreenY - rect.top) - worldCy * targetScale;
-        setTick(t=>t+1);
+  v.targetScale = targetScale;
+  v.targetTx = (centerScreenX - rect.left) - worldCx * targetScale;
+  v.targetTy = (centerScreenY - rect.top) - worldCy * targetScale;
+  triggerRender();
       }} />
     </div>
   );
