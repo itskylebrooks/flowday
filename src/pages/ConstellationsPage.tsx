@@ -21,7 +21,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const worldWidth = WORLD_SIZE, worldHeight = WORLD_SIZE;
 
   // Default initial zoom level (world units -> rendered zoom). >1 = zoomed in
-  const DEFAULT_SCALE = 2.0;
+  const DEFAULT_SCALE = 2.5;
 
   const NODE_PADDING = 24; // desired padding from edge (in world units)
   // Allow nodes to be dragged slightly beyond the visible canvas (world units)
