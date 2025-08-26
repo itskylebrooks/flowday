@@ -28,13 +28,14 @@ export default function MonthFlow({ hues, empty=false, className = '' }: { hues:
   const hueKey = useMemo(() => hues.join(','), [hues]);
   // Stable seeds for glitter
   const seedsRef = useRef<Array<{ y: number; r: number; phase: number; speed: number }>>([]);
-  if (!seedsRef.current) {
+  // Seeds for glitter particles
+  if (!seedsRef.current.length) {
     const N = 20;
     seedsRef.current = Array.from({ length: N }, () => ({
-      y: Math.random(),
-      r: 1 + Math.random() * 1.8,
-      phase: Math.random(),
-      speed: 0.02 + Math.random() * 0.05,
+      y: Math.random(),                    // vertical offset (randomized)
+      r: 1 + Math.random() * 1.8,          // radius size
+      phase: Math.random(),                // starting phase offset
+      speed: 0.02 + Math.random() * 0.05,  // how fast it moves horizontally
     }));
   }
 
