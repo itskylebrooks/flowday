@@ -2,7 +2,7 @@
   <img src="public/Flowday.png" alt="Flowday" width="120" />
   <h1>Flowday</h1>
   <p><strong>Your day distilled into color, emojis, and a vibe.</strong></p>
-  <p>A 20-second ritual that turns feelings into flowing visuals worth keeping and sharing.</p>
+  <p>A 20‑second ritual that turns feelings into flowing visuals worth keeping and sharing.</p>
 </div>
 
 ## Why Flowday?
@@ -16,87 +16,137 @@ Most journals want essays. Habit trackers reduce mood to numbers.
 
 From these tiny inputs, Flowday creates:
 
-- Weekly flowing ribbons  
-- Monthly continuous color mixes  
-- Emoji constellations (your emotional sky)  
-- Song Echoes (cassette-style snapshots)
+- **Weekly flowing ribbons** (7‑day wave)  
+- **Monthly continuous mixes** (a single ribbon that reflects dominant hues)  
+- **Emoji constellations** (your emotional sky)  
+- **Song Echoes** (cassette‑style snapshots)
 
 No calendars. No streaks. Just ambient reflection.
 
 ## Principles
 
 1. **Frictionless** – quicker than replying to a text.  
-2. **Feels like art** – outputs look poster-ready by default.  
-3. **Local-first** – entries stay on your device unless you opt in later.  
+2. **Feels like art** – outputs look poster‑ready by default.  
+3. **Local‑first** – entries stay on your device unless you opt in.  
 4. **Human tone** – playful, not clinical or gamified.
 
-## Daily Flow
+## Features
 
-| Step | Action | Feedback |
-|------|--------|----------|
-| 1 | Tap 1–3 emojis (triangle layout) | Empty slots invite filling |
-| 2 | Drag rainbow slider (unlocked after first emoji) | Aura appears; label flips to “Saved 🌈” |
-| 3 | (Optional) Add song | Becomes part of Echoes as a cassette |
+- **Today** – Emoji triangle + aura; calm when saved, inviting when empty.  
+- **Flows** –  
+  - *Week Flow*: 7 blended bands in a soft wave.  
+  - *Month Mix*: luminous ribbon weighted by hue frequency (not a timeline).  
+- **Constellations** – Top emojis become nodes; co‑occurrences connect them. Opacity tracks recency.  
+- **Echoes** – Days with songs show as cassette cards (title + artist).  
+- **Sync (Telegram)** – Optional cloud sync keyed by Telegram ID.  
+- **Reminders (Telegram)** – Server‑side daily reminder (opt‑in).  
+- **Export / Import** – JSON file with all entries, user, recents, and reminder prefs.
 
-Edits allowed for today & yesterday only. Earlier entries are snapshots.
+## Privacy at a glance
 
-## Visual Surfaces
+- **Local‑first by default.** Cloud sync is opt‑in (Telegram only).  
+- **Telegram Analytics** is anonymous and event‑only (launches, basic flows) to meet App Center requirements.  
+- **You control your data.** Export anytime. Delete cloud account from Settings; local data stays unless you wipe it.
 
-**Today** – Emoji triangle + aura gradient, calm when saved, inviting when empty.  
-**Flows** –  
-- Week Flow: 7 blended bands in a soft wave  
-- Month Mix: a luminous ribbon, continuous color without ticks  
-Both exportable as minimal posters.  
+## Quickstart (development)
 
-**Constellations** – Top emojis become nodes; co-occurrences connect them. Motion suggests a night sky.  
+**Prereqs:** Node 18+, npm or pnpm, a Supabase project (free tier is fine).
 
-**Echoes** – Days with songs show as cassette cards. Open one for spinning reels, date stamp, title & artist.
-
-## Telegram Sync
-
-Flowday integrates with Telegram Mini App for enhanced sharing and syncing. Your entries remain local by default, with optional cloud sync to keep your data safe and accessible across devices.
-
-## Export & Import
-
-You can export all your Flowday data to a file and import it back later. It's a simple way for web users to save and restore their entries—handy if you don't use Telegram sync. Your memories, your control.
-
-## Development
-
-Run tests:
-
+1) **Clone & install**
 ```bash
-npm test
+git clone https://github.com/itskylebrooks/flowday
+cd flowday
+npm i
 ```
 
-Dev server:
+2) **Apply database schema (Supabase)**
+- Open your Supabase SQL editor and run `supabase.sql`.  
+- Row Level Security is enabled; tables: `users`, `entries`, `reminders`.
 
+3) **Create `.env.local` (examples)**
+```bash
+# Supabase (client)
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Telegram Mini App
+BOT_TOKEN=123456:ABC...        # @BotFather token
+MINIAPP_URL=https://your-app.vercel.app   # deployed URL used in the /start button
+PRIVACY_URL=https://your-privacy-page     # optional
+
+# Telegram Mini Apps Analytics (anonymous)
+ANALYTICS_TOKEN=your_analytics_token
+ANALYTICS_APP=your_analytics_identifier   # the app name you registered
+```
+
+4) **Run dev**
 ```bash
 npm run dev
 ```
 
-Build:
-
+5) **Run tests**
 ```bash
-npm run build
+npm test
 ```
+
+## Deploy (Vercel)
+
+1) **Add the same environment variables** in your Vercel Project → *Settings → Environment Variables*.  
+2) **Deploy** (main or a preview branch).  
+3) **Set Telegram webhook** to your deployed URL:
+```bash
+curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+  --data-urlencode "url=https://your-app.vercel.app/api/telegram/tg-webhook"
+```
+4) *(Optional)* **Set bot commands** (served by `api/telegram/tg-set-commands.ts` if present) or via @BotFather.  
+5) **Reminders cron** – Vercel Scheduler should hit `api/reminders/cron-reminders` daily.
+Example `vercel.json` entry:
+```json
+{
+  "crons": [
+    { "path": "/api/reminders/cron-reminders", "schedule": "0 18 * * *" }
+  ]
+}
+```
+
+## API surface (serverless)
+
+- `POST /api/telegram/tg-webhook` – Bot webhook; replies to `/start` with “Open Flowday” button.  
+- `GET/POST /api/reminders/reminders-get|reminders-set` – Read/update reminder prefs.  
+- `POST /api/reminders/cron-reminders` – Sends daily reminders to opted‑in users.  
+- `POST /api/sync/sync-push` – Push entries to Supabase (Telegram users).  
+- `POST /api/sync/sync-pull` – Pull entries from Supabase.  
+- `POST /api/share/share-poster` – Generate minimal poster from flows.
+
+## Tech stack
+
+- **Client:** React + TypeScript + Vite, TailwindCSS.  
+- **Telegram Mini App:** WebApp integration + Bot API.  
+- **Backend:** Vercel Serverless Functions.  
+- **DB:** Supabase (Postgres + RLS).  
+- **Analytics:** Telegram Mini Apps Analytics SDK (anonymous).
 
 ## Roadmap
 
-- Blends with friends  
-- Richer overviews of your flows and moods  
-- Language options (localization)  
+- **Blends with friends** – lightweight social layer (invite, view friends’ activity, emoji reactions).  
+- **Month Mix v2** – palette extraction & weighting tweaks for an even more true “mood ribbon”.  
+- **Reminder upgrade** – user‑selectable reminder time instead of a fixed “evening.”  
+- **Localization** – RU, DE, ES, FR.  
+- **Telegram integrations** – share to Stories, quick invite links.  
+- **TON exploration** – collectible visuals (Month Mix / avatar / constellations) and **blockchain‑backed backups** *(likely hashes, not full data)*.  
+- **Web sync (maybe)** – evaluate simple email or OAuth in a separate web build.
 
-Always under 20 seconds to capture.
+Always under **20 seconds** to capture.
 
 ## Contributing
 
-PRs welcome — keep UI minimal, add tests for changes, avoid heavy dependencies.
+PRs welcome — keep UI minimal, add tests for changes, avoid heavy deps.  
+If adding features, prefer platform‑specific folders (`components/tg`, `components/web`) over runtime `if/else`.
 
 ## License
 
 This code is for **personal viewing and inspiration only**.  
 All rights reserved © 2025 Kyle Brooks.  
-
-No commercial use or redistribution without permission.  
+No commercial use or redistribution without permission.
 
 > Flowday is a daily glance inward — memory carried forward in color.
