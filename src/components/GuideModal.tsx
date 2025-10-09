@@ -40,11 +40,11 @@ const STEPS: { title: string; body: string }[] = [
   },
   {
     title: 'Sharing & privacy',
-    body: 'Export PNGs or share directly to Telegram. Data is local-first; future sync is optional and opt-in only.'
+    body: 'Export PNGs or share directly to Telegram. Data stays on your device — copy or import JSON to move it.',
   },
   {
     title: 'Settings & account',
-    body: 'Set a username (auto in Telegram), manage reminders, or wipe local data from Settings.'
+    body: 'Set a username (auto in Telegram), export/import data, or wipe local data from Settings.'
   }
 ];
 

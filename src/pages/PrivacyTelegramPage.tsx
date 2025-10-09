@@ -1,5 +1,5 @@
 // Privacy (Telegram Mini App)
-// Applies to the Telegram version with cloud sync + reminders.
+// Applies to the Telegram version now running fully local within the Telegram WebApp container.
 
 export default function PrivacyTelegramPage({ onBack }: { onBack?: () => void }) {
   return (
@@ -21,38 +21,37 @@ export default function PrivacyTelegramPage({ onBack }: { onBack?: () => void })
 
       <div className="mt-2 flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="px-0 py-2 space-y-4 text-sm text-white/70" style={{ textAlign: 'justify' }}>
-          <div><div className="font-semibold">Last updated: Aug 25, 2025</div></div>
+          <div><div className="font-semibold">Last updated: Feb 17, 2025</div></div>
 
           <div>
             <div className="font-semibold">What we collect</div>
             <ul className="list-disc pl-5 mt-2">
-              <li><span className="font-medium">Telegram account:</span> Your Telegram ID and username (if available) to create your cloud account and sync entries across Telegram devices.</li>
-              <li><span className="font-medium">App data:</span> Your mood entries (emojis, optional colors, optional song title/artist) and reminder preferences.</li>
+              <li><span className="font-medium">Telegram basics only:</span> When you open the mini app we can read your Telegram ID and username so the UI can greet you. We do not store this information on our servers.</li>
+              <li><span className="font-medium">Local app data:</span> Your mood entries (emojis, optional colors, optional song title/artist) and preferences live inside the Telegram WebApp local storage on your device.</li>
             </ul>
           </div>
 
           <div>
             <div className="font-semibold">How we use data</div>
             <ul className="list-disc pl-5 mt-2">
-              <li>Provide cloud sync for your entries within Telegram.</li>
-              <li>Send optional daily reminders if you enable them.</li>
-              <li>Keep your cloud data (entries, reminders, username) in sync across Telegram devices.</li>
+              <li>Everything stays on your device. We render your flows, constellations, and echoes directly from local storage.</li>
+              <li>If you export or share a poster, we temporarily send that poster to Telegram/Telegra.ph to deliver the share result you requested. We do not retain a copy.</li>
             </ul>
           </div>
 
           <div>
             <div className="font-semibold">Sharing</div>
             <div className="mt-2">
-              We do not sell or share your personal data with third parties. Data is stored on our Supabase backend.
+              We do not sell or share your personal data with third parties. There is no Supabase or external database involved anymore.
             </div>
           </div>
 
           <div>
             <div className="font-semibold">Your choices</div>
             <ul className="list-disc pl-5 mt-2">
-              <li>Turn reminders on/off any time in Settings.</li>
-              <li>Delete your cloud account in Settings (removes synced entries and reminder settings from the server). Local data on your device stays until you remove it.</li>
-              <li>Want a portable copy? Use the web build’s export to JSON (available on the open web version).</li>
+              <li>Export your data to JSON and import it on another device manually.</li>
+              <li>Clear local data in Settings if you want to wipe everything from this Telegram client.</li>
+              <li>Copy or paste JSON between Telegram devices using the built-in transfer card.</li>
             </ul>
           </div>
 

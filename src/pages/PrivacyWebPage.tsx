@@ -21,7 +21,7 @@ export default function PrivacyWebPage({ onBack }: { onBack?: () => void }) {
 
       <div className="mt-2 flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="px-0 py-2 space-y-4 text-sm text-white/70" style={{ textAlign: 'justify' }}>
-          <div><div className="font-semibold">Last updated: Aug 25, 2025</div></div>
+          <div><div className="font-semibold">Last updated: Feb 17, 2025</div></div>
 
           <div>
             <div className="font-semibold">What we collect</div>
@@ -52,7 +52,7 @@ export default function PrivacyWebPage({ onBack }: { onBack?: () => void }) {
             <ul className="list-disc pl-5 mt-2">
               <li>Export your entries to a JSON file and import them later or on another browser.</li>
               <li>Clear local data in Settings if you want to wipe everything from this device.</li>
-              <li>Using Flowday in Telegram? That version offers cloud sync and has a separate privacy policy.</li>
+              <li>Using Flowday in Telegram? That version also keeps everything local and provides the same manual JSON export/import tools.</li>
             </ul>
           </div>
 

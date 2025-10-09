@@ -84,7 +84,7 @@ export default async function handler(req: Req, res: Res) {
       const welcome =
         `Flowday — your mood diary on Telegram.\n` +
         `Track each day with up to 3 emojis, a color, and an optional song. ` +
-        `Your data syncs across Telegram devices.`;
+        `Your data stays on this device. Export JSON any time to move it.`;
 
       // Preferred: web_app button
       const preferred = {

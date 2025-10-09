@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.56.0",
     "html-to-image": "^1.11.13",
     "motion": "^12.23.12",
     "react": "^19.1.1",

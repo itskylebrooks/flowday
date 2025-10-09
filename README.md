@@ -38,19 +38,18 @@ No calendars. No streaks. Just ambient reflection.
   - *Month Mix*: luminous ribbon weighted by hue frequency (not a timeline).  
 - **Constellations** – Top emojis become nodes; co‑occurrences connect them. Opacity tracks recency.  
 - **Echoes** – Days with songs show as cassette cards (title + artist).  
-- **Sync (Telegram)** – Optional cloud sync keyed by Telegram ID.  
-- **Reminders (Telegram)** – Server‑side daily reminder (opt‑in).  
+- **Manual transfer (Telegram)** – Copy/paste JSON between Telegram devices for manual sync.
 - **Export / Import** – JSON file with all entries, user, recents, and reminder prefs.
 
 ## Privacy at a glance
 
-- **Local‑first by default.** Cloud sync is opt‑in (Telegram only).
-- **No analytics or trackers.** The Telegram build only talks to Supabase for sync and Telegram for reminders.
-- **You control your data.** Export anytime. Delete cloud account from Settings; local data stays unless you wipe it.
+- **Local‑first.** Entries and preferences stay on your device across both web and Telegram builds.
+- **No analytics or trackers.** The Telegram build only talks to Telegram APIs when you share a poster.
+- **You control your data.** Export or import JSON anytime, or wipe local storage from Settings.
 
 ## Quickstart (development)
 
-**Prereqs:** Node 18+, npm or pnpm, a Supabase project (free tier is fine).
+**Prereqs:** Node 18+, npm or pnpm.
 
 1) **Clone & install**
 ```bash
@@ -59,16 +58,8 @@ cd flowday
 npm i
 ```
 
-2) **Apply database schema (Supabase)**
-- Open your Supabase SQL editor and run `supabase.sql`.  
-- Row Level Security is enabled; tables: `users`, `entries`, `reminders`.
-
-3) **Create `.env.local` (examples)**
+2) **Create `.env.local` (examples)**
 ```bash
-# Supabase (client)
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
 # Telegram Mini App
 BOT_TOKEN=123456:ABC...        # @BotFather token
 MINIAPP_URL=https://your-app.vercel.app   # deployed URL used in the /start button
@@ -76,12 +67,12 @@ PRIVACY_URL=https://your-privacy-page     # optional
 
 ```
 
-4) **Run dev**
+3) **Run dev**
 ```bash
 npm run dev
 ```
 
-5) **Run tests**
+4) **Run tests**
 ```bash
 npm test
 ```
@@ -93,40 +84,24 @@ npm test
 3) **Set Telegram webhook** to your deployed URL:
 ```bash
 curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
-  --data-urlencode "url=https://your-app.vercel.app/api/telegram/tg-webhook"
+  --data-urlencode "url=https://your-app.vercel.app/api/tg-webhook"
 ```
-4) *(Optional)* **Set bot commands** (served by `api/telegram/tg-set-commands.ts` if present) or via @BotFather.  
-5) **Reminders cron** – Vercel Scheduler should hit `api/reminders/cron-reminders` daily.
-Example `vercel.json` entry:
-```json
-{
-  "crons": [
-    { "path": "/api/reminders/cron-reminders", "schedule": "0 18 * * *" }
-  ]
-}
-```
-
+4) *(Optional)* **Set bot commands** (served by `api/tg-set-commands.ts` if present) or via @BotFather.  
 ## API surface (serverless)
 
-- `POST /api/telegram/tg-webhook` – Bot webhook; replies to `/start` with “Open Flowday” button.  
-- `GET/POST /api/reminders/reminders-get|reminders-set` – Read/update reminder prefs.  
-- `POST /api/reminders/cron-reminders` – Sends daily reminders to opted‑in users.  
-- `POST /api/sync/sync-push` – Push entries to Supabase (Telegram users).  
-- `POST /api/sync/sync-pull` – Pull entries from Supabase.  
-- `POST /api/share/share-poster` – Generate minimal poster from flows.
+- `POST /api/tg-webhook` – Bot webhook; replies to `/start` with “Open Flowday” button.  
+- `POST /api/share-poster` – Generates a Telegram-ready poster from your flows.  
+- `POST /api/tg-set-commands` – (Optional) helper to register basic bot commands.
 
 ## Tech stack
 
 - **Client:** React + TypeScript + Vite, TailwindCSS.  
 - **Telegram Mini App:** WebApp integration + Bot API.  
 - **Backend:** Vercel Serverless Functions.  
-- **DB:** Supabase (Postgres + RLS).  
-
 ## Roadmap
 
 - **Blends with friends** – lightweight social layer (invite, view friends’ activity, emoji reactions).  
 - **Month Mix v2** – palette extraction & weighting tweaks for an even more true “mood ribbon”.  
-- **Reminder upgrade** – user‑selectable reminder time instead of a fixed “evening.”  
 - **Localization** – RU, DE, ES, FR.  
 - **Telegram integrations** – share to Stories, quick invite links.  
 - **TON exploration** – collectible visuals (Month Mix / avatar / constellations) and **blockchain‑backed backups** *(likely hashes, not full data)*.  
