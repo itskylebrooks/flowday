@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { isTelegram, hapticFunny } from '../lib/telegram';
-import { APP_VERSION } from '../lib/version';
-import { APP_NAME } from '../lib/version';
+import { APP_NAME, APP_VERSION } from '../../../lib/constants/version';
+import { hapticFunny, isTelegram } from '../../../lib/services/telegram';
 
 interface Props {
   enabled?: boolean; // whether overlay functionality is enabled

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { addDays, todayISO, emojiStats, monthlyTop3, monthlyStops } from '../src/lib/utils';
-import { upsertEntry } from '../src/lib/storage';
-import type { Entry } from '../src/lib/types';
+import { upsertEntry } from '../src/lib/services/storage';
+import type { Entry } from '../src/lib/types/global';
 
 // Helper to freeze todayISO by mocking Date
 function mockToday(date: string) {

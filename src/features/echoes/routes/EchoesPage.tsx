@@ -1,9 +1,9 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
-import cassetteInsert from '../assets/audio/cassette-insert.mp3';
-import cassetteEject from '../assets/audio/cassette-eject.mp3';
-import { createCassettePool, playCassetteInsert, playCassetteEject } from '../lib/sounds';
-import type { Entry } from '../lib/types';
-import { hsl } from '../lib/utils';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import cassetteInsert from '../../../assets/audio/cassette-insert.mp3';
+import cassetteEject from '../../../assets/audio/cassette-eject.mp3';
+import { createCassettePool, playCassetteEject, playCassetteInsert } from '../../../lib/services/sounds';
+import type { Entry } from '../../../lib/types/global';
+import { hsl } from '../../../lib/utils';
 
 // Compute a contrasting reel (dot) color based on hue brightness so bright hues (e.g. yellows)
 // get darker reels instead of even brighter, improving legibility of reel shapes.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Entry } from '../src/lib/types';
-import { upsertEntry } from '../src/lib/storage';
+import type { Entry } from '../src/lib/types/global';
+import { upsertEntry } from '../src/lib/services/storage';
 
 // Regression: ensure aura (hue) cleared when no emojis remain
 

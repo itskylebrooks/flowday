@@ -1,4 +1,4 @@
-import EmojiBubble from './EmojiBubble';
+import { EmojiBubble } from '../../../ui';
 
 export default function EmojiTriangle({
   emojis, onPick, onRemove, editable,

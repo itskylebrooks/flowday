@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser, clearAllData, exportAllData, importAllData } from '../lib/storage';
-import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
-import type { Entry } from '../lib/types';
+import { APP_VERSION_LABEL } from '../../../lib/constants/version';
+import { clearAllData, exportAllData, importAllData, loadUser, saveUser } from '../../../lib/services/storage';
+import { emojiStats, hsl, monthlyStops, todayISO } from '../../../lib/utils';
+import type { Entry } from '../../../lib/types/global';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG, onOpenPrivacy }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean; onOpenPrivacy?: () => void }) {
   const [closing, setClosing] = useState(false);
