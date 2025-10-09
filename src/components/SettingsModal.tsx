@@ -1,7 +1,6 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { APP_VERSION_LABEL } from '../lib/version';
-import { loadUser, saveUser, loadReminders, saveReminders, clearAllData, exportAllData, importAllData } from '../lib/storage';
-import { isCloudEnabled, signInToCloud, deleteCloudAccount, updateCloudUsername } from '../lib/sync';
+import { loadUser, saveUser, clearAllData, exportAllData, importAllData } from '../lib/storage';
 import { monthlyStops, emojiStats, hsl, todayISO } from '../lib/utils';
 import type { Entry } from '../lib/types';
 
@@ -12,7 +11,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [reminders, setReminders] = useState(()=> loadReminders());
   // Data transfer UI state (export/import)
   const [mode, setMode] = useState<'merge'|'replace'>('merge');
   const [exporting, setExporting] = useState(false);
@@ -24,7 +22,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const pasteRef = useRef<HTMLTextAreaElement | null>(null);
   // simple language state stored locally as a placeholder
   // language selection removed — app is English-only for Telegram deployment
-  const remindersDirtyRef = useRef(false);
   useEffect(()=>{ if(!open) setClosing(false); }, [open]);
   useEffect(()=>()=>{ if(timeoutRef.current) window.clearTimeout(timeoutRef.current); },[]);
   const CLOSE_DURATION = 280; // ms (match CSS .28s)
@@ -39,9 +36,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
       const current = loadUser();
       setUsername(current.username);
       setDirty(false); setSaving(false); setSavedFlash(false);
-  // refresh reminders
-  setReminders(loadReminders());
-  remindersDirtyRef.current = false;
     }
   }, [open]);
 
@@ -120,17 +114,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     if (e) e.preventDefault();
     if (!dirty || saving) return;
     setSaving(true);
-  if (username.trim().length < 4) { setSaving(false); alert('Username must be at least 4 characters.'); return; }
-  const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
-    // If cloud enabled, attempt remote username update
-    if (isCloudEnabled()) {
-      const r = await updateCloudUsername(stored.username);
-      if (!r.ok && r.error === 'username-taken') {
-        setSaving(false);
-        alert('Username already taken. Please choose another.');
-        return;
-      }
-    }
+    const stored = saveUser({ username, createdAt: Date.now(), updatedAt: Date.now() });
     setUsername(stored.username);
     setSaving(false); setDirty(false); setSavedFlash(true);
     setTimeout(()=> setSavedFlash(false), 1400);
@@ -170,37 +154,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
     }
     return { topEmoji: emoji, gradientCSS: gradient };
   }, [entries]);
-
-  const pushRemindersToCloud = useCallback(async (updated = reminders) => {
-    if (!isCloudEnabled()) return;
-    try {
-      interface TGWin { Telegram?: { WebApp?: { initData?: string } } }
-      const tg = (window as unknown as TGWin).Telegram?.WebApp; const initData: string | undefined = tg?.initData;
-      if (!initData) return;
-      const body = {
-        initData,
-        daily_enabled: updated.dailyEnabled,
-        daily_time: updated.dailyTime
-      };
-      await fetch('/api/reminders-set', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
-    } catch { /* ignore */ }
-  }, [reminders]);
-
-  // Persist reminders when modal closes if changed
-  useEffect(()=>{
-    if (!open && remindersDirtyRef.current) {
-      saveReminders(reminders);
-      void pushRemindersToCloud();
-      remindersDirtyRef.current = false;
-    }
-  }, [open, reminders, pushRemindersToCloud]);
-
-  // Reminder execution logic removed (placeholder) — only settings & persistence remain for now.
-
-  // ---- Time helpers (stored internally always as 24h HH:MM) ----
-  
-  // Local helper for UI state
-  const dailyEnabled = reminders.dailyEnabled;
 
   if (!open && !closing) return null;
   return (
@@ -277,13 +230,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] text-white/40">Lowercase, 24 chars max. Global uniqueness.</p>
+                <p className="mt-2 text-[11px] text-white/40">Lowercase, 24 chars max. Stored on this device.</p>
               </div>
-
-                  <div className="pt-1 grid gap-2">
-                    <CloudAccountSection isTG={isTG} />
-                  </div>
-
               <div className="mt-1">
                 <div className="flex items-center justify-between">
                   <div>
@@ -358,9 +306,8 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           </div>
           )}
 
-          {/* Telegram-only: Data transfer + Reminders */}
+          {/* Telegram-only: Data transfer */}
           {isTG && (
-          <>
           <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
             <div className="flex items-start justify-between">
               <div>
@@ -373,7 +320,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="grid gap-2">
                 <button onClick={handleCopyExport} disabled={exporting}
                   className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                  {exporting ? 'Exporting4e4' : 'Copy export JSON to clipboard'}
+                  {exporting ? 'Exporting…' : 'Copy export JSON to clipboard'}
                 </button>
 
                 <textarea ref={pasteRef} value={pasteInput} onChange={(e)=>setPasteInput(e.target.value)} placeholder="Paste exported JSON here to import" rows={6}
@@ -382,7 +329,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                 <div className="flex gap-2">
                   <button type="button" onClick={handlePasteImport}
                     className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                    {importing ? 'Importing4e5' : 'Import pasted JSON'}
+                    {importing ? 'Importing…' : 'Import pasted JSON'}
                   </button>
                   <button type="button" onClick={triggerFilePick}
                     className="rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
@@ -410,46 +357,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               )}
             </div>
           </div>
-
-          <div className="mt-3 bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold">Daily reminder</div>
-                  <div className="text-[12px] text-white/40 mt-1">Arrives in the evening \ud83c\udf06</div>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={dailyEnabled}
-                  aria-disabled={!isCloudEnabled()}
-                  onClick={()=> {
-                    if (!isCloudEnabled()) return; // only cloud (Supabase) users may enable daily reminders
-                    const v={...reminders,dailyEnabled: !dailyEnabled}; setReminders(v); remindersDirtyRef.current=true; saveReminders(v); pushRemindersToCloud(v);
-                  }}
-                  disabled={!isCloudEnabled()}
-                  className={
-                      "inline-flex items-center px-3 py-2 rounded-full transition-colors text-sm font-medium " +
-                      (dailyEnabled
-                        ? 'bg-emerald-600/8 text-white/90 ring-1 ring-emerald-500/30'
-                        : 'bg-red-600/6 text-white/85 ring-1 ring-red-400/25 hover:bg-red-600/12')
-                    }
-                >
-                  <span className="mr-3 text-sm">{dailyEnabled ? 'On' : 'Off'}</span>
-                  <span className={"relative inline-block w-11 h-6 rounded-full transition-colors " + (dailyEnabled ? 'bg-emerald-500/80' : 'bg-white/12') }>
-                    <span
-                      className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform"
-                      style={{ transform: dailyEnabled ? 'translateX(1.4rem)' : 'translateX(0)' }}
-                    />
-                  </span>
-                </button>
-              </div>
-            </div>
-            {!isCloudEnabled() && (
-              <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders, since they run from our server.</div>
-            )}
-          </div>
-          </>
           )}
 
           {/* Language selection removed */}
@@ -492,70 +399,3 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
 // Language selection UI removed
 
-// Subcomponent to handle cloud account actions
-function CloudAccountSection({ isTG }: { isTG?: boolean }) {
-  const [enabled, setEnabled] = useState(isCloudEnabled());
-  const [working, setWorking] = useState(false);
-  // Web-only import/export state & handlers (hooks must be top-level)
-  // Cloud account sign-in UI is below for Telegram builds. Web-only import/export is provided
-  // by the Data transfer card in the parent SettingsModal.
-
-  // If this is not the Telegram build, don't expose cloud sign-in UI.
-  // Show a short informational notice instead.
-  if (!isTG) {
-    return (
-      <div className="space-y-2">
-        <div className="w-full">
-          <div className="w-full flex justify-center">
-            <div className="text-[12px] text-center px-3 py-1.5 rounded-md bg-sky-500/30 text-white/85 ring-1 ring-sky-500/60 tracking-wide hover:bg-sky-500/50 transition">
-              Cloud sync is only available in the Telegram version.
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  async function handleSignIn() {
-    setWorking(true);
-    const desired = loadUser().username;
-    if (desired.trim().length < 4) { setWorking(false); alert('Username must be at least 4 characters.'); return; }
-    const r = await signInToCloud(desired);
-    setWorking(false);
-    if (r.ok) { setEnabled(true); }
-    else {
-      if (r.error === 'username-taken') alert('Username already taken. Choose another.');
-      else if (r.error === 'username-too-short') alert('Username must be at least 4 characters.');
-      else alert('Sign in failed. Try again.');
-    }
-  }
-  async function handleDelete() {
-    if (!enabled) return;
-    if (!window.confirm('Delete cloud account and all synced data? This cannot be undone. Local data will remain.')) return;
-    setWorking(true);
-    const ok = await deleteCloudAccount();
-    setWorking(false);
-    if (ok) setEnabled(false);
-  }
-  return (
-    <div className="space-y-2">
-      {!enabled && (
-        <button type="button" disabled={working} onClick={handleSignIn}
-          className="w-full rounded-md bg-emerald-600/15 px-3 py-1.5 text-xs font-medium ring-1 ring-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25 disabled:opacity-50">
-          {working ? 'Signing in…' : 'Sign in & enable sync'}
-        </button>
-      )}
-      {enabled && (
-        <button type="button" disabled={working} onClick={handleDelete}
-          className="w-full rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-red-300 hover:bg-red-600/25 disabled:opacity-50">
-          {working ? 'Deleting…' : 'Delete cloud account'}
-        </button>
-      )}
-      <p className="text-[10px] leading-relaxed text-white/35">
-        {enabled ? 'Cloud sync enabled. Your entries sync across Telegram devices.' : 'Sign in creates a cloud account (Telegram ID) so entries sync across devices. No account is created until you tap Sign in.'}
-      </p>
-      <p className="text-[10px] leading-relaxed text-white/35">
-        Synced data (entries, username, reminders) is stored securely on Supabase and never shared with third parties.
-      </p>
-    </div>
-  );
-}

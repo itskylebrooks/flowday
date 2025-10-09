@@ -11,8 +11,7 @@ import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTo
 import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
 import ReleaseOverlay from './components/ReleaseOverlay';
 import { APP_VERSION } from './lib/version';
-import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent, STORAGE_KEY } from './lib/storage';
-import { verifyTelegram, queueSyncPush, initialFullSyncIfNeeded, startPeriodicPull, startStartupSyncLoop, isCloudEnabled, syncPull } from './lib/sync';
+import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
 import IconButton from './components/IconButton';
 import EmojiTriangle from './components/EmojiTriangle';
 import EmojiPickerModal from './components/EmojiPickerModal';
@@ -63,59 +62,7 @@ export default function App() {
   const [activeDate, setActiveDate] = useState<string>(todayISO());
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
-  const entriesRef = useRef<Entry[]>(entries);
-  useEffect(() => { entriesRef.current = entries; }, [entries]);
   useEffect(() => { saveEntries(entries); }, [entries]);
-  // Telegram verification + initial cloud sync (telegram only)
-  // Run this effect whenever `isTG` changes so startup sync runs when Telegram.WebApp
-  // appears later (e.g. opening in another device) without requiring a manual reload.
-  useEffect(()=> {
-    if (!isTG) return;
-    startStartupSyncLoop(); // resilient verification loop
-    (async ()=> {
-      await verifyTelegram();
-      if (isCloudEnabled()) {
-        await initialFullSyncIfNeeded();
-        startPeriodicPull();
-      }
-    })();
-    // Listen for storage-level updates dispatched by background sync so UI updates live
-    const onEntriesUpdated = () => {
-      try {
-        const next = loadEntries();
-        const cur = entriesRef.current || [];
-        const a = JSON.stringify(cur);
-        const b = JSON.stringify(next);
-        if (a !== b) setEntries(next);
-      } catch { /* ignore */ }
-    };
-    window.addEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
-
-    // Also listen for cross-window/localStorage changes which fire 'storage' events
-    const onStorage = (e: StorageEvent) => {
-      try {
-        if (!e.key) return;
-        if (e.key === STORAGE_KEY) {
-          try {
-            const next = loadEntries();
-            const cur = entriesRef.current || [];
-            if (JSON.stringify(cur) !== JSON.stringify(next)) setEntries(next);
-          } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
-    };
-    window.addEventListener('storage', onStorage as EventListener);
-
-    // When the document becomes visible (reopen Telegram), attempt a pull so UI refreshes
-    const onVisibility = () => { if (document.visibilityState === 'visible') void syncPull(); };
-    document.addEventListener('visibilitychange', onVisibility as EventListener);
-
-    return () => {
-  window.removeEventListener('flowday:entries-updated', onEntriesUpdated as EventListener);
-  window.removeEventListener('storage', onStorage as EventListener);
-  document.removeEventListener('visibilitychange', onVisibility as EventListener);
-    };
-  }, [isTG]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
@@ -281,8 +228,7 @@ export default function App() {
     const hue = Math.round((x / rect.width) * 360);
     const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
     setShowAura(true);
-  setEntries((old) => upsertEntry(old, next));
-  queueSyncPush(next);
+    setEntries((old) => upsertEntry(old, next));
     if (isTG) {
       // Throttle haptics: only fire if >140ms since last or hue moved >=12 degrees
       const now = performance.now();
@@ -320,8 +266,7 @@ export default function App() {
       setShowAura(false);
     }
     next.updatedAt = Date.now();
-  setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+    setEntries(old => upsertEntry(old, next));
   }
 
   function removeEmojiAt(index: number) {
@@ -335,8 +280,7 @@ export default function App() {
       setShowAura(false);
     }
     next.updatedAt = Date.now();
-  setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+    setEntries(old => upsertEntry(old, next));
   }
 
   function updateSong(partial: Partial<Song>) {
@@ -351,8 +295,7 @@ export default function App() {
       next.song = merged;
     }
     next.updatedAt = Date.now();
-  setEntries(old => upsertEntry(old, next));
-  queueSyncPush(next);
+    setEntries(old => upsertEntry(old, next));
   }
 
   function formatActiveDate(): string {
