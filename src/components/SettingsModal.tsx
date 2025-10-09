@@ -19,6 +19,9 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
   const [importing, setImporting] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // Telegram paste import UI
+  const [pasteInput, setPasteInput] = useState<string>('');
+  const pasteRef = useRef<HTMLTextAreaElement | null>(null);
   // simple language state stored locally as a placeholder
   // language selection removed — app is English-only for Telegram deployment
   const remindersDirtyRef = useRef(false);
@@ -76,6 +79,37 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
       }
     } catch { alert('Import failed'); }
     finally { setImporting(false); try { e.target.value = ''; } catch {} }
+  }
+
+  // Telegram: import from pasted JSON
+  async function handlePasteImport() {
+    if (!pasteInput || !pasteInput.trim()) { alert('Paste some JSON to import'); return; }
+    setImporting(true);
+    try {
+      const res = importAllData(pasteInput, { merge: mode === 'merge' });
+      if (!res.ok) alert('Import failed: ' + (res.message || 'unknown'));
+      else {
+        const parts: string[] = [];
+        if (res.added) parts.push(`${res.added} added`);
+        if (res.merged) parts.push(`${res.merged} merged`);
+        parts.push(`${res.total ?? '??'} total locally`);
+        alert('Import completed: ' + parts.join(', '));
+        window.location.reload();
+      }
+    } catch (e) { alert('Import failed'); }
+    finally { setImporting(false); setPasteInput(''); }
+  }
+
+  // Telegram: export to clipboard
+  async function handleCopyExport() {
+    try {
+      setExporting(true);
+      const payload = exportAllData();
+      const json = JSON.stringify(payload, null, 2);
+      setPreview(json);
+      try { await navigator.clipboard?.writeText(json); alert('Export copied to clipboard'); } catch { alert('Could not copy to clipboard'); }
+    } catch { alert('Export failed'); }
+    finally { setExporting(false); }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -324,13 +358,64 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
           </div>
           )}
 
-          {/* Reminders card (only Daily reminder shown) - Telegram only */}
+          {/* Telegram-only: Data transfer + Reminders */}
           {isTG && (
+          <>
           <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-sm font-semibold mb-0.5">Data transfer</div>
+                <hr className="border-t border-white/6 my-3" />
+                <div className="text-[11px] text-center text-white/40 mt-1">Use JSON to move data between devices. Copy or paste JSON in Telegram.</div>
+              </div>
+            </div>
+            <div className="w-full mt-2">
+              <div className="grid gap-2">
+                <button onClick={handleCopyExport} disabled={exporting}
+                  className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+                  {exporting ? 'Exporting4e4' : 'Copy export JSON to clipboard'}
+                </button>
+
+                <textarea ref={pasteRef} value={pasteInput} onChange={(e)=>setPasteInput(e.target.value)} placeholder="Paste exported JSON here to import" rows={6}
+                  className="w-full rounded-md bg-white/5 px-3 py-2 text-xs outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30" />
+
+                <div className="flex gap-2">
+                  <button type="button" onClick={handlePasteImport}
+                    className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+                    {importing ? 'Importing4e5' : 'Import pasted JSON'}
+                  </button>
+                  <button type="button" onClick={triggerFilePick}
+                    className="rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
+                    From file
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
+                  <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
+                    <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
+                    <span>Merge (keep newest per day)</span>
+                  </label>
+                  <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
+                    <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
+                    <span>Replace local</span>
+                  </label>
+                </div>
+
+              </div>
+              {preview && (
+                <details className="mt-2 text-left text-[11px] text-white/40">
+                  <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
+                  <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
+                </details>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold">Daily reminder</div>
-                  <div className="text-[12px] text-white/40 mt-1">Arrives in the evening 🌆</div>
+                  <div className="text-[12px] text-white/40 mt-1">Arrives in the evening \ud83c\udf06</div>
               </div>
               <div>
                 <button
@@ -364,6 +449,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
               <div className="text-[11px] text-white/40 mt-3">Only users with a cloud account can enable reminders, since they run from our server.</div>
             )}
           </div>
+          </>
           )}
 
           {/* Language selection removed */}
