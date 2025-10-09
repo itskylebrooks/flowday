@@ -1,5 +1,5 @@
 // Privacy (Telegram Mini App)
-// Applies to the Telegram version with cloud sync + reminders + analytics.
+// Applies to the Telegram version with cloud sync + reminders.
 
 export default function PrivacyTelegramPage({ onBack }: { onBack?: () => void }) {
   return (
@@ -28,7 +28,6 @@ export default function PrivacyTelegramPage({ onBack }: { onBack?: () => void })
             <ul className="list-disc pl-5 mt-2">
               <li><span className="font-medium">Telegram account:</span> Your Telegram ID and username (if available) to create your cloud account and sync entries across Telegram devices.</li>
               <li><span className="font-medium">App data:</span> Your mood entries (emojis, optional colors, optional song title/artist) and reminder preferences.</li>
-              <li><span className="font-medium">Analytics:</span> Telegram Mini Apps Analytics (anonymous, GDPR-compliant) for app launches and basic in-app events. This helps improve Flowday and is required for the Apps Center. We do not collect private messages, contacts, or payment info.</li>
             </ul>
           </div>
 
@@ -37,14 +36,14 @@ export default function PrivacyTelegramPage({ onBack }: { onBack?: () => void })
             <ul className="list-disc pl-5 mt-2">
               <li>Provide cloud sync for your entries within Telegram.</li>
               <li>Send optional daily reminders if you enable them.</li>
-              <li>Improve stability and experience via anonymous analytics.</li>
+              <li>Keep your cloud data (entries, reminders, username) in sync across Telegram devices.</li>
             </ul>
           </div>
 
           <div>
             <div className="font-semibold">Sharing</div>
             <div className="mt-2">
-              We do not sell or share your personal data with third parties. Data is stored on our Supabase backend and Telegram Mini Apps Analytics infrastructure.
+              We do not sell or share your personal data with third parties. Data is stored on our Supabase backend.
             </div>
           </div>
 

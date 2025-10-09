@@ -44,8 +44,8 @@ No calendars. No streaks. Just ambient reflection.
 
 ## Privacy at a glance
 
-- **Local‑first by default.** Cloud sync is opt‑in (Telegram only).  
-- **Telegram Analytics** is anonymous and event‑only (launches, basic flows) to meet App Center requirements.  
+- **Local‑first by default.** Cloud sync is opt‑in (Telegram only).
+- **No analytics or trackers.** The Telegram build only talks to Supabase for sync and Telegram for reminders.
 - **You control your data.** Export anytime. Delete cloud account from Settings; local data stays unless you wipe it.
 
 ## Quickstart (development)
@@ -74,9 +74,6 @@ BOT_TOKEN=123456:ABC...        # @BotFather token
 MINIAPP_URL=https://your-app.vercel.app   # deployed URL used in the /start button
 PRIVACY_URL=https://your-privacy-page     # optional
 
-# Telegram Mini Apps Analytics (anonymous)
-ANALYTICS_TOKEN=your_analytics_token
-ANALYTICS_APP=your_analytics_identifier   # the app name you registered
 ```
 
 4) **Run dev**
@@ -124,7 +121,6 @@ Example `vercel.json` entry:
 - **Telegram Mini App:** WebApp integration + Bot API.  
 - **Backend:** Vercel Serverless Functions.  
 - **DB:** Supabase (Postgres + RLS).  
-- **Analytics:** Telegram Mini Apps Analytics SDK (anonymous).
 
 ## Roadmap
 
