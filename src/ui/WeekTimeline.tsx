@@ -1,5 +1,5 @@
-import type { Entry } from '../lib/types';
-import { hsl, todayISO, addDays } from '../lib/utils';
+import type { Entry } from '../lib/types/global';
+import { addDays, hsl, todayISO } from '../lib/utils';
 
 export default function WeekTimeline({ entries }: { entries: Entry[] }) {
   const width = 320;

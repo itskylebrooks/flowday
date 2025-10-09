@@ -1,11 +1,10 @@
-import type { Entry } from '../lib/types';
-import WeekTimeline from '../components/WeekTimeline';
-import MonthFlow from '../components/MonthFlow';
-import { loadUser } from '../lib/storage';
-import { todayISO } from '../lib/utils';
-import { useRef, useState, useMemo } from 'react';
-import { sharePoster } from '../lib/sharePoster';
+import { useMemo, useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
+import { loadUser } from '../../../lib/services/storage';
+import { sharePoster } from '../../../lib/services/sharing';
+import type { Entry } from '../../../lib/types/global';
+import { todayISO } from '../../../lib/utils';
+import { MonthFlow, WeekTimeline } from '../../../ui';
 
 export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onToggleMode, animKey }:
   { recent7: Entry[]; monthHues: number[]; monthEmpty: boolean; mode: 'week' | 'month'; onToggleMode: () => void; animKey: string }) {

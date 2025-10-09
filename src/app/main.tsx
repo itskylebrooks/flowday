@@ -1,8 +1,8 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { initTelegram, tg } from './lib/telegram';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './styles/index.css';
+import { initTelegram, tg } from '../lib/services/telegram';
 
 // Attempt immediate init; if not yet present (script may load async), retry a few times.
 function tryInitTG(attempt=0){

@@ -1,5 +1,5 @@
-import type { Entry, UserProfile, RemindersSettings } from './types';
-import { clamp } from './utils';
+import type { Entry, RemindersSettings, UserProfile } from '../types/global';
+import { clamp } from '../utils';
 
 // ---------------- Versioned Entry Storage ----------------
 // Historical formats:

@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { getEmojiCategories, searchEmojis } from '../lib/emojiAll';
+import { useEffect, useMemo, useState } from 'react';
+import { getEmojiCategories, searchEmojis } from '../lib/utils/emoji';
 
 export default function EmojiPickerModal({
   open, onClose, onPick, recents,

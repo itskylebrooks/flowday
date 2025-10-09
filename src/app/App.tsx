@@ -1,26 +1,28 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import type { Entry, Page, Song } from './lib/types';
-import FlowsPage from './pages/FlowsPage';
-import ConstellationsPage from './pages/ConstellationsPage';
-import EchoesPage from './pages/EchoesPage';
-import SettingsModal from './components/SettingsModal';
-import PrivacyTelegramPage from './pages/PrivacyTelegramPage';
-import PrivacyWebPage from './pages/PrivacyWebPage';
-import GuideModal from './components/GuideModal';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from './lib/utils';
-import { setBackButton, hapticLight, disableVerticalSwipes, enableVerticalSwipes, isTelegram, telegramAccentColor } from './lib/telegram';
-import ReleaseOverlay from './components/ReleaseOverlay';
-import { APP_VERSION } from './lib/version';
-import { loadEntries, saveEntries, upsertEntry, getRecents, pushRecent } from './lib/storage';
-import IconButton from './components/IconButton';
-import EmojiTriangle from './components/EmojiTriangle';
-import EmojiPickerModal from './components/EmojiPickerModal';
-import AuraBlock from './components/AuraBlock';
+import type { Entry, Song } from '../lib/types/global';
+import { APP_ROUTES, type AppPage } from '../lib/constants/routes';
+import ConstellationsPage from '../features/constellations/routes/ConstellationsPage';
+import EchoesPage from '../features/echoes/routes/EchoesPage';
+import FlowsPage from '../features/flows/routes/FlowsPage';
+import GuideModal from '../features/journal/components/GuideModal';
+import ReleaseOverlay from '../features/journal/components/ReleaseOverlay';
+import SettingsModal from '../features/journal/components/SettingsModal';
+import PrivacyTelegramPage from '../features/privacy/routes/PrivacyTelegramPage';
+import PrivacyWebPage from '../features/privacy/routes/PrivacyWebPage';
+import AuraBlock from '../features/journal/components/AuraBlock';
+import EmojiTriangle from '../features/journal/components/EmojiTriangle';
+import { EmojiPickerModal, IconButton } from '../ui';
+import { APP_VERSION } from '../lib/constants/version';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from '../lib/utils';
+import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton, telegramAccentColor } from '../lib/services/telegram';
+import { getRecents, loadEntries, pushRecent, saveEntries, upsertEntry } from '../lib/services/storage';
+import { APP_TABS } from './routes';
 
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
   const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
+  const { TODAY, FLOWS, CONSTELLATIONS, ECHOES } = APP_ROUTES;
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
@@ -47,7 +49,7 @@ export default function App() {
   // Song length constraints
   const MAX_TITLE = 48;
   const MAX_ARTIST = 40;
-  const [page, setPage] = useState<Page>('today');
+  const [page, setPage] = useState<AppPage>(TODAY);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [privacyClosing, setPrivacyClosing] = useState(false);
@@ -125,7 +127,7 @@ export default function App() {
   // (Removed Telegram MainButton 'Done' — no longer shown)
 
   // Reset offsets when switching to today page
-  useEffect(()=>{ if(page==='today'){ setWeekOffset(0); setMonthOffset(0); setYearOffset(0);} }, [page]);
+  useEffect(()=>{ if(page===TODAY){ setWeekOffset(0); setMonthOffset(0); setYearOffset(0);} }, [page]);
 
   // Derive week date range for weekOffset (Monday reference)
   function weekDates(offset: number): string[] {
@@ -172,23 +174,30 @@ export default function App() {
   }
 
   function headerCenterText(): string {
-    if (page==='today') return formatActiveDate();
-    if (page==='flows') return flowsMode==='week' ? relativeLabel('week', weekOffset) : relativeLabel('month', monthOffset);
-    if (page==='constellations') return relativeLabel('year', yearOffset);
-  if (page==='echoes') return relativeLabel('year', yearOffset);
+    if (page===TODAY) return formatActiveDate();
+    if (page===FLOWS) return flowsMode==='week' ? relativeLabel('week', weekOffset) : relativeLabel('month', monthOffset);
+    if (page===CONSTELLATIONS) return relativeLabel('year', yearOffset);
+  if (page===ECHOES) return relativeLabel('year', yearOffset);
     return '';
   }
 
+  function handleTabSelect(next: AppPage) {
+    if (next === TODAY) {
+      setActiveDate(todayISO());
+    }
+    setPage(next);
+  }
+
   const handleBack = useCallback(() => {
-    if (page==='today') {
+    if (page===TODAY) {
       setActiveDate(addDays(activeDate, -1));
       return;
     }
-    if (page==='flows') {
+    if (page===FLOWS) {
       if (flowsMode==='week') { setWeekOffset(o=>o+1); return; }
       setMonthOffset(o=>o+1); return;
     }
-  if (page==='constellations' || page==='echoes') { setYearOffset(o=>o+1); return; }
+  if (page===CONSTELLATIONS || page===ECHOES) { setYearOffset(o=>o+1); return; }
   }, [page, activeDate, flowsMode]);
   // Telegram BackButton disabled per requirement (always hidden)
   useEffect(()=> { if (isTG) setBackButton(false); }, [isTG]);
@@ -205,19 +214,19 @@ export default function App() {
   }, [isTG, page]);
 
   function canReset(): boolean {
-    if (page==='today') return activeDate !== todayISO();
-    if (page==='flows') return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
-  if (page==='constellations' || page==='echoes') return yearOffset>0;
+    if (page===TODAY) return activeDate !== todayISO();
+    if (page===FLOWS) return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
+  if (page===CONSTELLATIONS || page===ECHOES) return yearOffset>0;
     return false;
   }
   function handleReset() {
     if (!canReset()) return;
-    if (page==='today') { setActiveDate(todayISO()); return; }
-    if (page==='flows') { 
+    if (page===TODAY) { setActiveDate(todayISO()); return; }
+    if (page===FLOWS) { 
       if (flowsMode==='week') setWeekOffset(0); else setMonthOffset(0); 
       return; 
     }
-  if (page==='constellations' || page==='echoes') { setYearOffset(0); return; }
+  if (page===CONSTELLATIONS || page===ECHOES) { setYearOffset(0); return; }
   }
 
   function handleSliderPointer(e: React.PointerEvent) {
@@ -330,7 +339,7 @@ export default function App() {
           </div>
           <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">
             <span
-              key={page==='constellations' ? 'constellations-static' : headerCenterText()}
+              key={page===CONSTELLATIONS ? 'constellations-static' : headerCenterText()}
               className={'inline-block animate-fadeFromTop'}
             >{headerCenterText()}</span>
           </div>
@@ -344,7 +353,7 @@ export default function App() {
 
   {/* Content area sized between fixed bars (no scroll) */}
   <div className="absolute inset-x-0 overflow-hidden page-stack" style={{ top: contentTop, bottom: contentBottom }}>
-  <div className="page-view from-left" data-active={page==='today'}>
+  <div className="page-view from-left" data-active={page===TODAY}>
         <div className="mx-auto flex h-full max-w-sm flex-col px-4">
           {/* Fixed visual area so slider never jumps */}
           <div className="h-[320px] w-full flex items-center justify-center">
@@ -481,8 +490,8 @@ export default function App() {
       </div>
       
 
-  <div className="page-view from-left" data-active={page==='flows'}>
-        {page==='flows' && (
+  <div className="page-view from-left" data-active={page===FLOWS}>
+        {page===FLOWS && (
           <div className="h-full animate-fadeSwap">
             <FlowsPage
               recent7={recent7}
@@ -495,15 +504,15 @@ export default function App() {
           </div>
         )}
       </div>
-  <div className="page-view from-right" data-active={page==='constellations'}>
-        {page==='constellations' && (
+  <div className="page-view from-right" data-active={page===CONSTELLATIONS}>
+        {page===CONSTELLATIONS && (
           <div className="h-full">
             <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
           </div>
         )}
       </div>
-  <div className="page-view from-right" data-active={page==='echoes'}>
-        {page==='echoes' && (
+  <div className="page-view from-right" data-active={page===ECHOES}>
+        {page===ECHOES && (
           <div className="h-full animate-fadeSwap">
             <EchoesPage entries={entries} yearOffset={yearOffset} />
           </div>
@@ -513,29 +522,23 @@ export default function App() {
 
   {/* Bottom nav (fixed) */}
   {!songEditorOpen && (
-  <nav className="fixed left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md" style={{ bottom: footerBottomOffset }}>
-  <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
-          <IconButton label="Flows" active={page==='flows'} onClick={() => setPage('flows')} accent={isTG ? tgAccent : undefined}>
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-              <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>
-            </svg>
+    <nav
+      className="fixed left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md"
+      style={{ bottom: footerBottomOffset }}
+    >
+      <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
+        {APP_TABS.map((tab) => (
+          <IconButton
+            key={tab.id}
+            label={tab.label}
+            active={page === tab.id}
+            onClick={() => handleTabSelect(tab.id)}
+            accent={isTG ? tgAccent : undefined}
+          >
+            {tab.icon}
           </IconButton>
-
-          <IconButton label="Today" active={page==='today'} onClick={() => { setActiveDate(todayISO()); setPage('today'); }} accent={isTG ? tgAccent : undefined}>
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-              <path d="M21 20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.48907C3 9.18048 3.14247 8.88917 3.38606 8.69972L11.3861 2.47749C11.7472 2.19663 12.2528 2.19663 12.6139 2.47749L20.6139 8.69972C20.8575 8.88917 21 9.18048 21 9.48907V20ZM19 19V9.97815L12 4.53371L5 9.97815V19H19ZM7 15H17V17H7V15Z"></path>
-            </svg>
-          </IconButton>
-
-          <IconButton label="Constellations" active={page==='constellations'} onClick={() => setPage('constellations')} accent={isTG ? tgAccent : undefined}>
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-              <path d="M10.6144 17.7956C10.277 18.5682 9.20776 18.5682 8.8704 17.7956L7.99275 15.7854C7.21171 13.9966 5.80589 12.5726 4.0523 11.7942L1.63658 10.7219C.868536 10.381.868537 9.26368 1.63658 8.92276L3.97685 7.88394C5.77553 7.08552 7.20657 5.60881 7.97427 3.75892L8.8633 1.61673C9.19319 .821767 10.2916 .821765 10.6215 1.61673L11.5105 3.75894C12.2782 5.60881 13.7092 7.08552 15.5079 7.88394L17.8482 8.92276C18.6162 9.26368 18.6162 10.381 17.8482 10.7219L15.4325 11.7942C13.6789 12.5726 12.2731 13.9966 11.492 15.7854L10.6144 17.7956ZM4.53956 9.82234C6.8254 10.837 8.68402 12.5048 9.74238 14.7996 10.8008 12.5048 12.6594 10.837 14.9452 9.82234 12.6321 8.79557 10.7676 7.04647 9.74239 4.71088 8.71719 7.04648 6.85267 8.79557 4.53956 9.82234ZM19.4014 22.6899 19.6482 22.1242C20.0882 21.1156 20.8807 20.3125 21.8695 19.8732L22.6299 19.5353C23.0412 19.3526 23.0412 18.7549 22.6299 18.5722L21.9121 18.2532C20.8978 17.8026 20.0911 16.9698 19.6586 15.9269L19.4052 15.3156C19.2285 14.8896 18.6395 14.8896 18.4628 15.3156L18.2094 15.9269C17.777 16.9698 16.9703 17.8026 15.956 18.2532L15.2381 18.5722C14.8269 18.7549 14.8269 19.3526 15.2381 19.5353L15.9985 19.8732C16.9874 20.3125 17.7798 21.1156 18.2198 22.1242L18.4667 22.6899C18.6473 23.104 19.2207 23.104 19.4014 22.6899ZM18.3745 19.0469 18.937 18.4883 19.4878 19.0469 18.937 19.5898 18.3745 19.0469Z"></path>
-            </svg>
-          </IconButton>
-          <IconButton label="Echoes" active={page==='echoes'} onClick={() => setPage('echoes')} accent={isTG ? tgAccent : undefined}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor"><path d="M15 4.58152V12C15 13.6569 13.6569 15 12 15C10.3431 15 9 13.6569 9 12C9 10.3431 10.3431 9 12 9C12.3506 9 12.6872 9.06016 13 9.17071V2.04938C18.0533 2.5511 22 6.81465 22 12C22 17.5229 17.5228 22 12 22C6.47715 22 2 17.5229 2 12C2 6.81465 5.94668 2.5511 11 2.04938V4.0619C7.05369 4.55399 4 7.92038 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 8.64262 17.9318 5.76829 15 4.58152Z"/></svg>
-          </IconButton>
-  </div>
+        ))}
+      </div>
     </nav>
   )}
     {isTG && footerBottomOffset > 0 && !songEditorOpen && (

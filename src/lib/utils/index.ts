@@ -1,25 +1,12 @@
-import type { Entry } from './types';
+import type { CSSProperties } from 'react';
+import type { Entry } from '../types/global';
+import { addDays, isToday, isYesterday, todayISO } from './date';
 
-export function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+export * from './date';
+
+export function canEdit(iso: string): boolean {
+  return isToday(iso) || isYesterday(iso);
 }
-
-export function addDays(iso: string, delta: number): string {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-export function isToday(iso: string) { return iso === todayISO(); }
-export function isYesterday(iso: string) { return iso === addDays(todayISO(), -1); }
-export function canEdit(iso: string) { return isToday(iso) || isYesterday(iso); }
 
 export function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -40,7 +27,7 @@ export function rainbowGradientCSS(): string {
   return `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-export function auraBackground(hue: number): React.CSSProperties {
+export function auraBackground(hue: number): CSSProperties {
   const h1 = hue, h2 = (hue + 30) % 360, h3 = (hue + 320) % 360;
   return {
     backgroundImage:

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadEntries, STORAGE_KEY } from '../src/lib/storage';
+import { loadEntries, STORAGE_KEY } from '../src/lib/services/storage';
 
 describe('storage migration', () => {
   beforeEach(() => {
