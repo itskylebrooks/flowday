@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
-import { motion } from 'motion/react'
-import { auraBackground } from '../lib/utils';
+import { motion } from 'motion/react';
+import { auraBackground } from '@lib/utils';
 
 export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: number }) {
-  const size = 224, cx = size/2, cy = size/2, R = 70;
+  const size = 224,
+    cx = size / 2,
+    cy = size / 2,
+    R = 70;
 
   const positions = useMemo(() => {
     const n = Math.max(1, Math.min(3, emojis.length));
@@ -17,11 +20,14 @@ export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: numb
     });
   }, [emojis.length, cx, cy]);
 
-  const ROTATE_DURATION = 11; // seconds 
+  const ROTATE_DURATION = 11; // seconds
 
   return (
     <div className="mx-auto mt-2 flex flex-col items-center">
-      <div className="relative h-56 w-56 rounded-full ring-1 ring-white/10" style={auraBackground(hue)}>
+      <div
+        className="relative h-56 w-56 rounded-full ring-1 ring-white/10"
+        style={auraBackground(hue)}
+      >
         {/* key ensures the rotating container remounts when emojis change, so animation starts from 0 */}
         <motion.div
           key={`${emojis.join(',')}`}

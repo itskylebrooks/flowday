@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { isTelegram, hapticFunny } from '../lib/telegram';
-import { APP_VERSION } from '../lib/version';
-import { APP_NAME } from '../lib/version';
+import { hapticFunny, isTelegram } from '@lib/telegram';
+import { APP_NAME, APP_VERSION } from '@lib/version';
 
 interface Props {
   enabled?: boolean; // whether overlay functionality is enabled
@@ -18,11 +17,11 @@ export default function ReleaseOverlay({ enabled = true, duration = 2000, onCele
       if (!enabled) return false;
       const last = localStorage.getItem(LAST_VERSION_KEY);
       if (last === APP_VERSION) return false; // already seen
-  const parts = String(APP_VERSION).split('.');
-  const patch = parts.length > 2 ? parseInt(parts[2] || '0', 10) : 0;
-  if (Number.isNaN(patch)) return false;
-  // show only when patch is 0 (e.g. 1.0.0 or 1.2.0)
-  return patch === 0;
+      const parts = String(APP_VERSION).split('.');
+      const patch = parts.length > 2 ? parseInt(parts[2] || '0', 10) : 0;
+      if (Number.isNaN(patch)) return false;
+      // show only when patch is 0 (e.g. 1.0.0 or 1.2.0)
+      return patch === 0;
     } catch {
       return false;
     }
@@ -50,10 +49,17 @@ export default function ReleaseOverlay({ enabled = true, duration = 2000, onCele
     setBannerGlow(true);
     hapticRef.current = true;
     try {
-      if (isTelegram()) hapticFunny(duration); else if (navigator.vibrate) navigator.vibrate([100,50,200]);
-    } catch { /* ignore */ }
-  // Persist that user has seen/celebrated this version so it won't show again
-  try { localStorage.setItem(LAST_VERSION_KEY, APP_VERSION); } catch { /* ignore */ }
+      if (isTelegram()) hapticFunny(duration);
+      else if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+    } catch {
+      /* ignore */
+    }
+    // Persist that user has seen/celebrated this version so it won't show again
+    try {
+      localStorage.setItem(LAST_VERSION_KEY, APP_VERSION);
+    } catch {
+      /* ignore */
+    }
     setOverlayMounted(false);
     setGhostVisible(true);
     setTimeout(() => setGhostFading(true), 20);
@@ -78,11 +84,19 @@ export default function ReleaseOverlay({ enabled = true, duration = 2000, onCele
             className="w-full h-8 rounded-full text-center text-white font-medium text-sm ring-1 focus:outline-none"
             onClick={handleClick}
             onMouseEnter={() => setBannerGlow(true)}
-            onMouseLeave={() => { if (!hapticRef.current) setBannerGlow(false); }}
+            onMouseLeave={() => {
+              if (!hapticRef.current) setBannerGlow(false);
+            }}
             style={{
-              background: bannerGlow ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))' : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
-              border: bannerGlow ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)',
-              boxShadow: bannerGlow ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)' : '0 2px 10px rgba(0,0,0,0.22)'
+              background: bannerGlow
+                ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))'
+                : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
+              border: bannerGlow
+                ? '1px solid rgba(255,255,255,0.12)'
+                : '1px solid rgba(255,255,255,0.06)',
+              boxShadow: bannerGlow
+                ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)'
+                : '0 2px 10px rgba(0,0,0,0.22)',
             }}
           >
             {`🎉 ${APP_NAME} v${APP_VERSION} released! 🎉`}
@@ -93,14 +107,25 @@ export default function ReleaseOverlay({ enabled = true, duration = 2000, onCele
       {/* Ghost visual: render even after overlayUnmount so fade animation can run */}
       {ghostVisible && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-          <div aria-hidden className="w-full h-8 rounded-full" style={{
-            background: ghostFading || bannerGlow ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))' : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
-            border: bannerGlow ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)',
-            boxShadow: bannerGlow ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)' : '0 2px 10px rgba(0,0,0,0.22)',
-            opacity: ghostFading ? 0 : 1,
-            transform: ghostFading ? 'scale(0.98)' : 'scale(1)',
-            transition: 'opacity 420ms ease, transform 420ms ease, background 200ms ease'
-          }} />
+          <div
+            aria-hidden
+            className="w-full h-8 rounded-full"
+            style={{
+              background:
+                ghostFading || bannerGlow
+                  ? 'linear-gradient(90deg, rgba(50,170,110,0.36), rgba(255,205,130,0.36))'
+                  : 'linear-gradient(90deg, rgba(50,150,95,0.26), rgba(255,190,100,0.26))',
+              border: bannerGlow
+                ? '1px solid rgba(255,255,255,0.12)'
+                : '1px solid rgba(255,255,255,0.06)',
+              boxShadow: bannerGlow
+                ? '0 12px 40px rgba(255,190,100,0.18), 0 3px 8px rgba(50,170,110,0.06)'
+                : '0 2px 10px rgba(0,0,0,0.22)',
+              opacity: ghostFading ? 0 : 1,
+              transform: ghostFading ? 'scale(0.98)' : 'scale(1)',
+              transition: 'opacity 420ms ease, transform 420ms ease, background 200ms ease',
+            }}
+          />
         </div>
       )}
     </>

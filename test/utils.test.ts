@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { addDays, todayISO, emojiStats, monthlyTop3, monthlyStops } from '../src/lib/utils';
-import { upsertEntry } from '../src/lib/storage';
-import type { Entry } from '../src/lib/types';
+import { addDays, todayISO, emojiStats, monthlyTop3, monthlyStops } from '@lib/utils';
+import { upsertEntry } from '@lib/storage';
+import type { Entry } from '@lib/types';
 
 // Helper to freeze todayISO by mocking Date
 function mockToday(date: string) {
-  const [y,m,d] = date.split('-').map(n=>parseInt(n,10));
-  const base = new Date(Date.UTC(y, m-1, d));
+  const [y, m, d] = date.split('-').map((n) => parseInt(n, 10));
+  const base = new Date(Date.UTC(y, m - 1, d));
   vi.setSystemTime(base);
 }
 
 describe('date helpers', () => {
-  beforeAll(()=> {
+  beforeAll(() => {
     vi.useFakeTimers();
   });
-  beforeEach(()=> {
+  beforeEach(() => {
     mockToday('2025-01-01');
   });
 
@@ -36,8 +36,8 @@ describe('date helpers', () => {
 describe('emoji stats', () => {
   it('counts unique emojis per day (dedup same-day duplicates)', () => {
     const entries: Entry[] = [
-      { date: '2025-01-01', emojis: ['😀','😀','🔥'], updatedAt: 0 },
-      { date: '2025-01-02', emojis: ['😀','🔥','🔥'], updatedAt: 0 },
+      { date: '2025-01-01', emojis: ['😀', '😀', '🔥'], updatedAt: 0 },
+      { date: '2025-01-02', emojis: ['😀', '🔥', '🔥'], updatedAt: 0 },
       { date: '2025-01-03', emojis: ['🔥'], updatedAt: 0 },
     ];
     const { freq, pair } = emojiStats(entries);
@@ -50,29 +50,29 @@ describe('emoji stats', () => {
 });
 
 describe('monthly hue selection', () => {
-  beforeAll(()=> vi.useFakeTimers());
-  beforeEach(()=> mockToday('2025-03-15'));
+  beforeAll(() => vi.useFakeTimers());
+  beforeEach(() => mockToday('2025-03-15'));
 
   it('returns defaults when empty month', () => {
-    expect(monthlyStops([])).toEqual([220,300,40]);
-    expect(monthlyTop3([])).toEqual([220,300,40]);
+    expect(monthlyStops([])).toEqual([220, 300, 40]);
+    expect(monthlyTop3([])).toEqual([220, 300, 40]);
   });
 
   it('returns top clustered hues for current month', () => {
     // Spread hues around 30, 40, 35 -> cluster ~35
     const entries: Entry[] = [];
-    const baseDates = ['2025-03-01','2025-03-02','2025-03-03','2025-03-04','2025-03-05'];
+    const baseDates = ['2025-03-01', '2025-03-02', '2025-03-03', '2025-03-04', '2025-03-05'];
     const hues = [32, 40, 34, 210, 215, 220, 90];
-    for (let i=0;i<baseDates.length;i++) {
+    for (let i = 0; i < baseDates.length; i++) {
       entries.push({ date: baseDates[i], emojis: ['😀'], hue: hues[i] ?? 30, updatedAt: 0 });
     }
     // Add more in 210 bin
-    entries.push({ date: '2025-03-06', emojis:['😀'], hue: 208, updatedAt:0 });
+    entries.push({ date: '2025-03-06', emojis: ['😀'], hue: 208, updatedAt: 0 });
     const result = monthlyTop3(entries, '2025-03');
     expect(result.length).toBeGreaterThan(0);
     // Ensure predominant hue families appear (approx)
     // We'll assert they are numbers within 0..360 and include something near 210.
-    expect(result.some(h => h > 190 && h < 230)).toBe(true);
+    expect(result.some((h) => h > 190 && h < 230)).toBe(true);
   });
 });
 
@@ -81,7 +81,7 @@ describe('storage & upsert behaviors', () => {
     const a: Entry = { date: '2025-01-02', emojis: [], updatedAt: 0 };
     const b: Entry = { date: '2025-01-01', emojis: [], updatedAt: 0 };
     const list = upsertEntry([a], b);
-    expect(list.map(e=>e.date)).toEqual(['2025-01-01','2025-01-02']);
+    expect(list.map((e) => e.date)).toEqual(['2025-01-01', '2025-01-02']);
   });
 
   it('upsert replaces existing entry', () => {

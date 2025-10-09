@@ -22,30 +22,44 @@ function cleanupOldEntryKeys() {
       if (key.startsWith(STORAGE_PREFIX) && key !== STORAGE_KEY) toRemove.push(key);
     }
     for (const k of toRemove) {
-      try { localStorage.removeItem(k); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(k);
+      } catch {
+        /* ignore */
+      }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
-interface PersistedV2 { version: 2; entries: unknown; }
+interface PersistedV2 {
+  version: 2;
+  entries: unknown;
+}
 type PersistedAny = PersistedV2 | Entry[] | unknown;
 type UnknownRecord = Record<string, unknown>;
 
-function isISO(s: unknown): s is string { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+function isISO(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
 
 function sanitizeEntry(raw: unknown): Entry | null {
   if (!raw || typeof raw !== 'object') return null;
   const rec = raw as UnknownRecord;
   if (!isISO(rec.date)) return null;
-  let emojis: string[] = Array.isArray(rec.emojis) ? (rec.emojis as unknown[]) as string[] : [];
-  emojis = emojis.filter(e => typeof e === 'string').map(e=>e.trim()).filter(Boolean);
-  emojis = Array.from(new Set(emojis)).slice(0,3);
+  let emojis: string[] = Array.isArray(rec.emojis) ? (rec.emojis as unknown[] as string[]) : [];
+  emojis = emojis
+    .filter((e) => typeof e === 'string')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  emojis = Array.from(new Set(emojis)).slice(0, 3);
   let hue: number | undefined;
-  if (typeof rec.hue === 'number' && emojis.length>0) {
+  if (typeof rec.hue === 'number' && emojis.length > 0) {
     hue = ((clamp(Math.round(rec.hue as number), -720, 720) % 360) + 360) % 360;
   }
   const updatedAt = typeof rec.updatedAt === 'number' ? (rec.updatedAt as number) : Date.now();
   const entry: Entry = { date: rec.date as string, emojis, updatedAt };
-  if (hue != null && emojis.length>0) entry.hue = hue;
+  if (hue != null && emojis.length > 0) entry.hue = hue;
   if (rec.song && typeof rec.song === 'object') {
     const songRec = rec.song as UnknownRecord;
     const t = typeof songRec.title === 'string' ? songRec.title : undefined;
@@ -79,11 +93,18 @@ function migrate(persisted: PersistedAny): Entry[] {
 }
 
 function persist(entries: Entry[]) {
-  const payload: PersistedV2 = { version: CURRENT_VERSION, entries: [...entries].sort((a,b)=>a.date.localeCompare(b.date)) };
+  const payload: PersistedV2 = {
+    version: CURRENT_VERSION,
+    entries: [...entries].sort((a, b) => a.date.localeCompare(b.date)),
+  };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   // After writing the canonical storage key, remove any older entry keys so only
   // the latest version exists in localStorage.
-  try { cleanupOldEntryKeys(); } catch { /* ignore */ }
+  try {
+    cleanupOldEntryKeys();
+  } catch {
+    /* ignore */
+  }
 }
 
 export function loadEntries(): Entry[] {
@@ -96,7 +117,9 @@ export function loadEntries(): Entry[] {
       persist(migrated); // self-heal formatting
       return migrated;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   // No current payload found — try to migrate any older entry keys.
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -109,11 +132,19 @@ export function loadEntries(): Entry[] {
         const parsed = JSON.parse(raw) as PersistedAny;
         const migrated = migrate(parsed);
         persist(migrated);
-        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* ignore */
+        }
         return migrated;
-      } catch { /* keep trying other keys */ }
+      } catch {
+        /* keep trying other keys */
+      }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return [];
 }
 
@@ -121,9 +152,13 @@ export function saveEntries(list: Entry[]) {
   persist(list);
   try {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('flowday:entries-updated', { detail: { entries: list } }));
+      window.dispatchEvent(
+        new CustomEvent('flowday:entries-updated', { detail: { entries: list } }),
+      );
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export const RECENTS_KEY = 'flowday_recent_emojis_v1';
@@ -148,7 +183,9 @@ export function getRecents(): string[] {
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 export function pushRecent(emoji: string) {
@@ -189,12 +226,18 @@ function createDefaultUser(): UserProfile {
   // Attempt to derive username from Telegram WebApp context if present
   let base = 'user';
   try {
-    const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { username?: string } } } } }).Telegram?.WebApp;
+    const tg = (
+      window as unknown as {
+        Telegram?: { WebApp?: { initDataUnsafe?: { user?: { username?: string } } } };
+      }
+    ).Telegram?.WebApp;
     const tgUser = tg?.initDataUnsafe?.user;
     if (tgUser && tgUser.username) {
       base = sanitizeUsername(tgUser.username);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   const user: UserProfile = { username: base, createdAt: now, updatedAt: now };
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
@@ -232,7 +275,9 @@ export function loadReminders(): RemindersSettings {
       updatedAt: typeof obj.updatedAt === 'number' ? obj.updatedAt : Date.now(),
     };
     return merged;
-  } catch { return defaultReminders(); }
+  } catch {
+    return defaultReminders();
+  }
 }
 
 export function saveReminders(prefs: RemindersSettings) {
@@ -250,13 +295,19 @@ export function saveReminders(prefs: RemindersSettings) {
 export function clearAllData() {
   try {
     // Current & legacy entry keys
-  localStorage.removeItem(STORAGE_KEY);
-  try { cleanupOldEntryKeys(); } catch { /* ignore */ }
+    localStorage.removeItem(STORAGE_KEY);
+    try {
+      cleanupOldEntryKeys();
+    } catch {
+      /* ignore */
+    }
     // Related feature keys
     localStorage.removeItem(RECENTS_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(REMINDERS_KEY);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---------------- Export / Import helpers ----------------
@@ -287,19 +338,22 @@ export function exportAllData(): ExportPayload {
 
 // Merge incoming entries with local by taking the entry with the newest updatedAt for each date.
 function mergeEntriesByNewer(local: Entry[], incoming: Entry[]): Entry[] {
-  const map = new Map<string, Entry>(local.map(e => [e.date, e]));
+  const map = new Map<string, Entry>(local.map((e) => [e.date, e]));
   for (const r of incoming) {
     const cur = map.get(r.date);
-    if (!cur || (r.updatedAt > cur.updatedAt)) map.set(r.date, r);
+    if (!cur || r.updatedAt > cur.updatedAt) map.set(r.date, r);
   }
-  return [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: boolean; message?: string; added?: number; merged?: number; total?: number } {
+export function importAllData(
+  raw: unknown,
+  opts?: { merge?: boolean },
+): { ok: boolean; message?: string; added?: number; merged?: number; total?: number } {
   try {
     // Accept both already-parsed objects and JSON strings
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!parsed) return { ok:false, message: 'Invalid payload' };
+    if (!parsed) return { ok: false, message: 'Invalid payload' };
     // Extract entries
     let incomingEntries: Entry[] = [];
     try {
@@ -307,18 +361,25 @@ export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: b
         incomingEntries = (parsed as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
       } else if (typeof parsed === 'object') {
         const p = parsed as Record<string, unknown>;
-        if (Array.isArray(p.entries)) incomingEntries = (p.entries as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
+        if (Array.isArray(p.entries))
+          incomingEntries = (p.entries as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
         else {
           // Maybe it's a raw entries array in a wrapper property with a different name
           for (const v of Object.values(p)) {
             if (Array.isArray(v)) {
               const candidate = (v as unknown[]).map(sanitizeEntry).filter(Boolean) as Entry[];
-              if (candidate.length) { incomingEntries = candidate; break; }
+              if (candidate.length) {
+                incomingEntries = candidate;
+                break;
+              }
             }
           }
         }
       }
-    } catch (e) { return { ok:false, message: 'Invalid entries format' }; }
+    } catch (error) {
+      console.warn('failed to parse incoming entries', error);
+      return { ok: false, message: 'Invalid entries format' };
+    }
 
     const local = loadEntries();
     let final: Entry[];
@@ -326,7 +387,7 @@ export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: b
     let merged = 0;
     if (opts?.merge ?? true) {
       // compute statistics
-      const localMap = new Map(local.map(e=>[e.date, e] as const));
+      const localMap = new Map(local.map((e) => [e.date, e] as const));
       for (const ie of incomingEntries) {
         const cur = localMap.get(ie.date);
         if (!cur) added++;
@@ -335,7 +396,7 @@ export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: b
       final = mergeEntriesByNewer(local, incomingEntries);
     } else {
       // replace local completely
-      final = incomingEntries.slice().sort((a,b)=> a.date.localeCompare(b.date));
+      final = incomingEntries.slice().sort((a, b) => a.date.localeCompare(b.date));
       added = final.length;
       merged = 0;
     }
@@ -348,21 +409,40 @@ export function importAllData(raw: unknown, opts?: { merge?: boolean }): { ok: b
         // best-effort shape check
         const userObj = p.user as Record<string, unknown>;
         if (typeof userObj.username === 'string') {
-          saveUser({ username: userObj.username as string, createdAt: typeof userObj.createdAt === 'number' ? userObj.createdAt as number : Date.now(), updatedAt: Date.now() });
+          saveUser({
+            username: userObj.username as string,
+            createdAt:
+              typeof userObj.createdAt === 'number' ? (userObj.createdAt as number) : Date.now(),
+            updatedAt: Date.now(),
+          });
         }
       }
       if (p.reminders && typeof p.reminders === 'object') {
         const rem = p.reminders as Partial<RemindersSettings>;
-        saveReminders({ dailyEnabled: !!rem.dailyEnabled, dailyTime: typeof rem.dailyTime === 'string' ? rem.dailyTime : '20:00', timeFormat: rem.timeFormat === '12' ? '12' : '24', updatedAt: Date.now() });
+        saveReminders({
+          dailyEnabled: !!rem.dailyEnabled,
+          dailyTime: typeof rem.dailyTime === 'string' ? rem.dailyTime : '20:00',
+          timeFormat: rem.timeFormat === '12' ? '12' : '24',
+          updatedAt: Date.now(),
+        });
       }
       if (Array.isArray((parsed as Record<string, unknown>).recents)) {
-        try { localStorage.setItem(RECENTS_KEY, JSON.stringify((parsed as Record<string, unknown>).recents)); } catch { /* ignore */ }
+        try {
+          localStorage.setItem(
+            RECENTS_KEY,
+            JSON.stringify((parsed as Record<string, unknown>).recents),
+          );
+        } catch {
+          /* ignore */
+        }
       }
-    } catch { /* best-effort only */ }
+    } catch {
+      /* best-effort only */
+    }
 
-    const result = { ok:true, added, merged, total: loadEntries().length };
+    const result = { ok: true, added, merged, total: loadEntries().length };
     return result;
   } catch (e) {
-    return { ok:false, message: (e instanceof Error) ? e.message : 'Import failed' };
+    return { ok: false, message: e instanceof Error ? e.message : 'Import failed' };
   }
 }

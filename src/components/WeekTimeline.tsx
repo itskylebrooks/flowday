@@ -1,5 +1,5 @@
-import type { Entry } from '../lib/types';
-import { hsl, todayISO, addDays } from '../lib/utils';
+import type { Entry } from '@lib/types';
+import { addDays, hsl, todayISO } from '@lib/utils';
 
 export default function WeekTimeline({ entries }: { entries: Entry[] }) {
   const width = 320;
@@ -16,8 +16,12 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
   // WeekTimeline aligns exactly with the data window (this fixes last-week navigation).
   // Otherwise fall back to computing the Monday->Sunday range for the current week.
   let weekISOs: string[];
-  if (Array.isArray(entries) && entries.length === 7 && entries.every(e => typeof e.date === 'string')) {
-    weekISOs = entries.map(e => e.date);
+  if (
+    Array.isArray(entries) &&
+    entries.length === 7 &&
+    entries.every((e) => typeof e.date === 'string')
+  ) {
+    weekISOs = entries.map((e) => e.date);
   } else {
     const today = new Date(todayISO() + 'T00:00:00');
     const dowSun0 = today.getDay(); // 0..6, 0=Sun
@@ -34,11 +38,20 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
     return typeof e?.hue === 'number' ? hsl(e.hue) : gray;
   });
 
-  const hasHue = entries.some(e => typeof e.hue === 'number');
+  const hasHue = entries.some((e) => typeof e.hue === 'number');
   if (!hasHue) {
     return (
-      <div className="mx-auto w-[320px] flex items-center justify-center select-none" style={{ height: 200 }}>
-        <div className="text-white/18 font-poster" style={{ fontSize: 170, lineHeight: 1 }} aria-label="No data yet">?</div>
+      <div
+        className="mx-auto w-[320px] flex items-center justify-center select-none"
+        style={{ height: 200 }}
+      >
+        <div
+          className="text-white/18 font-poster"
+          style={{ fontSize: 170, lineHeight: 1 }}
+          aria-label="No data yet"
+        >
+          ?
+        </div>
       </div>
     );
   }
@@ -53,7 +66,15 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
         shapeRendering="geometricPrecision"
       >
         {/* Base track */}
-        <rect x={pad} y={trackY} width={width - pad * 2} height={trackH} rx={trackH / 2} fill="white" opacity={0.08} />
+        <rect
+          x={pad}
+          y={trackY}
+          width={width - pad * 2}
+          height={trackH}
+          rx={trackH / 2}
+          fill="white"
+          opacity={0.08}
+        />
 
         {/* Continuous gradient across Monday→Sunday with smooth transitions */}
         <linearGradient id="wkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -65,13 +86,28 @@ export default function WeekTimeline({ entries }: { entries: Entry[] }) {
           ))}
           <stop offset="100%" stopColor={dayColors[6]} />
         </linearGradient>
-        <rect x={pad} y={trackY} width={width - pad * 2} height={trackH} rx={trackH / 2} fill="url(#wkGrad)" opacity={0.95} />
+        <rect
+          x={pad}
+          y={trackY}
+          width={width - pad * 2}
+          height={trackH}
+          rx={trackH / 2}
+          fill="url(#wkGrad)"
+          opacity={0.95}
+        />
 
-  {/* Removed top highlight to avoid gray line artifact under the band */}
+        {/* Removed top highlight to avoid gray line artifact under the band */}
 
         {/* Markers (dots) */}
         {labels.map((_, i) => (
-          <circle key={i} cx={pad + i * segmentW + segmentW / 2} cy={trackY + trackH / 2} r={2} fill="white" opacity={0.6} />
+          <circle
+            key={i}
+            cx={pad + i * segmentW + segmentW / 2}
+            cy={trackY + trackH / 2}
+            r={2}
+            fill="white"
+            opacity={0.6}
+          />
         ))}
 
         {/* Labels */}

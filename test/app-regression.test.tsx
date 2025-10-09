@@ -1,28 +1,36 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import App from '../src/App';
+import App from '@app/App';
 
 // Minimal mock for localStorage
 class LS {
-  store: Record<string,string> = {};
-  getItem(k:string){ return this.store[k] ?? null; }
-  setItem(k:string,v:string){ this.store[k]=String(v); }
-  removeItem(k:string){ delete this.store[k]; }
-  clear(){ this.store={}; }
+  store: Record<string, string> = {};
+  getItem(k: string) {
+    return this.store[k] ?? null;
+  }
+  setItem(k: string, v: string) {
+    this.store[k] = String(v);
+  }
+  removeItem(k: string) {
+    delete this.store[k];
+  }
+  clear() {
+    this.store = {};
+  }
 }
 
 // Provide fake Date for stable today
 function mockToday(date: string) {
-  const [y,m,d] = date.split('-').map(n=>parseInt(n,10));
-  vi.setSystemTime(new Date(y,m-1,d));
+  const [y, m, d] = date.split('-').map((n) => parseInt(n, 10));
+  vi.setSystemTime(new Date(y, m - 1, d));
 }
 
 describe('App aura regression', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockToday('2025-08-22');
-  // @ts-expect-error injecting mock localStorage
+    // @ts-expect-error injecting mock localStorage
     global.localStorage = new LS();
   });
 

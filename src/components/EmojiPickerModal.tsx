@@ -1,8 +1,11 @@
 import { useMemo, useState, useEffect } from 'react';
-import { getEmojiCategories, searchEmojis } from '../lib/emojiAll';
+import { getEmojiCategories, searchEmojis } from '@lib/emojiAll';
 
 export default function EmojiPickerModal({
-  open, onClose, onPick, recents,
+  open,
+  onClose,
+  onPick,
+  recents,
 }: {
   open: boolean;
   onClose: () => void;
@@ -13,8 +16,17 @@ export default function EmojiPickerModal({
   const [q, setQ] = useState('');
   const [closing, setClosing] = useState(false);
   // Handle close with animation
-  useEffect(()=>{ if(!open){ setClosing(false);} }, [open]);
-  function beginClose() { setClosing(true); setTimeout(()=>{ onClose(); }, 230); }
+  useEffect(() => {
+    if (!open) {
+      setClosing(false);
+    }
+  }, [open]);
+  function beginClose() {
+    setClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 230);
+  }
   const full = useMemo(() => getEmojiCategories(), []);
   const categories = useMemo(() => {
     const firstGroup = Object.keys(full)[0] ?? 'Smileys & Emotion';
@@ -26,14 +38,36 @@ export default function EmojiPickerModal({
   }, [recents, full]);
 
   if (!open && !closing) return null;
-  const list = tab === 'Search' ? (q ? searchEmojis(q, 300) : []) : (categories[tab] || []);
+  const list = tab === 'Search' ? (q ? searchEmojis(q, 300) : []) : categories[tab] || [];
 
   return (
-    <div className={"fixed inset-0 z-50 flex items-end justify-center picker-overlay sm:items-center " + (closing ? 'closing bg-black/60' : 'bg-black/60')} onClick={beginClose}>
-      <div className={"w-full max-w-sm rounded-t-2xl bg-[#111] p-3 ring-1 ring-white/10 sm:rounded-2xl picker-panel " + (closing ? 'closing':'' )} onClick={(e)=>e.stopPropagation()}>
-  <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar">
+    <div
+      className={
+        'fixed inset-0 z-50 flex items-end justify-center picker-overlay sm:items-center ' +
+        (closing ? 'closing bg-black/60' : 'bg-black/60')
+      }
+      onClick={beginClose}
+    >
+      <div
+        className={
+          'w-full max-w-sm rounded-t-2xl bg-[#111] p-3 ring-1 ring-white/10 sm:rounded-2xl picker-panel ' +
+          (closing ? 'closing' : '')
+        }
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex gap-2 overflow-x-auto no-scrollbar">
           {Object.keys(categories).map((name) => (
-            <button key={name} onClick={()=>{ setTab(name); setQ(''); }} className={'rounded-full px-3 py-1 text-sm ' + (tab===name? 'bg-white/10 text-white' : 'text-white/70 hover:text-white')}>
+            <button
+              key={name}
+              onClick={() => {
+                setTab(name);
+                setQ('');
+              }}
+              className={
+                'rounded-full px-3 py-1 text-sm ' +
+                (tab === name ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white')
+              }
+            >
               {name}
             </button>
           ))}
@@ -43,22 +77,41 @@ export default function EmojiPickerModal({
             <input
               autoFocus
               value={q}
-              onChange={(e)=>setQ(e.target.value)}
+              onChange={(e) => setQ(e.target.value)}
               placeholder="Search emojis (e.g. happy, heart, cat)"
               className="w-full rounded-md bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 ring-1 ring-white/10 outline-none focus:ring-white/20"
             />
-            {!q && <div className="mt-1 text-xs text-white/50">Type keywords to search by name, shortcode, or category</div>}
+            {!q && (
+              <div className="mt-1 text-xs text-white/50">
+                Type keywords to search by name, shortcode, or category
+              </div>
+            )}
           </div>
         )}
-        <div key={tab + (tab==='Search'? ':'+q:'')} className="max-h-72 grid grid-cols-8 gap-2 overflow-y-auto p-1 cat-swap">
+        <div
+          key={tab + (tab === 'Search' ? ':' + q : '')}
+          className="max-h-72 grid grid-cols-8 gap-2 overflow-y-auto p-1 cat-swap"
+        >
           {list.map((emo, i) => (
-            <button key={emo+i} onClick={()=>{ onPick(emo); beginClose(); }} className="flex h-10 w-10 items-center justify-center rounded-md bg-white/5 text-2xl hover:bg-white/10 active:scale-90 transition-transform">
+            <button
+              key={emo + i}
+              onClick={() => {
+                onPick(emo);
+                beginClose();
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-md bg-white/5 text-2xl hover:bg-white/10 active:scale-90 transition-transform"
+            >
               {emo}
             </button>
           ))}
         </div>
         <div className="mt-3 flex justify-end">
-          <button onClick={beginClose} className="rounded-md px-3 py-1 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5">Close</button>
+          <button
+            onClick={beginClose}
+            className="rounded-md px-3 py-1 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
