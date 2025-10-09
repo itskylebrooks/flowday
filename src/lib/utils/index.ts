@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Entry } from '../types/global';
-import { addDays, isToday, isYesterday, todayISO } from './date';
+import { isToday, isYesterday, todayISO } from './date';
 
 export * from './date';
 
