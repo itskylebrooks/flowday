@@ -11,7 +11,7 @@ import PrivacyTelegramPage from '@platforms/web/desktop/features/privacy/routes/
 import PrivacyWebPage from '@platforms/web/desktop/features/privacy/routes/PrivacyWebPage';
 import AuraBlock from '@platforms/web/desktop/features/journal/components/AuraBlock';
 import EmojiTriangle from '@platforms/web/desktop/features/journal/components/EmojiTriangle';
-import { EmojiPickerModal, IconButton } from '@shared/ui';
+import { EmojiPickerModal, GlobalFooter, IconButton } from '@shared/ui';
 import { APP_VERSION } from '@shared/lib/constants/version';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from '@shared/lib/utils';
 import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton, telegramAccentColor } from '@shared/lib/services/telegram';
@@ -483,34 +483,64 @@ export default function LegacyApp() {
                 </button>
               </div>
             )}
+            <div
+              className="mt-auto pt-6"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
+            >
+              <GlobalFooter variant="stacked" />
+            </div>
           </div>
         </div>
 
         <div className="page-view from-left" data-active={page===FLOWS}>
           {page===FLOWS && (
-            <div className="h-full animate-fadeSwap">
-              <FlowsPage
-                recent7={recent7}
-                monthHues={monthHues}
-                monthEmpty={monthEmpty}
-                mode={flowsMode}
-                animKey={flowsMode==='week' ? 'w'+weekOffset : 'm'+monthOffset}
-                onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')}
-              />
+            <div className="flex h-full flex-col animate-fadeSwap">
+              <div className="flex-1 overflow-y-auto">
+                <FlowsPage
+                  recent7={recent7}
+                  monthHues={monthHues}
+                  monthEmpty={monthEmpty}
+                  mode={flowsMode}
+                  animKey={flowsMode==='week' ? 'w'+weekOffset : 'm'+monthOffset}
+                  onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')}
+                />
+              </div>
+              <div
+                className="mx-auto w-full max-w-[640px] px-4 pt-6"
+                style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
+              >
+                <GlobalFooter variant="stacked" />
+              </div>
             </div>
           )}
         </div>
         <div className="page-view from-right" data-active={page===CONSTELLATIONS}>
           {page===CONSTELLATIONS && (
-            <div className="h-full">
-              <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
+            <div className="flex h-full flex-col">
+              <div className="flex-1 overflow-y-auto">
+                <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
+              </div>
+              <div
+                className="mx-auto w-full max-w-[640px] px-4 pt-6"
+                style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
+              >
+                <GlobalFooter variant="stacked" />
+              </div>
             </div>
           )}
         </div>
         <div className="page-view from-right" data-active={page===ECHOES}>
           {page===ECHOES && (
-            <div className="h-full animate-fadeSwap">
-              <EchoesPage entries={entries} yearOffset={yearOffset} />
+            <div className="flex h-full flex-col animate-fadeSwap">
+              <div className="flex-1 overflow-y-auto">
+                <EchoesPage entries={entries} yearOffset={yearOffset} />
+              </div>
+              <div
+                className="mx-auto w-full max-w-[640px] px-4 pt-6"
+                style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}
+              >
+                <GlobalFooter variant="stacked" />
+              </div>
             </div>
           )}
         </div>

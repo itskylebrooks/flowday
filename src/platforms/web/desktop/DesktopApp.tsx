@@ -11,7 +11,7 @@ import PrivacyTelegramPage from '@platforms/web/desktop/features/privacy/routes/
 import PrivacyWebPage from '@platforms/web/desktop/features/privacy/routes/PrivacyWebPage';
 import AuraBlock from '@platforms/web/desktop/features/journal/components/AuraBlock';
 import EmojiTriangle from '@platforms/web/desktop/features/journal/components/EmojiTriangle';
-import { EmojiPickerModal } from '@shared/ui';
+import { EmojiPickerModal, GlobalFooter } from '@shared/ui';
 import { APP_VERSION } from '@shared/lib/constants/version';
 import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3, isToday, isYesterday, hsl } from '@shared/lib/utils';
 import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton } from '@shared/lib/services/telegram';
@@ -793,6 +793,9 @@ export default function DesktopApp() {
             <div className="h-full overflow-y-auto">
               {pageContent}
             </div>
+          </div>
+          <div className="px-8 pb-8 pt-6 lg:px-12">
+            <GlobalFooter />
           </div>
         </div>
         <div className="hidden lg:flex w-[260px] flex-col border-l border-white/10 px-6 py-8">
