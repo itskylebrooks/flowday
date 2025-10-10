@@ -788,10 +788,42 @@ export default function DesktopApp() {
         </div>
       </aside>
       <div className="flex flex-1">
-        <div className="hidden lg:flex w-[260px] flex-col border-r border-white/10 px-6 py-8">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.4em] text-white/40">{timelineScope}</div>
-            <div className="mt-2 text-lg font-semibold text-white">Journal timeline</div>
+        <div className="flex flex-1 flex-col">
+          <div className="flex-1 overflow-hidden">
+            <div className="h-full overflow-y-auto">
+              {pageContent}
+            </div>
+          </div>
+        </div>
+        <div className="hidden lg:flex w-[260px] flex-col border-l border-white/10 px-6 py-8">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.4em] text-white/40">{timelineScope}</div>
+              <div className="mt-2 text-lg font-semibold text-white">Journal timeline</div>
+            </div>
+            {timelineResetLabel && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="flex h-9 w-9 items-center justify-center self-start rounded-full border border-white/12 text-white/65 transition hover:border-white/30 hover:text-white"
+              >
+                <span className="sr-only">{timelineResetLabel}</span>
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M6.75 4.5L2.5 8l4.25 3.5M2.5 8h11"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
           {page === FLOWS && (
             <div className="mt-5 flex gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/45">
@@ -810,15 +842,6 @@ export default function DesktopApp() {
                 Months
               </button>
             </div>
-          )}
-          {timelineResetLabel && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="mt-5 self-start rounded-full border border-white/12 px-3 py-1 text-[11px] font-medium text-white/65 transition hover:text-white"
-            >
-              {timelineResetLabel}
-            </button>
           )}
           <div className="mt-5 flex-1 overflow-y-auto pr-1">
             <div className="space-y-1.5">
@@ -844,13 +867,6 @@ export default function DesktopApp() {
                   </div>
                 </button>
               ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-1 flex-col">
-          <div className="flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto">
-              {pageContent}
             </div>
           </div>
         </div>
