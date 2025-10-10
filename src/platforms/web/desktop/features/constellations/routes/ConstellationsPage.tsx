@@ -338,8 +338,6 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const uniqueEmojiCount = freq.size;
   const todayActiveCount = todaySet.size;
   const connectionCount = pair.size;
-  const mostUsed = topEmojis[0];
-  const mostUsedCount = mostUsed ? numberFormatter.format(mostUsed[1]) : null;
   const statItems = [
     { label: 'Unique emojis', value: numberFormatter.format(uniqueEmojiCount) },
     { label: 'Active today', value: numberFormatter.format(todayActiveCount) },
@@ -558,13 +556,6 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       <div className="flex flex-col items-center gap-2 text-center">
         <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
         <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
-        {mostUsed && mostUsedCount && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/70 backdrop-blur-sm">
-            <span className="text-base leading-none">{mostUsed[0]}</span>
-            <span className="uppercase tracking-[0.3em] text-white/45">Most used</span>
-            <span className="text-white/75">×{mostUsedCount}</span>
-          </div>
-        )}
       </div>
       <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
         {statItems.map((item) => (
