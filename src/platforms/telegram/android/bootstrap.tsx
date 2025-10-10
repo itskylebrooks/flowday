@@ -1,6 +1,6 @@
-import App from './App';
+import App from '@platforms/web/desktop/App';
 import { bootstrapReactApp } from '@app/bootstrapApp';
 
 export function bootstrap(): void {
-  bootstrapReactApp(App, 'web/desktop');
+  bootstrapReactApp(App, 'telegram/android');
 }
