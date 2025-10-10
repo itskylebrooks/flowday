@@ -32,9 +32,9 @@ const STEPS: Step[] = [
     accent: 'from-[#22D3EE]/40 via-[#67E8F9]/20 to-transparent'
   },
   {
-    title: 'Lock it in',
-    body: 'Hit Save. You can tweak today or yesterday; earlier entries stay as captured memories.',
-    icon: '🔒',
+    title: 'Auto-save magic',
+    body: 'Flowday keeps everything synced as you edit—adjust today or yesterday anytime while past memories stay untouched.',
+    icon: '💾',
     accent: 'from-[#34D399]/40 via-[#059669]/20 to-transparent'
   },
   {
