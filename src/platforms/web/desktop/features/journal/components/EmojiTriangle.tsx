@@ -10,7 +10,7 @@ export default function EmojiTriangle({
 }) {
   const slots = [emojis[0], emojis[1], emojis[2]];
   return (
-    <div className="relative mx-auto mt-6 grid h-40 w-56 grid-cols-2 place-items-center">
+    <div className="relative mx-auto mt-6 grid h-48 w-72 grid-cols-2 place-items-center gap-y-4">
       {/* top-left */}
       <EmojiBubble emoji={slots[0]} empty={!slots[0]} onClick={() => editable && onPick(0)} onRemove={() => editable && onRemove(0)} />
       {/* top-right */}

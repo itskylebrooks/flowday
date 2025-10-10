@@ -11,41 +11,26 @@ import PrivacyTelegramPage from '@platforms/web/desktop/features/privacy/routes/
 import PrivacyWebPage from '@platforms/web/desktop/features/privacy/routes/PrivacyWebPage';
 import AuraBlock from '@platforms/web/desktop/features/journal/components/AuraBlock';
 import EmojiTriangle from '@platforms/web/desktop/features/journal/components/EmojiTriangle';
-import { EmojiPickerModal, IconButton } from '@shared/ui';
+import { EmojiPickerModal } from '@shared/ui';
 import { APP_VERSION } from '@shared/lib/constants/version';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3 } from '@shared/lib/utils';
-import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton, telegramAccentColor } from '@shared/lib/services/telegram';
+import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3, isToday, isYesterday, hsl } from '@shared/lib/utils';
+import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton } from '@shared/lib/services/telegram';
 import { getRecents, loadEntries, pushRecent, saveEntries, upsertEntry } from '@shared/lib/services/storage';
 import { APP_TABS } from './routes';
 
 export default function App() {
   const [isTG, setIsTG] = useState<boolean>(false);
-  const [tgAccent, setTgAccent] = useState<string | undefined>(undefined);
-  const [tgPlatform, setTgPlatform] = useState<string | undefined>(undefined);
   const { TODAY, FLOWS, CONSTELLATIONS, ECHOES } = APP_ROUTES;
+  const today = todayISO();
   useEffect(()=> {
     function poll(){
       const flag = isTelegram();
       setIsTG(flag);
-      if (flag) {
-        setTgAccent(prev => prev || telegramAccentColor());
-        try {
-          const platform = (window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform;
-          if (platform && platform !== tgPlatform) setTgPlatform(platform);
-        } catch { /* ignore */ }
-      }
     }
     poll();
     const id = setInterval(poll, 500);
     return ()=> clearInterval(id);
-  }, [tgPlatform]);
-  // Dynamic spacing tweaks for Telegram (raise bottom nav, lower top header slightly)
-  const HEADER_H = 56; // tailwind h-14
-  const FOOTER_H = 56; // tailwind h-14
-  const headerTopOffset = isTG ? 8 : 0;      // px push-down for top nav
-  const footerBottomOffset = (isTG && tgPlatform === 'ios') ? 20 : 0;  // raise only on iOS Telegram
-  const contentTop = HEADER_H + headerTopOffset;
-  const contentBottom = FOOTER_H + footerBottomOffset;
+  }, []);
   // Song length constraints
   const MAX_TITLE = 48;
   const MAX_ARTIST = 40;
@@ -131,11 +116,11 @@ export default function App() {
 
   // Derive week date range for weekOffset (Monday reference)
   function weekDates(offset: number): string[] {
-    const today = new Date(todayISO() + 'T00:00:00');
-    today.setDate(today.getDate() - offset * 7); // go back offset weeks
-    const dowSun0 = today.getDay();
+    const baseDate = new Date(today + 'T00:00:00');
+    baseDate.setDate(baseDate.getDate() - offset * 7); // go back offset weeks
+    const dowSun0 = baseDate.getDay();
     const monOffset = (dowSun0 + 6) % 7;
-    const monday = addDays(todayISO(), -(monOffset + offset*7));
+    const monday = addDays(today, -(monOffset + offset*7));
     return Array.from({length:7}, (_,i)=> addDays(monday, i));
   }
   const recent7 = useMemo(()=> {
@@ -143,11 +128,11 @@ export default function App() {
     const dates = weekDates(weekOffset);
     const map = new Map(entries.map(e=>[e.date,e] as const));
     return dates.map(d=> map.get(d) || { date:d, emojis:[], updatedAt:0 });
-  }, [entries, weekOffset]);
+  }, [entries, weekOffset, today]);
 
   // Month hues for monthOffset
   const { monthHues, monthEmpty } = useMemo(()=> {
-    const base = todayISO().slice(0,7); // YYYY-MM
+    const base = today.slice(0,7); // YYYY-MM
     const year = parseInt(base.slice(0,4),10);
     const m = parseInt(base.slice(5,7),10);
     const targetDate = new Date(year, m-1, 1); // first of current month
@@ -156,15 +141,57 @@ export default function App() {
     const has = entries.some(e => e.date.startsWith(ym) && typeof e.hue === 'number');
     const hues = has ? monthlyTop3(entries, ym) : [];
     return { monthHues: hues, monthEmpty: !has };
-  }, [entries, monthOffset]);
+  }, [entries, monthOffset, today]);
 
   // Entries filtered by year for constellations (respect yearOffset)
   const constellationEntries = useMemo(()=>{
     if (yearOffset===0) return entries;
-    const baseYear = parseInt(todayISO().slice(0,4),10);
+    const baseYear = parseInt(today.slice(0,4),10);
     const targetYear = baseYear - yearOffset;
     return entries.filter(e => parseInt(e.date.slice(0,4),10) === targetYear);
-  }, [entries, yearOffset]);
+  }, [entries, yearOffset, today]);
+
+  const timelineDays = useMemo(() => {
+    const map = new Map(entries.map(e => [e.date, e] as const));
+    const windowStart = addDays(activeDate, -6);
+    const windowEnd = addDays(activeDate, 6);
+    const cappedEnd = windowEnd.localeCompare(today) > 0 ? today : windowEnd;
+
+    const collected: { date: string; entry?: Entry }[] = [];
+    let cursor = windowStart;
+    function push(date: string) {
+      collected.push({ date, entry: map.get(date) });
+    }
+
+    while (cursor.localeCompare(cappedEnd) <= 0) {
+      push(cursor);
+      if (cursor === cappedEnd) break;
+      cursor = addDays(cursor, 1);
+    }
+
+    if (!collected.some(d => d.date === activeDate)) {
+      collected.push({ date: activeDate, entry: map.get(activeDate) });
+    }
+
+    while (collected.length < 13) {
+      const first = collected[0]?.date ?? activeDate;
+      const prev = addDays(first, -1);
+      collected.unshift({ date: prev, entry: map.get(prev) });
+    }
+
+    const seen = new Set<string>();
+    const unique = collected.filter(item => {
+      if (seen.has(item.date)) return false;
+      seen.add(item.date);
+      return true;
+    });
+
+    unique.sort((a, b) => b.date.localeCompare(a.date));
+    return unique.slice(0, 14);
+  }, [entries, activeDate, today]);
+
+  const sliderStatus = showAura ? 'Saved 🌈' : editable ? 'Pick your vibe' : 'Read-only';
+  const currentTab = useMemo(() => APP_TABS.find(tab => tab.id === page), [page]);
 
   // Title logic
   function relativeLabel(unit: 'week'|'month'|'year', offset: number): string {
@@ -183,7 +210,7 @@ export default function App() {
 
   function handleTabSelect(next: AppPage) {
     if (next === TODAY) {
-      setActiveDate(todayISO());
+      setActiveDate(today);
     }
     setPage(next);
   }
@@ -197,8 +224,46 @@ export default function App() {
       if (flowsMode==='week') { setWeekOffset(o=>o+1); return; }
       setMonthOffset(o=>o+1); return;
     }
-  if (page===CONSTELLATIONS || page===ECHOES) { setYearOffset(o=>o+1); return; }
+    if (page===CONSTELLATIONS || page===ECHOES) {
+      setYearOffset(o=>o+1);
+      return;
+    }
   }, [page, activeDate, flowsMode]);
+
+  const handleForward = useCallback(() => {
+    if (page===TODAY) {
+      if (activeDate !== today) {
+        setActiveDate(addDays(activeDate, 1));
+      }
+      return;
+    }
+    if (page===FLOWS) {
+      if (flowsMode==='week') {
+        setWeekOffset(o => Math.max(0, o - 1));
+      } else {
+        setMonthOffset(o => Math.max(0, o - 1));
+      }
+      return;
+    }
+    if (page===CONSTELLATIONS || page===ECHOES) {
+      setYearOffset(o => Math.max(0, o - 1));
+      return;
+    }
+  }, [page, activeDate, flowsMode, today]);
+
+  const canGoBack = useMemo(() => {
+    if (page === TODAY) return true;
+    if (page === FLOWS) return true;
+    if (page === CONSTELLATIONS || page === ECHOES) return true;
+    return false;
+  }, [page]);
+
+  const canGoForward = useMemo(() => {
+    if (page === TODAY) return activeDate !== today;
+    if (page === FLOWS) return flowsMode === 'week' ? weekOffset > 0 : monthOffset > 0;
+    if (page === CONSTELLATIONS || page === ECHOES) return yearOffset > 0;
+    return false;
+  }, [page, activeDate, today, flowsMode, weekOffset, monthOffset, yearOffset]);
   // Telegram BackButton disabled per requirement (always hidden)
   useEffect(()=> { if (isTG) setBackButton(false); }, [isTG]);
 
@@ -214,14 +279,14 @@ export default function App() {
   }, [isTG, page]);
 
   function canReset(): boolean {
-    if (page===TODAY) return activeDate !== todayISO();
+    if (page===TODAY) return activeDate !== today;
     if (page===FLOWS) return flowsMode==='week' ? weekOffset>0 : monthOffset>0;
   if (page===CONSTELLATIONS || page===ECHOES) return yearOffset>0;
     return false;
   }
   function handleReset() {
     if (!canReset()) return;
-    if (page===TODAY) { setActiveDate(todayISO()); return; }
+    if (page===TODAY) { setActiveDate(today); return; }
     if (page===FLOWS) { 
       if (flowsMode==='week') setWeekOffset(0); else setMonthOffset(0); 
       return; 
@@ -314,185 +379,261 @@ export default function App() {
       .replace(',', ' ·');
   }
 
-  // Dynamic center title based on page and (internal) flows mode (week/month) -> we read localStorage flowsMode? Simpler: show weekOffset or monthOffset not accessible here; keep flows page title inside flows component? We'll compute here for header.
-  // We store flows mode locally in child; replicate via lifting if needed. For now we expose via a ref pattern not present. Simpler: manage flows mode here instead of FlowsPage internal state.
+  function timelineTitle(date: string): string {
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    const d = new Date(date + 'T00:00:00');
+    return d.toLocaleDateString('en', { weekday: 'long' });
+  }
 
-  return (
-    <div className="app-viewport fixed inset-0 w-full bg-[#0E0E0E] text-white overflow-hidden">
-      {/* Header (fixed) */}
-  <div className="fixed left-0 right-0 z-20 box-border h-14 text-sm text-white/90" style={{ top: headerTopOffset }}>
-        <div className="mx-auto w-full max-w-[425px] grid grid-cols-3 items-center px-4">
-          <div className="justify-self-start flex items-center gap-1">
-            <button aria-label="Navigate back" onClick={handleBack}
-              className="rounded-full p-2 text-white/70 hover:text-white">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
-              </svg>
-            </button>
-            {canReset() && (
-              <button aria-label="Go to current" onClick={handleReset} className="rounded-full p-2 text-white/70 hover:text-white">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                  <path d="M15.874 13C15.4299 14.7252 13.8638 16 12 16C10.1362 16 8.57006 14.7252 8.12602 13H3V11H8.12602C8.57006 9.27477 10.1362 8 12 8C13.8638 8 15.4299 9.27477 15.874 11H21V13H15.874ZM12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z"></path>
-                </svg>
-              </button>
-            )}
+  function timelineCaption(date: string): string {
+    const d = new Date(date + 'T00:00:00');
+    return d.toLocaleDateString('en', { month: 'short', day: '2-digit', year: 'numeric' });
+  }
+
+  function timelineEmojis(entry?: Entry): string {
+    if (!entry || entry.emojis.length === 0) return 'No entry saved';
+    return entry.emojis.join(' ');
+  }
+
+  function timelineSong(entry?: Entry): string | null {
+    if (!entry || !entry.song) return null;
+    const title = entry.song.title?.trim();
+    const artist = entry.song.artist?.trim();
+    if (!title && !artist) return null;
+    return [title, artist].filter(Boolean).join(' • ');
+  }
+
+  function tabDescription(id: AppPage): string {
+    if (id === TODAY) return 'Daily journal';
+    if (id === FLOWS) return 'Weekly & monthly posters';
+    if (id === CONSTELLATIONS) return 'Emoji galaxy';
+    if (id === ECHOES) return 'Mixtape memories';
+    return '';
+  }
+
+
+  const pageContent = (() => {
+  if (page === TODAY) {
+    return (
+      <div className="px-6 py-8 lg:px-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-10">
+          <div className="grid gap-10 xl:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
+            <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-[0_25px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm lg:p-10">
+              <div className="flex flex-col gap-8">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.45em] text-white/45">Daily journal</p>
+                  <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">{formatActiveDate()}</h1>
+                  <p className="mt-2 text-sm text-white/60">Choose up to three emotions and lock today&apos;s aura palette.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/25 px-6 py-8 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                  <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-start">
+                    <div className="flex flex-1 flex-col items-center gap-6">
+                      <div
+                        key={activeDate}
+                        className={`emoji-trans-container flex w-full max-w-[360px] flex-col items-center justify-center ${showAura ? 'aura-active' : ''}`}
+                      >
+                        <div className="triangle-view flex w-full items-center justify-center" onClick={() => { if(entry.emojis.length>0 && editable) { /* placeholder for future interactions */ } }}>
+                          <EmojiTriangle
+                            emojis={entry.emojis}
+                            onPick={(slot) => openPicker(slot)}
+                            onRemove={removeEmojiAt}
+                            editable={editable}
+                          />
+                        </div>
+                        <div className="aura-view cursor-pointer" onClick={() => setShowAura(false)}>
+                          <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} />
+                        </div>
+                      </div>
+                      <div className="text-xs text-white/50">Click the aura to return to the emoji selector.</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-semibold text-white">Aura palette</div>
+                      <div className="text-xs text-white/60">Drag across the spectrum to capture today&apos;s colour story.</div>
+                    </div>
+                    <div className={`text-xs font-medium ${showAura ? 'text-emerald-300' : editable ? 'text-white/65' : 'text-white/40'}`}>
+                      {sliderStatus}
+                    </div>
+                  </div>
+                  <div
+                    ref={sliderRef}
+                    tabIndex={editable && entry.emojis.length>0 ? 0 : -1}
+                    onKeyDown={(e) => {
+                      if (!editable || entry.emojis.length===0) return;
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        const delta = e.key === 'ArrowLeft' ? -5 : 5;
+                        const hue = (((entry.hue ?? 0) + delta + 360) % 360);
+                        const next = { ...entry, hue, updatedAt: Date.now() } as Entry;
+                        setShowAura(true);
+                        setEntries(old => upsertEntry(old, next));
+                        if (isTG) {
+                          const now = performance.now();
+                          const last = lastHapticRef.current;
+                          if (now - last.t > 140 || Math.abs(hue - last.hue) >= 12) {
+                            hapticLight();
+                            lastHapticRef.current = { t: now, hue };
+                          }
+                        }
+                        e.preventDefault();
+                      }
+                    }}
+                    onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); if(isTG) disableVerticalSwipes(); handleSliderPointer(e); }}
+                    onPointerMove={(e)=>{ if(e.buttons!==1) return; if(!editable || entry.emojis.length===0) return; handleSliderPointer(e); }}
+                    onPointerUp={()=>{ if(isTG) { enableVerticalSwipes(); } }}
+                    onPointerCancel={()=>{ if(isTG) { enableVerticalSwipes(); } }}
+                    onWheel={()=> { if(isTG && sliderRef.current) { disableVerticalSwipes(); if (sliderRef.current._wheelTO) clearTimeout(sliderRef.current._wheelTO); sliderRef.current._wheelTO = setTimeout(()=> enableVerticalSwipes(), 260); } }}
+                    className={
+                      'relative mt-6 h-12 w-full overflow-hidden rounded-full transition-[box-shadow,transform] duration-300 ' +
+                      (editable && entry.emojis.length>0 ? 'cursor-pointer ring-1 ring-white/15 hover:ring-white/30 hover:shadow-[0_0_0_4px_rgba(255,255,255,0.08)] active:scale-[0.99]' : 'cursor-not-allowed bg-white/10 opacity-70') +
+                      (releaseBlocked ? ' pointer-events-none' : '')
+                    }
+                    style={{ boxShadow: (editable && entry.emojis.length>0 && !releaseBlocked) ? '0 0 30px 6px rgba(99,132,255,0.08)' : undefined }}
+                    aria-disabled={releaseBlocked || !(editable && entry.emojis.length>0)}
+                  >
+                    <div
+                      aria-hidden
+                      className="absolute inset-0 rounded-full transition-opacity duration-400 ease-out transform-gpu"
+                      style={{
+                        background: rainbowGradientCSS(),
+                        opacity: releaseBlocked ? 0 : ((editable && entry.emojis.length>0) ? 1 : 0),
+                        transform: (editable && entry.emojis.length>0) ? 'scale(1)' : 'scale(0.985)'
+                      }}
+                    />
+                    {releaseBlocked && (
+                      <ReleaseOverlay enabled={true} onCelebrate={() => setReleaseBlocked(false)} />
+                    )}
+                  </div>
+                  {!editable && (
+                    <div className="mt-3 text-xs text-white/45">
+                      Read-only · you can edit today or yesterday.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-6 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold text-white">Soundtrack</div>
+                      <div className="text-xs text-white/60">Pair the day with the song looping in your head.</div>
+                    </div>
+                    {!isTG ? (
+                      <button
+                        type="button"
+                        onClick={() => { if (canEditSongMeta) setShowSong((prev) => !prev); }}
+                        disabled={!canEditSongMeta}
+                        className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-medium text-white/85 transition hover:border-white/30 hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {showSong ? 'Hide fields' : entry.song ? 'Edit details' : 'Add song'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { if (canEditSongMeta) setSongEditorOpen(true); }}
+                        disabled={!canEditSongMeta}
+                        className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-medium text-white/85 transition hover:border-white/30 hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Open editor
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-sm font-medium text-white/90">{entry.song?.title || 'No song saved'}</div>
+                    <div className="text-xs text-white/55">{entry.song?.artist || (canEditSongMeta ? 'Add a track after saving your aura.' : 'Locked until you can edit this entry.')}</div>
+                  </div>
+                  {!isTG && showSong && (
+                    <div className="mt-5 grid gap-4 song-inputs">
+                      <input
+                        type="text"
+                        className="song-input text-base"
+                        placeholder="Artist"
+                        disabled={!editable}
+                        value={entry.song?.artist || ''}
+                        maxLength={MAX_ARTIST}
+                        onChange={(e)=> updateSong({ artist: e.target.value.slice(0, MAX_ARTIST) })}
+                        onBlur={(e)=> updateSong({ artist: e.target.value.trim().slice(0, MAX_ARTIST) })}
+                      />
+                      <input
+                        type="text"
+                        className="song-input text-base"
+                        placeholder="Song title"
+                        disabled={!editable}
+                        value={entry.song?.title || ''}
+                        maxLength={MAX_TITLE}
+                        onChange={(e)=> updateSong({ title: e.target.value.slice(0, MAX_TITLE) })}
+                        onBlur={(e)=> updateSong({ title: e.target.value.trim().slice(0, MAX_TITLE) })}
+                      />
+                      <div className="text-xs text-white/45">Saved automatically. Leave fields blank to clear.</div>
+                    </div>
+                  )}
+                  {isTG && (
+                    <div className="mt-4 text-xs text-white/55">Song editing opens in a focused sheet inside Telegram.</div>
+                  )}
+                </div>
+              </div>
+            </section>
+            <section className="flex flex-col rounded-3xl border border-white/10 bg-black/30 p-6 shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm lg:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.45em] text-white/45">Recent days</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Journal timeline</h2>
+                  <p className="mt-2 text-sm text-white/60">Revisit entries and jump between moments.</p>
+                </div>
+                {activeDate !== today && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveDate(today)}
+                    className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-xs font-medium text-white/80 transition hover:border-white/30 hover:bg-white/[0.12]"
+                  >
+                    Jump to today
+                  </button>
+                )}
+              </div>
+              <div className="mt-6 max-h-[520px] overflow-y-auto pr-1">
+                <div className="space-y-3">
+                  {timelineDays.map(({ date, entry }) => {
+                    const active = date === activeDate;
+                    const swatch = typeof entry?.hue === 'number' ? hsl(entry.hue, 80, 50) : null;
+                    const songLine = timelineSong(entry);
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => setActiveDate(date)}
+                        className={`group flex w-full items-center gap-4 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-white/40 bg-white/[0.12] shadow-[0_18px_48px_rgba(0,0,0,0.4)]' : 'border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.08]'}`}
+                      >
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/40">
+                          {swatch ? <span className="h-8 w-8 rounded-lg" style={{ background: swatch }} /> : <span className="text-lg text-white/30">—</span>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-white">{timelineTitle(date)}</div>
+                            <div className="text-xs text-white/45">{timelineCaption(date)}</div>
+                          </div>
+                          <div className="mt-1 text-sm text-white/80 truncate">{timelineEmojis(entry)}</div>
+                          {songLine && (
+                            <div className="mt-1 text-xs text-white/55 truncate">{songLine}</div>
+                          )}
+                        </div>
+                        {active && <span className="text-xs font-medium text-emerald-300">Active</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
           </div>
-          <div className="justify-self-center font-medium text-center px-2 whitespace-nowrap">
-            <span
-              key={page===CONSTELLATIONS ? 'constellations-static' : headerCenterText()}
-              className={'inline-block animate-fadeFromTop'}
-            >{headerCenterText()}</span>
-          </div>
-          <button aria-label="Open settings" onClick={() => setSettingsOpen(true)} className="justify-self-end rounded-full p-2 text-white/70 hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-              <path d="M8.68637 4.00008L11.293 1.39348C11.6835 1.00295 12.3167 1.00295 12.7072 1.39348L15.3138 4.00008H19.0001C19.5524 4.00008 20.0001 4.4478 20.0001 5.00008V8.68637L22.6067 11.293C22.9972 11.6835 22.9972 12.3167 22.6067 12.7072L20.0001 15.3138V19.0001C20.0001 19.5524 19.5524 20.0001 19.0001 20.0001H15.3138L12.7072 22.6067C12.3167 22.9972 11.6835 22.9972 11.293 22.6067L8.68637 20.0001H5.00008C4.4478 20.0001 4.00008 19.5524 4.00008 19.0001V15.3138L1.39348 12.7072C1.00295 12.3167 1.00295 11.6835 1.39348 11.293L4.00008 8.68637V5.00008C4.00008 4.4478 4.4478 4.00008 5.00008 4.00008H8.68637ZM6.00008 6.00008V9.5148L3.5148 12.0001L6.00008 14.4854V18.0001H9.5148L12.0001 20.4854L14.4854 18.0001H18.0001V14.4854L20.4854 12.0001L18.0001 9.5148V6.00008H14.4854L12.0001 3.5148L9.5148 6.00008H6.00008ZM12.0001 16.0001C9.79094 16.0001 8.00008 14.2092 8.00008 12.0001C8.00008 9.79094 9.79094 8.00008 12.0001 8.00008C14.2092 8.00008 16.0001 9.79094 16.0001 12.0001C16.0001 14.2092 14.2092 16.0001 12.0001 16.0001ZM12.0001 14.0001C13.1047 14.0001 14.0001 13.1047 14.0001 12.0001C14.0001 10.8955 13.1047 10.0001 12.0001 10.0001C10.8955 10.0001 10.0001 10.8955 10.0001 12.0001C10.0001 13.1047 10.8955 14.0001 12.0001 14.0001Z"></path>
-            </svg>
-          </button>
         </div>
       </div>
-
-  {/* Content area sized between fixed bars (no scroll) */}
-  <div className="absolute inset-x-0 overflow-hidden page-stack" style={{ top: contentTop, bottom: contentBottom }}>
-  <div className="page-view from-left" data-active={page===TODAY}>
-        <div className="mx-auto flex h-full max-w-sm flex-col px-4">
-          {/* Fixed visual area so slider never jumps */}
-          <div className="h-[320px] w-full flex items-center justify-center">
-            <div key={activeDate} className={"emoji-trans-container w-full flex items-center justify-center animate-emoji-day-swap " + (showAura ? 'aura-active':'')}
-        style={{maxWidth:280}}>
-              <div className="triangle-view flex items-center justify-center w-full" onClick={()=>{ if(entry.emojis.length>0 && editable){ /* maybe future */ }}}>
-                <EmojiTriangle
-                  emojis={entry.emojis}
-                  onPick={(slot) => openPicker(slot)}
-                  onRemove={removeEmojiAt}
-                  editable={editable}
-                />
-              </div>
-              <div className="aura-view cursor-pointer" onClick={() => setShowAura(false)}>
-                <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} />
-              </div>
-            </div>
-          </div>
-
-          {/* Label above slider */}
-          <div className="mt-2 text-center text-sm text-white/75 min-h-[20px] flex items-center justify-center">
-            {showAura ? 'Saved 🌈' : 'Pick your vibe'}
-          </div>
-
-          {/* Thicker color slider (stays in place) */}
-          <div
-            ref={sliderRef}
-            tabIndex={editable && entry.emojis.length>0 ? 0 : -1}
-            onKeyDown={(e) => {
-              if (!editable || entry.emojis.length===0) return;
-              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                const delta = e.key === 'ArrowLeft' ? -5 : 5;
-                const hue = (((entry.hue ?? 0) + delta + 360) % 360);
-                const next = { ...entry, hue, updatedAt: Date.now() };
-                setShowAura(true);
-                setEntries(old => upsertEntry(old, next));
-                if (isTG) {
-                  const now = performance.now();
-                  const last = lastHapticRef.current;
-                  if (now - last.t > 140 || Math.abs(hue - last.hue) >= 12) {
-                    hapticLight();
-                    lastHapticRef.current = { t: now, hue };
-                  }
-                }
-                e.preventDefault();
-              }
-            }}
-            onPointerDown={(e)=>{ if(!editable || entry.emojis.length===0) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); if(isTG) disableVerticalSwipes(); handleSliderPointer(e); }}
-            onPointerMove={(e)=>{ if(e.buttons!==1) return; if(!editable || entry.emojis.length===0) return; handleSliderPointer(e); }}
-            onPointerUp={()=>{ if(isTG) { enableVerticalSwipes(); } }}
-            onPointerCancel={()=>{ if(isTG) { enableVerticalSwipes(); } }}
-            onWheel={()=> { if(isTG && sliderRef.current) { disableVerticalSwipes(); if (sliderRef.current._wheelTO) clearTimeout(sliderRef.current._wheelTO); sliderRef.current._wheelTO = setTimeout(()=> enableVerticalSwipes(), 260); } }}
-            className={
-              'mx-auto mt-6 w-full max-w-xs cursor-pointer rounded-full h-8 transition-[box-shadow,transform] duration-300 relative overflow-hidden ' +
-              (editable && entry.emojis.length>0 ? 'ring-1 ring-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.07)] active:scale-[0.98]' : 'bg-white/10 cursor-not-allowed') +
-              (releaseBlocked ? ' pointer-events-none' : '')
-            }
-            style={{ boxShadow: (editable && entry.emojis.length>0 && !releaseBlocked) ? '0 0 20px 2px rgba(255,255,255,0.07)' : undefined }}
-            aria-disabled={releaseBlocked || !(editable && entry.emojis.length>0)}
-          >
-            {/* Gradient overlay: animate opacity+scale when activated (at least one emoji present) */}
-            <div
-              aria-hidden
-              className={"absolute inset-0 rounded-full transition-opacity duration-400 ease-out transform-gpu"}
-                style={{
-                background: rainbowGradientCSS(),
-                opacity: releaseBlocked ? 0 : ((editable && entry.emojis.length>0) ? 1 : 0),
-                transform: (editable && entry.emojis.length>0) ? 'scale(1)' : 'scale(0.985)'
-              }}
-            />
-            {/* Externalized release overlay component (blocks slider until celebrated) */}
-            {releaseBlocked && (
-              <ReleaseOverlay enabled={true} onCelebrate={() => setReleaseBlocked(false)} />
-            )}
-          </div>
-          {!editable && (
-            <div className="mt-1 text-center text-xs text-white/40">
-              Read-only · you can edit today or yesterday
-            </div>
-          )}
-
-          {/* Song of the day (inline web / overlay in Telegram) */}
-      {(!isTG && !showSong) && (
-            <div className="mt-6 flex justify-center">
-              <button
-                type="button"
-        onClick={()=> { if(canEditSongMeta) setShowSong(true); }}
-        disabled={!canEditSongMeta}
-        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 disabled:opacity-35 disabled:cursor-not-allowed text-sm font-medium text-white/90 transition ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
-              >
-                {entry.song ? 'Edit song' : 'Song of the day'}
-              </button>
-            </div>
-          )}
-      {(!isTG && showSong) && (
-            <div className="mt-6 space-y-3 song-inputs">
-              <input
-                type="text"
-                className="song-input"
-                placeholder="Artist"
-                disabled={!editable}
-                value={entry.song?.artist || ''}
-                maxLength={MAX_ARTIST}
-                onChange={(e)=> updateSong({ artist: e.target.value.slice(0, MAX_ARTIST) })}
-                onBlur={(e)=> updateSong({ artist: e.target.value.trim().slice(0, MAX_ARTIST) })}
-              />
-              <input
-                type="text"
-                className="song-input"
-                placeholder="Song title"
-                disabled={!editable}
-                value={entry.song?.title || ''}
-                maxLength={MAX_TITLE}
-                onChange={(e)=> updateSong({ title: e.target.value.slice(0, MAX_TITLE) })}
-                onBlur={(e)=> updateSong({ title: e.target.value.trim().slice(0, MAX_TITLE) })}
-              />
-            </div>
-          )}
-      {isTG && (
-            <div className="mt-6 flex justify-center">
-              <button
-                type="button"
-        onClick={()=> { if (canEditSongMeta) setSongEditorOpen(true); }}
-        className="w-full max-w-xs mx-auto px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 text-sm font-medium text-white/90 transition ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
-        disabled={!canEditSongMeta}
-              >
-                {entry.song ? 'Edit song' : 'Song of the day'}
-              </button>
-            </div>
-          )}
-          {/* Celebratory banner for v1.0 - visually matches "Song of the day" button */}
-          
-        </div>
-      </div>
-      
-
-  <div className="page-view from-left" data-active={page===FLOWS}>
-        {page===FLOWS && (
-          <div className="h-full animate-fadeSwap">
+    );
+  }
+  if (page === FLOWS) {
+    return (
+      <div className="px-6 py-8 lg:px-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_80px_rgba(0,0,0,0.4)] backdrop-blur-sm lg:p-10">
             <FlowsPage
               recent7={recent7}
               monthHues={monthHues}
@@ -502,90 +643,179 @@ export default function App() {
               onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')}
             />
           </div>
-        )}
+        </div>
       </div>
-  <div className="page-view from-right" data-active={page===CONSTELLATIONS}>
-        {page===CONSTELLATIONS && (
-          <div className="h-full">
+    );
+  }
+  if (page === CONSTELLATIONS) {
+    return (
+      <div className="px-6 py-8 lg:px-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_25px_80px_rgba(0,0,0,0.4)] backdrop-blur-sm lg:p-10">
             <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
           </div>
-        )}
+        </div>
       </div>
-  <div className="page-view from-right" data-active={page===ECHOES}>
-        {page===ECHOES && (
-          <div className="h-full animate-fadeSwap">
+    );
+  }
+  if (page === ECHOES) {
+    return (
+      <div className="px-6 py-8 lg:px-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_25px_80px_rgba(0,0,0,0.4)] backdrop-blur-sm lg:p-10">
             <EchoesPage entries={entries} yearOffset={yearOffset} />
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    );
+  }
+  return null;
+  })();
 
-  {/* Bottom nav (fixed) */}
-  {!songEditorOpen && (
-    <nav
-      className="fixed left-0 right-0 z-20 box-border h-14 border-t border-white/5 bg-black/40 backdrop-blur-md"
-      style={{ bottom: footerBottomOffset }}
-    >
-      <div className="mx-auto w-full max-w-sm flex items-center justify-center gap-10 px-4 text-white/80 h-full">
-        {APP_TABS.map((tab) => (
-          <IconButton
-            key={tab.id}
-            label={tab.label}
-            active={page === tab.id}
-            onClick={() => handleTabSelect(tab.id)}
-            accent={isTG ? tgAccent : undefined}
-          >
-            {tab.icon}
-          </IconButton>
-        ))}
+  return (
+    <div className="app-viewport flex h-full w-full bg-[#070708] text-white">
+    <aside className="hidden h-full w-[260px] flex-col border-r border-white/10 bg-white/[0.02] px-6 py-8 backdrop-blur-lg lg:flex">
+      <div>
+        <div className="text-lg font-semibold text-white">Flowday</div>
+        <div className="mt-1 text-xs text-white/50">Desktop studio</div>
       </div>
-    </nav>
-  )}
-    {isTG && footerBottomOffset > 0 && !songEditorOpen && (
-        <div
-          aria-hidden="true"
-          className="fixed left-0 right-0 bg-black/40 backdrop-blur-md pointer-events-none z-10"
-          style={{ height: footerBottomOffset, bottom: 0 }}
-        />
-      )}
-  <EmojiPickerModal
-        open={pickerOpen}
-        recents={recents}
-        onClose={closePicker}
-        onPick={handlePick}
-      />
-  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} onOpenPrivacy={() => { setPrivacyOpen(true); }} />
-  <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
-  {privacyOpen && (
-    <div className={"fixed inset-0 z-50 flex items-stretch sm:items-center justify-center settings-overlay backdrop-blur-sm" + (privacyClosing ? ' closing' : '')} onClick={() => {
-        if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320);
-      }}>
-      <div className={"w-full h-full sm:h-auto max-w-none sm:max-w-sm rounded-none sm:rounded-2xl bg-[#111] p-6 pt-7 pb-8 ring-1 ring-white/10 overflow-y-auto settings-panel" + (privacyClosing ? ' closing' : '')}
-           style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }} onClick={(e)=> e.stopPropagation()}>
-        <div className="mb-2">
-          {isTG ? (
-            <PrivacyTelegramPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
-          ) : (
-            <PrivacyWebPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
+      <nav className="mt-10 space-y-2">
+        {APP_TABS.map((tab) => {
+          const active = tab.id === page;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleTabSelect(tab.id)}
+              className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-white/25 bg-white/[0.12] text-white shadow-[0_12px_36px_rgba(0,0,0,0.35)]' : 'border-transparent text-white/70 hover:border-white/20 hover:bg-white/[0.08]'}`}
+            >
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${active ? 'bg-white/[0.18] text-white' : 'bg-white/[0.08] text-white/70'}`}>
+                {tab.icon}
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">{tab.label}</div>
+                <div className="text-xs text-white/45">{tabDescription(tab.id)}</div>
+              </div>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto space-y-3 pt-8">
+        <button
+          type="button"
+          onClick={() => setGuideOpen(true)}
+          className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm font-medium text-white/85 transition hover:border-white/30 hover:bg-white/[0.1]"
+        >
+          Product tour
+        </button>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left text-sm font-medium text-white/85 transition hover:border-white/30 hover:bg-white/[0.1]"
+        >
+          Settings
+        </button>
+        <div className="text-xs text-white/35">v{APP_VERSION}</div>
+      </div>
+    </aside>
+    <div className="flex flex-1 flex-col">
+      <header className="flex h-20 items-center justify-between border-b border-white/10 bg-black/30 px-6 backdrop-blur-md lg:px-10">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            disabled={!canGoBack}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] text-white/80 transition hover:border-white/35 hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+              <path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"></path>
+            </svg>
+          </button>
+          <div>
+            <div className="text-xs uppercase tracking-[0.45em] text-white/45">{currentTab?.label}</div>
+            <div className="mt-1 text-xl font-semibold text-white md:text-2xl">{headerCenterText()}</div>
+          </div>
+          <button
+            type="button"
+            onClick={handleForward}
+            disabled={!canGoForward}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] text-white/80 transition hover:border-white/35 hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+              <path d="M13.1716 11.9993L8.22183 7.0496L9.63604 5.63538L16 11.9993L9.63604 18.3633L8.22183 16.9491L13.1716 11.9993Z"></path>
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          {canReset() && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 text-sm font-medium text-white/85 transition hover:border-white/35 hover:bg-white/[0.12]"
+            >
+              Reset
+            </button>
           )}
+          <button
+            type="button"
+            onClick={() => setGuideOpen(true)}
+            className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm text-white/80 transition hover:border-white/35 hover:bg-white/[0.12]"
+          >
+            Tour
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm text-white/80 transition hover:border-white/35 hover:bg-white/[0.12]"
+          >
+            Settings
+          </button>
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto">
+          {pageContent}
         </div>
       </div>
     </div>
-  )}
-  {/* Telegram full-screen song editor overlay */}
-  {isTG && songEditorOpen && (
-    <SongEditorOverlay
-      artist={entry.song?.artist || ''}
-      title={entry.song?.title || ''}
-      maxArtist={MAX_ARTIST}
-      maxTitle={MAX_TITLE}
-      onChange={(p)=> updateSong(p)}
-  onClose={()=> setSongEditorOpen(false)}
-      editable={editable}
+    <EmojiPickerModal
+      open={pickerOpen}
+      recents={recents}
+      onClose={closePicker}
+      onPick={handlePick}
     />
-  )}
-    </div>
-  );
+    <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} entries={entries} onShowGuide={()=> { setGuideOpen(true); }} isTG={isTG} onOpenPrivacy={() => { setPrivacyOpen(true); }} />
+    <GuideModal open={guideOpen} onClose={()=> setGuideOpen(false)} />
+    {privacyOpen && (
+      <div className={`fixed inset-0 z-50 flex items-stretch sm:items-center justify-center settings-overlay backdrop-blur-sm${privacyClosing ? ' closing' : ''}`} onClick={() => {
+          if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320);
+        }}>
+        <div className={`w-full h-full sm:h-auto max-w-none sm:max-w-sm rounded-none sm:rounded-2xl bg-[#111] p-6 pt-7 pb-8 ring-1 ring-white/10 overflow-y-auto settings-panel${privacyClosing ? ' closing' : ''}`}
+             style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }} onClick={(e)=> e.stopPropagation()}>
+          <div className="mb-2">
+            {isTG ? (
+              <PrivacyTelegramPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
+            ) : (
+              <PrivacyWebPage onBack={() => { if (privacyClosing) return; setPrivacyClosing(true); setTimeout(()=> { setPrivacyOpen(false); setPrivacyClosing(false); }, 320); }} />
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    {isTG && songEditorOpen && (
+      <SongEditorOverlay
+        artist={entry.song?.artist || ''}
+        title={entry.song?.title || ''}
+        maxArtist={MAX_ARTIST}
+        maxTitle={MAX_TITLE}
+        onChange={(p)=> updateSong(p)}
+        onClose={()=> setSongEditorOpen(false)}
+        editable={editable}
+      />
+    )}
+  </div>
+);
+
 }
 
 interface SongEditorOverlayProps {

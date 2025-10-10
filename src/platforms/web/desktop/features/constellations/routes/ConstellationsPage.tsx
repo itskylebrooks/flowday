@@ -540,9 +540,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const { tx, ty, scale } = viewRef.current;
 
   return (
-    <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
-      <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
-      <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
+    <div className="flex h-full flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
+      <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
+      <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
       {/* Animated canvas wrapper only */}
   <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
         <svg
