@@ -429,6 +429,19 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     next.sort((a, b) => b.weight - a.weight);
     return next.slice(0, 8);
   }, [focus, pair]);
+
+  // Build helper maps: last used date & representative hue per emoji
+  const lastUsed = useMemo(() => {
+    const map = new Map<string, { date: string; hue?: number }>();
+    for (const e of filteredEntries) {
+      for (const emo of Array.from(new Set(e.emojis))) {
+        const cur = map.get(emo);
+        if (!cur || e.date > cur.date) map.set(emo, { date: e.date, hue: e.hue });
+      }
+    }
+    return map;
+  }, [filteredEntries]);
+
   const focusCount = focus ? freq.get(focus) || 0 : 0;
   const focusLastSeen = focus ? lastUsed.get(focus) : undefined;
   const focusDaysAgo = focusLastSeen ? daysBetween(todayIso, focusLastSeen.date) : null;
@@ -464,18 +477,6 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     if (typeof h !== 'number') return hsl(220, 14, 60, alpha * 0.9); // fallback bluish
     return hsl(Math.round(h), 85, 58, alpha);
   }
-
-  // Build helper maps: last used date & representative hue per emoji
-  const lastUsed = useMemo(() => {
-    const map = new Map<string, { date: string; hue?: number }>();
-    for (const e of filteredEntries) {
-      for (const emo of Array.from(new Set(e.emojis))) {
-        const cur = map.get(emo);
-        if (!cur || e.date > cur.date) map.set(emo, { date: e.date, hue: e.hue });
-      }
-    }
-    return map;
-  }, [filteredEntries]);
 
   // Compute circular mean hue across all entries per emoji (used when emoji not chosen today)
   const mixedHueByEmoji = useMemo(() => {
