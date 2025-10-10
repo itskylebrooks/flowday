@@ -1,12 +1,41 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Entry } from '@shared/lib/types/global';
 import { clamp, emojiStats, hsl, last7, todayISO } from '@shared/lib/utils';
 
-export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
-  const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
+const MAX_VISIBLE_EMOJIS = 80;
+const TIMEFRAME_OPTIONS = {
+  today: 'Today',
+  '7d': '7 days',
+  '30d': '30 days',
+  '90d': '90 days',
+  all: 'All time',
+} as const;
+type TimeframeKey = keyof typeof TIMEFRAME_OPTIONS;
 
-  // Show all emojis (sorted by frequency). Performance improvements below reduce O(n^2) cost.
-  const topEmojis = useMemo(() => [...freq.entries()].sort((a, b) => b[1] - a[1]), [freq]);
+export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
+  const [timeframe, setTimeframe] = useState<TimeframeKey>('30d');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [focus, setFocus] = useState<string | null>(null);
+
+  const todayIso = todayISO();
+  const filteredEntries = useMemo(() => {
+    if (timeframe === 'all') return entries;
+    if (timeframe === 'today') return entries.filter((e) => e.date === todayIso);
+    const days = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : 90;
+    const anchor = new Date(`${todayIso}T00:00:00`);
+    const cutoff = new Date(anchor.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+    const cutoffIso = cutoff.toISOString().slice(0, 10);
+    return entries.filter((e) => e.date >= cutoffIso);
+  }, [entries, timeframe, todayIso]);
+
+  const { freq, pair } = useMemo(() => emojiStats(filteredEntries), [filteredEntries]);
+
+  // Show all emojis (sorted by frequency). Limit visible nodes for performance.
+  const topEmojis = useMemo(
+    () => [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_VISIBLE_EMOJIS),
+    [freq],
+  );
+  const hiddenEmojiCount = Math.max(0, freq.size - topEmojis.length);
 
   // Force-directed layout state (kept outside React state for perf)
   interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
@@ -57,6 +86,55 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     }
   }
 
+  const toggleFocus = useCallback((emoji: string) => {
+    setFocus((prev) => (prev === emoji ? null : emoji));
+  }, []);
+
+  const timeframeLabel = TIMEFRAME_OPTIONS[timeframe];
+  const totalEntriesCount = filteredEntries.length;
+  const activeDays = useMemo(() => {
+    const unique = new Set<string>();
+    for (const entry of filteredEntries) unique.add(entry.date);
+    return unique.size;
+  }, [filteredEntries]);
+  const totalEmojiUses = useMemo(
+    () => filteredEntries.reduce((sum, entry) => sum + entry.emojis.length, 0),
+    [filteredEntries],
+  );
+  const averagePerEntry = totalEntriesCount ? totalEmojiUses / totalEntriesCount : 0;
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const searchableEmojis = useMemo(() => {
+    if (!normalizedSearch) return topEmojis;
+    return topEmojis.filter(([emo]) => emo.toLowerCase().includes(normalizedSearch));
+  }, [normalizedSearch, topEmojis]);
+  const quickEmojiList = useMemo(() => searchableEmojis.slice(0, 12), [searchableEmojis]);
+  const summaryStats = useMemo(
+    () => [
+      { label: 'Unique emoji', value: freq.size.toString() },
+      { label: 'Entries', value: totalEntriesCount.toString() },
+      { label: 'Active days', value: activeDays.toString() },
+      {
+        label: 'Avg emoji / entry',
+        value: Number.isFinite(averagePerEntry) ? averagePerEntry.toFixed(1) : '0.0',
+      },
+    ],
+    [freq.size, totalEntriesCount, activeDays, averagePerEntry],
+  );
+  const searchActive = normalizedSearch.length > 0;
+
+  const handleTimeframeChange = useCallback((key: TimeframeKey) => {
+    setTimeframe(key);
+  }, []);
+
+  useEffect(() => {
+    if (!normalizedSearch) return;
+    const first = searchableEmojis[0]?.[0];
+    if (first) {
+      setFocus((prev) => (prev === first ? prev : first));
+    }
+  }, [normalizedSearch, searchableEmojis]);
+
   // (Re)initialize simulation when top emojis change
   useEffect(() => {
     // Precompute sizes (frequency -> size) so we can respect bounds fully (size/2 + padding)
@@ -69,8 +147,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     const cx = worldWidth / 2, cy = worldHeight / 2;
   // Determine which emojis are from today so we place them near center
   const todaySet = new Set<string>();
-  const todayStr = todayISO();
-  for (const e of entries) if (e.date === todayStr) for (const emo of Array.from(new Set(e.emojis))) todaySet.add(emo);
+  for (const e of filteredEntries) if (e.date === todayIso) for (const emo of Array.from(new Set(e.emojis))) todaySet.add(emo);
 
     const centerRadius = Math.min(120, Math.min(worldWidth, worldHeight) / 6);
     const pad = NODE_PADDING + maxRadius;
@@ -100,9 +177,9 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     edgesRef.current = edges;
     // Force immediate render so stale nodes disappear (important when becoming empty)
     triggerRender();
-  }, [topEmojis, pair, freq, entries]);
+  }, [topEmojis, pair, freq, filteredEntries, todayIso]);
 
-  // Reset view transform when entries dataset changes (year navigation)
+  // Reset view transform when the dataset changes (year navigation or timeframe switch)
   useEffect(()=> {
     const v = viewRef.current;
     // Center the world in svg user units. For the world center to appear at svg center:
@@ -114,7 +191,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     v.targetScale = v.scale;
     v.targetTx = v.tx; v.targetTy = v.ty;
     momentumRef.current.active = false;
-  }, [entries]);
+  }, [filteredEntries, timeframe, yearKey]);
 
   // Drag handling
   const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean; group: {index:number; startX:number; startY:number}[] } | null>(null);
@@ -214,7 +291,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     const d = draggingRef.current;
     draggingRef.current = null;
     if (!d.moved) {
-      setFocus(f => f === emo ? null : emo);
+      toggleFocus(emo);
     }
   }
 
@@ -331,9 +408,39 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const nodes = nodesRef.current;
   const edges = edgesRef.current;
 
-  const [focus, setFocus] = useState<string | null>(null);
-  // Reset focus when dataset changes (e.g., year navigation)
-  useEffect(()=>{ setFocus(null); }, [entries]);
+  const topPairsList = useMemo(() => {
+    return [...pair.entries()]
+      .map(([key, weight]) => {
+        const [a, b] = key.split('__');
+        return { a, b, weight };
+      })
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 8);
+  }, [pair]);
+
+  const focusConnections = useMemo(() => {
+    if (!focus) return [] as { emoji: string; weight: number }[];
+    const next: { emoji: string; weight: number }[] = [];
+    for (const [key, weight] of pair.entries()) {
+      const [a, b] = key.split('__');
+      if (a === focus) next.push({ emoji: b, weight });
+      else if (b === focus) next.push({ emoji: a, weight });
+    }
+    next.sort((a, b) => b.weight - a.weight);
+    return next.slice(0, 8);
+  }, [focus, pair]);
+  const focusCount = focus ? freq.get(focus) || 0 : 0;
+  const focusLastSeen = focus ? lastUsed.get(focus) : undefined;
+  const focusDaysAgo = focusLastSeen ? daysBetween(todayIso, focusLastSeen.date) : null;
+  const focusRecencyLabel = focusLastSeen
+    ? focusDaysAgo === 0
+      ? 'Today'
+      : `${focusDaysAgo} day${focusDaysAgo === 1 ? '' : 's'} ago`
+    : null;
+  const datasetEmpty = nodes.length === 0;
+
+  // Reset focus when dataset changes (e.g., year navigation or timeframe switch)
+  useEffect(()=>{ setFocus(null); }, [filteredEntries, timeframe]);
   function edgeStyle(a: string, b: string, w: number) {
     // Only show edges when focused; weight subtly affects thickness
     const connected = focus != null && (focus === a || focus === b);
@@ -361,19 +468,19 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   // Build helper maps: last used date & representative hue per emoji
   const lastUsed = useMemo(() => {
     const map = new Map<string, { date: string; hue?: number }>();
-    for (const e of entries) {
+    for (const e of filteredEntries) {
       for (const emo of Array.from(new Set(e.emojis))) {
         const cur = map.get(emo);
         if (!cur || e.date > cur.date) map.set(emo, { date: e.date, hue: e.hue });
       }
     }
     return map;
-  }, [entries]);
+  }, [filteredEntries]);
 
   // Compute circular mean hue across all entries per emoji (used when emoji not chosen today)
   const mixedHueByEmoji = useMemo(() => {
     const buckets = new Map<string, number[]>();
-    for (const e of entries) {
+    for (const e of filteredEntries) {
       if (typeof e.hue !== 'number') continue;
       const huesForEntry = (e.hue + 360) % 360;
       for (const emo of Array.from(new Set(e.emojis))) {
@@ -399,11 +506,10 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       if (typeof m === 'number' && !Number.isNaN(m)) out.set(emo, m);
     }
     return out;
-  }, [entries]);
+  }, [filteredEntries]);
 
   // Which emojis appeared in the most recent 7 days (for soft teal glow)
-  const recent7Emojis = useMemo(() => new Set<string>(last7(entries).flatMap(e => e.emojis)), [entries]);
-  const todayIso = todayISO();
+  const recent7Emojis = useMemo(() => new Set<string>(last7(filteredEntries).flatMap(e => e.emojis)), [filteredEntries]);
 
   // width/height defined earlier
 
@@ -540,126 +646,329 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const { tx, ty, scale } = viewRef.current;
 
   return (
-    <div className="flex h-full flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
-      <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
-      <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
-      {/* Animated canvas wrapper only */}
-  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
-        <svg
-          viewBox={`0 0 ${worldWidth} ${worldHeight}`}
-          width={renderWidth}
-          height={renderHeight}
-          shapeRendering="geometricPrecision"
-          textRendering="geometricPrecision"
-          style={{ userSelect:'none', touchAction:'none', cursor: panDragRef.current? 'grabbing':'grab' }}
-          onWheel={onWheel}
-          onPointerDown={onBgPointerDown}
-          onPointerMove={onBgPointerMove}
-          onPointerUp={onBgPointerUp}
-          ref={el=> { svgElRef.current = el; }}
-        >
-          <defs>
-            <filter id="fd-blur" x="-60%" y="-60%" width="220%" height="220%">
-              <feGaussianBlur stdDeviation="6" />
-            </filter>
-          </defs>
-          <g transform={`translate(${tx} ${ty}) scale(${scale})`}>
-          {/* Edges: only render when focused, and only those connected to focus */}
-          {edges.map((e, idx) => {
-            const A = nodes[e.a]; const B = nodes[e.b];
-            const { op, sw } = edgeStyle(A.emo, B.emo, e.w);
-            // bright grey connecting lines, thin stroke; opacity controlled by focus
-            return <line key={idx} x1={A.x} y1={A.y} x2={B.x} y2={B.y}
-              stroke={'rgba(230,230,230,0.95)'} strokeWidth={sw || 0.8} opacity={op}
-              className="edge-line" data-connected={op>0} />;
+    <div className="flex h-full flex-col gap-6 text-white select-none" style={{ touchAction: 'none' }}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
+          <h1 className="mt-1 text-2xl font-semibold text-white">Explore your emoji universe</h1>
+          <p className="mt-2 max-w-xl text-sm text-white/65">
+            Drag, zoom, and focus to see how your most-used emoji connect across {timeframeLabel.toLowerCase()}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(Object.entries(TIMEFRAME_OPTIONS) as [TimeframeKey, string][]).map(([key, label]) => {
+            const active = timeframe === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleTimeframeChange(key)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+                  active ? 'bg-white/20 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.25)]' : 'bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                {label}
+              </button>
+            );
           })}
-
-  {nodes.map((n, idx) => {
-        const count = freq.get(n.emo) || 1;
-        const size = clamp(24 + count * 6, 24, 64);
-        const last = lastUsed.get(n.emo);
-        const daysAgo = last ? daysBetween(todayIso, last.date) : 999;
-  const { scale: recScale, opacity: recOp } = recencyToScaleOpacity(daysAgo);
-  const isRecent7 = recent7Emojis.has(n.emo);
-  const isTodayStar = last?.date === todayIso;
-  // If this emoji wasn't chosen today, mix all historical hues for it; else use today's hue
-  const mixed = mixedHueByEmoji.get(n.emo);
-  const fillHue = (isTodayStar ? last?.hue : (typeof mixed === 'number' ? mixed : last?.hue));
-  const fill = hueToFill(fillHue, 0.95);
-  const circleR = Math.max(12, (size / 2) * recScale * 1.22);
-        return (
-          <g key={n.emo} transform={`translate(${n.x}, ${n.y})`}
-             onPointerDown={(e) => onPointerDown(e, idx)}
-             onPointerMove={onPointerMove}
-             onPointerUp={(e) => onPointerUp(e, n.emo)}
-             style={{ cursor: 'pointer', pointerEvents:'auto' }}>
-            {/* soft blurred backdrop for star (larger, blurred for smooth edges) */}
-            <circle r={circleR * 1.33} fill={fill} opacity={recOp * 0.36} filter="url(#fd-blur)" />
-            {/* crisp colored circle on top */}
-            <circle r={circleR} fill={fill} opacity={recOp * 0.6}
-              style={{ mixBlendMode: 'screen', filter: isRecent7 ? 'drop-shadow(0 0 8px rgba(64,201,186,0.45))' : undefined }} />
-            {/* subtle outline only for today's star (white) */}
-            {isTodayStar && (
-              <circle r={circleR + 1} fill="none" stroke={'rgba(255,255,255,0.95)'} strokeWidth={1.1} />
-            )}
-            {/* Emoji text on top */}
-            <text textAnchor="middle" dominantBaseline="central" fontSize={size}
-                  stroke="black" strokeWidth={0.6} strokeOpacity={0.25} style={{ opacity: recOp }}>{n.emo}</text>
-            <text textAnchor="middle" dominantBaseline="central" fontSize={size} style={{ opacity: recOp }}>{n.emo}</text>
-            {/* one-shot pulse for today */}
-            {isTodayStar && (
-              <circle r={circleR + 2} fill="none" stroke={'rgba(255,255,255,0.9)'} strokeWidth={1.2}
-                className="fd-pulse-once" />
-            )}
-          </g>
-        );
-      })}
-      </g>
-        </svg>
-        {nodes.length===0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-label="No data yet">
-            <div className="font-poster text-white/18" style={{ fontSize: 170, lineHeight: 1 }}>?</div>
-          </div>
-        )}
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-xs font-medium select-none" style={{minHeight:'14px'}}>
-          {focus ? (
-            <span className="inline-flex items-center justify-center rounded-full bg-black/40 px-2 py-0.5 text-white/80 backdrop-blur-sm border border-white/10">
-              <span className="mr-1">{focus}</span>
-              <span>×{freq.get(focus) || 0}</span>
-            </span>
-          ) : (
-            // Invisible placeholder to keep height stable
-            <span className="opacity-0">placeholder</span>
-          )}
         </div>
       </div>
 
-      {/* Zoom Controls */}
-  <ConstellationControls width={renderWidth} onAction={(action)=>{
-        const v = viewRef.current;
-        const svg = svgElRef.current;
-        if (!svg) return;
-        const rect = svg.getBoundingClientRect();
-        const centerScreenX = rect.left + rect.width/2;
-        const centerScreenY = rect.top + rect.height/2;
-        if (action === 'reset') {
-          v.targetScale = DEFAULT_SCALE;
-          v.targetTx = (worldWidth / 2) - (worldWidth / 2) * DEFAULT_SCALE;
-          v.targetTy = (worldHeight / 2) - (worldHeight / 2) * DEFAULT_SCALE;
-          triggerRender();
-          return;
-        }
-        const factor = action === 'in' ? 1.25 : 1/1.25;
-  const targetScale = clamp(v.scale * factor, 0.55, 3.5);
-        // Maintain center anchor
-        const worldCx = (centerScreenX - rect.left - v.tx) / v.scale;
-        const worldCy = (centerScreenY - rect.top - v.ty) / v.scale;
-  v.targetScale = targetScale;
-  v.targetTx = (centerScreenX - rect.left) - worldCx * targetScale;
-  v.targetTy = (centerScreenY - rect.top) - worldCy * targetScale;
-  triggerRender();
-      }} />
+      <div className="flex flex-col gap-6 xl:flex-row">
+        <section className="flex-1 space-y-4">
+          <div
+            key={yearKey}
+            className="relative overflow-hidden rounded-2xl border border-white/5 bg-black/30 p-4 shadow-inner shadow-black/30 backdrop-blur"
+            style={{ touchAction: 'none' }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/60">
+              <span>
+                {datasetEmpty
+                  ? 'No emoji activity in this range yet. Try a wider timeframe.'
+                  : 'Drag to pan, click to focus, and use your trackpad or mouse wheel to zoom.'}
+              </span>
+              {hiddenEmojiCount > 0 && (
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/50">
+                  Showing top {topEmojis.length} · +{hiddenEmojiCount} hidden
+                </span>
+              )}
+            </div>
+            <div className="mt-3 flex justify-center">
+              <svg
+                viewBox={`0 0 ${worldWidth} ${worldHeight}`}
+                width={renderWidth}
+                height={renderHeight}
+                shapeRendering="geometricPrecision"
+                textRendering="geometricPrecision"
+                style={{ userSelect: 'none', touchAction: 'none', cursor: panDragRef.current ? 'grabbing' : 'grab' }}
+                onWheel={onWheel}
+                onPointerDown={onBgPointerDown}
+                onPointerMove={onBgPointerMove}
+                onPointerUp={onBgPointerUp}
+                ref={(el) => {
+                  svgElRef.current = el;
+                }}
+              >
+                <defs>
+                  <filter id="fd-blur" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation="6" />
+                  </filter>
+                </defs>
+                <g transform={`translate(${tx} ${ty}) scale(${scale})`}>
+                  {edges.map((e, idx) => {
+                    const A = nodes[e.a];
+                    const B = nodes[e.b];
+                    const { op, sw } = edgeStyle(A.emo, B.emo, e.w);
+                    return (
+                      <line
+                        key={idx}
+                        x1={A.x}
+                        y1={A.y}
+                        x2={B.x}
+                        y2={B.y}
+                        stroke="rgba(230,230,230,0.95)"
+                        strokeWidth={sw || 0.8}
+                        opacity={op}
+                        className="edge-line"
+                        data-connected={op > 0}
+                      />
+                    );
+                  })}
+
+                  {nodes.map((n, idx) => {
+                    const count = freq.get(n.emo) || 1;
+                    const size = clamp(24 + count * 6, 24, 64);
+                    const last = lastUsed.get(n.emo);
+                    const daysAgo = last ? daysBetween(todayIso, last.date) : 999;
+                    const { scale: recScale, opacity: recOp } = recencyToScaleOpacity(daysAgo);
+                    const isRecent7 = recent7Emojis.has(n.emo);
+                    const isTodayStar = last?.date === todayIso;
+                    const mixed = mixedHueByEmoji.get(n.emo);
+                    const fillHue = isTodayStar ? last?.hue : typeof mixed === 'number' ? mixed : last?.hue;
+                    const fill = hueToFill(fillHue, 0.95);
+                    const circleR = Math.max(12, (size / 2) * recScale * 1.22);
+                    return (
+                      <g
+                        key={n.emo}
+                        transform={`translate(${n.x}, ${n.y})`}
+                        onPointerDown={(e) => onPointerDown(e, idx)}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={(e) => onPointerUp(e, n.emo)}
+                        style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                      >
+                        <circle r={circleR * 1.33} fill={fill} opacity={recOp * 0.36} filter="url(#fd-blur)" />
+                        <circle
+                          r={circleR}
+                          fill={fill}
+                          opacity={recOp * 0.6}
+                          style={{
+                            mixBlendMode: 'screen',
+                            filter: isRecent7 ? 'drop-shadow(0 0 8px rgba(64,201,186,0.45))' : undefined,
+                          }}
+                        />
+                        {isTodayStar && (
+                          <circle r={circleR + 1} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth={1.1} />
+                        )}
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={size}
+                          stroke="black"
+                          strokeWidth={0.6}
+                          strokeOpacity={0.25}
+                          style={{ opacity: recOp }}
+                        >
+                          {n.emo}
+                        </text>
+                        <text textAnchor="middle" dominantBaseline="central" fontSize={size} style={{ opacity: recOp }}>
+                          {n.emo}
+                        </text>
+                        {isTodayStar && (
+                          <circle r={circleR + 2} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={1.2} className="fd-pulse-once" />
+                        )}
+                      </g>
+                    );
+                  })}
+                </g>
+              </svg>
+            </div>
+            {datasetEmpty && (
+              <div className="absolute inset-0 flex items-center justify-center text-[7rem] text-white/15" aria-label="No data yet">
+                ?
+              </div>
+            )}
+            {focus && (
+              <div className="pointer-events-none absolute inset-x-4 bottom-3 flex justify-center">
+                <span className="inline-flex items-center gap-2 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur-sm">
+                  <span className="text-base">{focus}</span>
+                  <span className="text-white/60">×{focusCount}</span>
+                </span>
+              </div>
+            )}
+          </div>
+          <ConstellationControls
+            width={renderWidth}
+            onAction={(action) => {
+              const v = viewRef.current;
+              const svg = svgElRef.current;
+              if (!svg) return;
+              const rect = svg.getBoundingClientRect();
+              const centerScreenX = rect.left + rect.width / 2;
+              const centerScreenY = rect.top + rect.height / 2;
+              if (action === 'reset') {
+                v.targetScale = DEFAULT_SCALE;
+                v.targetTx = worldWidth / 2 - (worldWidth / 2) * DEFAULT_SCALE;
+                v.targetTy = worldHeight / 2 - (worldHeight / 2) * DEFAULT_SCALE;
+                triggerRender();
+                return;
+              }
+              const factor = action === 'in' ? 1.25 : 1 / 1.25;
+              const targetScale = clamp(v.scale * factor, 0.55, 3.5);
+              const worldCx = (centerScreenX - rect.left - v.tx) / v.scale;
+              const worldCy = (centerScreenY - rect.top - v.ty) / v.scale;
+              v.targetScale = targetScale;
+              v.targetTx = centerScreenX - rect.left - worldCx * targetScale;
+              v.targetTy = centerScreenY - rect.top - worldCy * targetScale;
+              triggerRender();
+            }}
+          />
+        </section>
+
+        <aside className="w-full space-y-4 xl:w-80 xl:flex-shrink-0">
+          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 shadow-inner shadow-black/25 backdrop-blur">
+            <div className="mb-3 text-[11px] uppercase tracking-[0.2em] text-white/45">Activity at a glance</div>
+            <div className="grid grid-cols-2 gap-3">
+              {summaryStats.map((stat) => (
+                <div key={stat.label} className="rounded-lg bg-white/5 px-3 py-2">
+                  <div className="text-[11px] uppercase text-white/45">{stat.label}</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{stat.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 shadow-inner shadow-black/25 backdrop-blur space-y-3">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-white/45">Search & spotlight</div>
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Type an emoji or paste from clipboard"
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+            />
+            {searchActive && quickEmojiList.length === 0 ? (
+              <p className="text-xs text-white/55">No emoji match this search within the selected timeframe.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {quickEmojiList.map(([emo, count]) => {
+                  const active = focus === emo;
+                  return (
+                    <button
+                      key={emo}
+                      type="button"
+                      onClick={() => toggleFocus(emo)}
+                      className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                        active ? 'bg-white text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                      }`}
+                    >
+                      <span>{emo}</span>
+                      <span className="text-xs text-white/60">×{count}</span>
+                    </button>
+                  );
+                })}
+                {!quickEmojiList.length && (
+                  <span className="text-xs text-white/50">No emoji to show yet.</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 shadow-inner shadow-black/25 backdrop-blur space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] uppercase tracking-[0.2em] text-white/45">Focused emoji</div>
+              {focus && (
+                <button
+                  type="button"
+                  onClick={() => setFocus(null)}
+                  className="text-xs text-white/60 transition hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {focus ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{focus}</span>
+                  <div>
+                    <div className="text-sm font-semibold text-white">×{focusCount}</div>
+                    <div className="text-xs text-white/55">
+                      {focusRecencyLabel ? `Last used ${focusRecencyLabel}` : 'No usage recorded in this range'}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/45">Strongest links</div>
+                  {focusConnections.length ? (
+                    <div className="space-y-2">
+                      {focusConnections.map(({ emoji, weight }) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => toggleFocus(emoji)}
+                          className="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                        >
+                          <span>{emoji}</span>
+                          <span className="text-xs text-white/55">×{weight}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/55">No co-occurring emoji in this range yet.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-white/60">Select an emoji from the constellation or quick list to inspect its network.</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 shadow-inner shadow-black/25 backdrop-blur">
+            <div className="mb-3 text-[11px] uppercase tracking-[0.2em] text-white/45">Top pairings</div>
+            {topPairsList.length ? (
+              <ul className="space-y-2 text-sm text-white/80">
+                {topPairsList.map(({ a, b, weight }) => (
+                  <li key={`${a}-${b}`} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleFocus(a)}
+                        className={`rounded-full px-2 py-0.5 text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
+                          focus === a ? 'bg-white text-black' : 'bg-black/30 text-white'
+                        }`}
+                      >
+                        {a}
+                      </button>
+                      <span className="text-white/50">+</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleFocus(b)}
+                        className={`rounded-full px-2 py-0.5 text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
+                          focus === b ? 'bg-white text-black' : 'bg-black/30 text-white'
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    </div>
+                    <span className="text-xs text-white/55">×{weight}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-white/60">We need more data in this range to surface pair insights.</p>
+            )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
