@@ -1,5 +1,6 @@
 // Build an exhaustive emoji index from emojibase metadata so the picker
-// can expose every character (base, ZWJ sequences, and skin tone variants).
+// can expose every base character (including ZWJ sequences) while
+// normalizing skin tone variants to the default yellow presentation.
 
 type RawEmoji = {
   label: string;
@@ -93,10 +94,7 @@ for (const source of shortcodeSources) {
 const EMOJI_INDEX: EmojiMeta[] = [];
 const ALL_EMOJI_SET = new Set<string>();
 
-for (const entry of emojiData) {
-  pushEmojiMeta(entry, entry);
-  for (const skin of entry.skins ?? []) pushEmojiMeta(skin, entry);
-}
+for (const entry of emojiData) pushEmojiMeta(entry, entry);
 
 EMOJI_INDEX.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 
@@ -198,8 +196,14 @@ function pushEmojiMeta(entry: RawEmoji | RawEmojiSkin, base: RawEmoji) {
   const order = typeof entry.order === 'number' ? entry.order : (typeof base.order === 'number' ? base.order : Number.MAX_SAFE_INTEGER);
   const groupLabel = groupLabelByOrder.get(group) ?? '';
   const subgroupLabel = subgroupLabelByKey.get(subgroupKey) ?? '';
-  const keywords = collectKeywords(entry, base, groupLabel, subgroupLabel);
-  const keywordSet = new Set(keywords);
+  const keywordSet = new Set(collectKeywords(entry, base, groupLabel, subgroupLabel));
+
+  if (base === entry) {
+    for (const skin of base.skins ?? []) {
+      const skinKeywords = collectKeywords(skin, base, groupLabel, subgroupLabel);
+      for (const keyword of skinKeywords) keywordSet.add(keyword);
+    }
+  }
 
   const meta: EmojiMeta = {
     emoji: entry.emoji,
