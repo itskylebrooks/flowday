@@ -7,17 +7,27 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
 
   // Show all emojis (sorted by frequency). Performance improvements below reduce O(n^2) cost.
   const topEmojis = useMemo(() => [...freq.entries()].sort((a, b) => b[1] - a[1]), [freq]);
+  const todayIso = todayISO();
+  const todaySet = useMemo(() => {
+    const set = new Set<string>();
+    for (const entry of entries) {
+      if (entry.date !== todayIso) continue;
+      for (const emo of Array.from(new Set(entry.emojis))) set.add(emo);
+    }
+    return set;
+  }, [entries, todayIso]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('en-US'), []);
 
   // Force-directed layout state (kept outside React state for perf)
   interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
   interface SimEdge { a: number; b: number; w: number; }
   // Rendered (visible) canvas size in px (must NOT change per UI constraint)
-  const RENDER_SIZE = 325;
+  const RENDER_SIZE = 420;
   const renderWidth = RENDER_SIZE, renderHeight = RENDER_SIZE;
 
   // Internal world dimensions (much larger area where emojis can move).
   // This expands the draggable/physics area while the visible SVG remains the same.
-  const WORLD_SIZE = 1200; // much larger logical canvas
+  const WORLD_SIZE = 1600; // much larger logical canvas
   const worldWidth = WORLD_SIZE, worldHeight = WORLD_SIZE;
 
   // Default initial zoom level (world units -> rendered zoom). >1 = zoomed in
@@ -67,11 +77,6 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     });
     const maxRadius = sized.reduce((m, s) => Math.max(m, s.size / 2), 0);
     const cx = worldWidth / 2, cy = worldHeight / 2;
-  // Determine which emojis are from today so we place them near center
-  const todaySet = new Set<string>();
-  const todayStr = todayISO();
-  for (const e of entries) if (e.date === todayStr) for (const emo of Array.from(new Set(e.emojis))) todaySet.add(emo);
-
     const centerRadius = Math.min(120, Math.min(worldWidth, worldHeight) / 6);
     const pad = NODE_PADDING + maxRadius;
     const nodes: SimNode[] = sized.map((s) => {
@@ -100,7 +105,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     edgesRef.current = edges;
     // Force immediate render so stale nodes disappear (important when becoming empty)
     triggerRender();
-  }, [topEmojis, pair, freq, entries]);
+  }, [topEmojis, pair, freq, entries, todaySet]);
 
   // Reset view transform when entries dataset changes (year navigation)
   useEffect(()=> {
@@ -330,6 +335,16 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
 
   const nodes = nodesRef.current;
   const edges = edgesRef.current;
+  const uniqueEmojiCount = freq.size;
+  const todayActiveCount = todaySet.size;
+  const connectionCount = pair.size;
+  const mostUsed = topEmojis[0];
+  const mostUsedCount = mostUsed ? numberFormatter.format(mostUsed[1]) : null;
+  const statItems = [
+    { label: 'Unique emojis', value: numberFormatter.format(uniqueEmojiCount) },
+    { label: 'Active today', value: numberFormatter.format(todayActiveCount) },
+    { label: 'Connections', value: numberFormatter.format(connectionCount) },
+  ];
 
   const [focus, setFocus] = useState<string | null>(null);
   // Reset focus when dataset changes (e.g., year navigation)
@@ -403,7 +418,6 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
 
   // Which emojis appeared in the most recent 7 days (for soft teal glow)
   const recent7Emojis = useMemo(() => new Set<string>(last7(entries).flatMap(e => e.emojis)), [entries]);
-  const todayIso = todayISO();
 
   // width/height defined earlier
 
@@ -540,11 +554,28 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const { tx, ty, scale } = viewRef.current;
 
   return (
-    <div className="flex h-full flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
-      <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
-      <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
+        <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
+        {mostUsed && mostUsedCount && (
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/70 backdrop-blur-sm">
+            <span className="text-base leading-none">{mostUsed[0]}</span>
+            <span className="uppercase tracking-[0.3em] text-white/45">Most used</span>
+            <span className="text-white/75">×{mostUsedCount}</span>
+          </div>
+        )}
+      </div>
+      <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+        {statItems.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-left text-white/80 backdrop-blur-sm">
+            <div className="text-[0.65rem] uppercase tracking-[0.32em] text-white/45">{item.label}</div>
+            <div className="mt-2 text-xl font-semibold text-white">{item.value}</div>
+          </div>
+        ))}
+      </div>
       {/* Animated canvas wrapper only */}
-  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
+  <div key={yearKey} className="relative mx-auto mt-2 rounded-xl border border-white/5 bg-black/30 p-4 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
         <svg
           viewBox={`0 0 ${worldWidth} ${worldHeight}`}
           width={renderWidth}
