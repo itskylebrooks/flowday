@@ -231,7 +231,9 @@ function collectKeywords(entry: RawEmoji | RawEmojiSkin, base: RawEmoji, groupLa
   const relatedHex = new Set<string>([base.hexcode, entry.hexcode]);
   for (const hex of relatedHex) {
     if (!hex) continue;
-    const codes = shortcodesByHex.get(normalizeHex(hex));
+    const normalizedHex = normalizeHex(hex);
+    if (!normalizedHex) continue;
+    const codes = shortcodesByHex.get(normalizedHex);
     if (!codes) continue;
     for (const code of codes) addVariants(code, set);
   }
