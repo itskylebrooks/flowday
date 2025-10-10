@@ -1,16 +1,22 @@
 import { EmojiBubble } from '@shared/ui';
 
+type EmojiTriangleVariant = 'compact' | 'expanded';
+
 export default function EmojiTriangle({
-  emojis, onPick, onRemove, editable,
+  emojis, onPick, onRemove, editable, variant = 'expanded',
 }: {
   emojis: string[];
   onPick: (slot: number) => void;
   onRemove: (idx: number) => void;
   editable: boolean;
+  variant?: EmojiTriangleVariant;
 }) {
   const slots = [emojis[0], emojis[1], emojis[2]];
+  const containerClass = variant === 'compact'
+    ? 'relative mx-auto mt-6 grid h-40 w-56 grid-cols-2 place-items-center'
+    : 'relative mx-auto mt-6 grid h-48 w-72 grid-cols-2 place-items-center gap-y-4';
   return (
-    <div className="relative mx-auto mt-6 grid h-48 w-72 grid-cols-2 place-items-center gap-y-4">
+    <div className={containerClass}>
       {/* top-left */}
       <EmojiBubble emoji={slots[0]} empty={!slots[0]} onClick={() => editable && onPick(0)} onRemove={() => editable && onRemove(0)} />
       {/* top-right */}
