@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getEmojiCategories, searchEmojis } from '@shared/lib/utils/emoji';
+import { getAllEmojis, getEmojiCategories, searchEmojis } from '@shared/lib/utils/emoji';
 
 export default function EmojiPickerModal({
   open, onClose, onPick, recents,
@@ -16,14 +16,16 @@ export default function EmojiPickerModal({
   useEffect(()=>{ if(!open){ setClosing(false);} }, [open]);
   function beginClose() { setClosing(true); setTimeout(()=>{ onClose(); }, 230); }
   const full = useMemo(() => getEmojiCategories(), []);
+  const all = useMemo(() => getAllEmojis(), []);
   const categories = useMemo(() => {
-    const firstGroup = Object.keys(full)[0] ?? 'Smileys & Emotion';
-    const fallbackList = full[firstGroup]?.slice(0, 24) ?? [];
-    const base = { Recent: recents.length ? recents : fallbackList } as Record<string, string[]>;
-    // Insert Search as the second category label, will be virtual (uses q to compute list)
-    // We'll render Search separately when tab === 'Search'
-    return { ...base, Search: [], ...full } as Record<string, string[]>;
-  }, [recents, full]);
+    const fallbackList = recents.length ? recents : all.slice(0, 32);
+    const base = {
+      Recent: fallbackList,
+      All: all,
+      Search: [],
+    } as Record<string, string[]>;
+    return { ...base, ...full };
+  }, [recents, full, all]);
 
   if (!open && !closing) return null;
   const list = tab === 'Search' ? (q ? searchEmojis(q, 300) : []) : (categories[tab] || []);

@@ -10,11 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "emojibase-data": "^16.0.3",
     "html-to-image": "^1.11.13",
     "motion": "^12.23.12",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "unicode-emoji-json": "^0.8.0"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
