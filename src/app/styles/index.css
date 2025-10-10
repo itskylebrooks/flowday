@@ -154,6 +154,215 @@ body { margin: 0; position: fixed; inset: 0; width: 100%; }
 .edge-line { transition: opacity .4s ease, stroke-width .4s ease; opacity:0; }
 .edge-line[data-connected='true'] { opacity:.5; }
 
+/* Constellation window redesign */
+.fd-constellation-window {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: min(100%, 380px);
+        border-radius: 26px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: linear-gradient(160deg, rgba(68,85,190,0.14), rgba(8,10,24,0.9)) rgba(9,10,20,0.78);
+        padding: 16px 18px 20px;
+        box-shadow: 0 24px 60px -28px rgba(42,60,135,0.9), inset 0 0 0 1px rgba(255,255,255,0.02);
+        backdrop-filter: blur(18px);
+        transition: border-color .25s ease, box-shadow .25s ease;
+        will-change: transform;
+}
+@media (min-width: 640px) {
+        .fd-constellation-window { width: min(100%, 420px); }
+}
+.fd-constellation-window:hover {
+        border-color: rgba(255,255,255,0.18);
+        box-shadow: 0 28px 90px -32px rgba(80,110,240,0.95), inset 0 0 0 1px rgba(255,255,255,0.03);
+}
+.fd-constellation-window.is-dragging {
+        cursor: grabbing;
+        border-color: rgba(255,255,255,0.24);
+        box-shadow: 0 24px 70px -28px rgba(80,110,240,0.88);
+}
+.fd-constellation-window__chrome {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+}
+.fd-constellation-window__drag {
+        display: flex;
+        flex: 1;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05);
+        cursor: grab;
+        touch-action: none;
+        transition: border-color .2s ease, background .2s ease;
+        outline: none;
+}
+.fd-constellation-window__drag:hover {
+        border-color: rgba(255,255,255,0.18);
+        background: rgba(255,255,255,0.09);
+}
+.fd-constellation-window__drag[data-dragging='true'],
+.fd-constellation-window__drag:active {
+        cursor: grabbing;
+}
+.fd-constellation-window__drag:focus-visible {
+        outline: 2px solid rgba(255,255,255,0.55);
+        outline-offset: 4px;
+}
+.fd-constellation-window__grab {
+        width: 44px;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.28);
+        margin-top: 6px;
+        flex-shrink: 0;
+        align-self: center;
+}
+.fd-constellation-window__title {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.28em;
+        color: rgba(255,255,255,0.72);
+}
+.fd-constellation-window__subtitle {
+        margin-top: 4px;
+        font-size: 0.7rem;
+        line-height: 1.35;
+        color: rgba(255,255,255,0.5);
+        max-width: 220px;
+}
+.fd-constellation-window__reset {
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.16);
+        background: rgba(10,12,24,0.45);
+        color: rgba(255,255,255,0.78);
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 6px 14px;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.fd-constellation-window__reset:hover {
+        color: #fff;
+        border-color: rgba(255,255,255,0.3);
+        background: rgba(35,40,72,0.62);
+}
+.fd-constellation-window__reset:focus-visible {
+        outline: 2px solid rgba(255,255,255,0.5);
+        outline-offset: 3px;
+}
+.fd-constellation-window__canvas {
+        position: relative;
+        border-radius: 20px;
+        padding: 16px;
+        background: radial-gradient(140% 120% at 50% 0%, rgba(98,128,255,0.18), rgba(8,9,22,0.88)) rgba(6,8,18,0.82);
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -16px 40px rgba(12,10,36,0.45);
+        overflow: hidden;
+}
+.fd-constellation-window__canvas svg {
+        display: block;
+        margin: 0 auto;
+}
+.fd-constellation-window__empty {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+}
+.fd-constellation-window__footer {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+}
+@media (min-width: 480px) {
+        .fd-constellation-window__footer {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+        }
+}
+.fd-constellation-window__focus {
+        min-height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+}
+.fd-constellation-window__focusBadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: rgba(0,0,0,0.45);
+        padding: 4px 12px;
+        color: rgba(255,255,255,0.8);
+        font-size: 0.75rem;
+        backdrop-filter: blur(10px);
+}
+.fd-constellation-window__focusBadge span:first-child {
+        font-size: 1.05rem;
+}
+.fd-constellation-window__focusPlaceholder {
+        visibility: hidden;
+}
+.fd-constellation-controls {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+}
+.fd-constellation-controls button {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.07);
+        color: rgba(255,255,255,0.86);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease, transform .2s ease;
+        touch-action: manipulation;
+}
+.fd-constellation-controls button:hover {
+        background: rgba(255,255,255,0.12);
+        border-color: rgba(255,255,255,0.24);
+        color: #fff;
+}
+.fd-constellation-controls button:active {
+        transform: scale(0.97);
+        background: rgba(255,255,255,0.18);
+}
+.fd-constellation-controls button:focus-visible {
+        outline: 2px solid rgba(255,255,255,0.45);
+        outline-offset: 3px;
+}
+.fd-constellation-controls svg {
+        width: 22px;
+        height: 22px;
+}
+.fd-constellation-controls[data-size='sm'] button {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+}
+.fd-constellation-controls[data-size='sm'] svg {
+        width: 18px;
+        height: 18px;
+}
+
 /* Utility: hide scrollbars (used for emoji picker category row) */
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

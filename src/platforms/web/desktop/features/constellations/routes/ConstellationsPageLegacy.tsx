@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useId } from 'react';
 import type { Entry } from '@shared/lib/types/global';
 import { clamp, emojiStats, hsl, last7, todayISO } from '@shared/lib/utils';
+import { useConstellationWindowDrag } from '../hooks/useConstellationWindowDrag';
 
 export default function ConstellationsPage({ entries, yearKey }: { entries: Entry[]; yearKey?: string }) {
   const { freq, pair } = useMemo(() => emojiStats(entries), [entries]);
@@ -46,6 +47,19 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     anchorWorld: { x: number; y: number };
     anchorScreen: { x: number; y: number };
   }>({ active: false, initialDist: 0, initialScale: 1, anchorWorld: { x:0, y:0 }, anchorScreen: { x:0, y:0 } });
+  const {
+    windowRef,
+    dragHandlers: windowDragHandlers,
+    resetWindow,
+    nudgeWindow,
+    dragging: windowDragging,
+  } = useConstellationWindowDrag();
+  const instructionsId = useId();
+  const windowTitleId = useId();
+
+  useEffect(() => {
+    resetWindow();
+  }, [resetWindow, yearKey]);
 
   // Throttle renders to ~30fps to avoid React churn when many nodes move
   const lastRenderRef = useRef<number>(0);
@@ -54,6 +68,35 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     if (now - lastRenderRef.current >= 33) {
       lastRenderRef.current = now;
       setTick(t => t + 1);
+    }
+  }
+
+  function handleWindowKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const step = e.shiftKey ? 80 : 40;
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Home' || e.key === 'Escape') {
+      e.preventDefault();
+      resetWindow();
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        nudgeWindow(-step, 0);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        nudgeWindow(step, 0);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        nudgeWindow(0, -step);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        nudgeWindow(0, step);
+        break;
+      default:
+        break;
     }
   }
 
@@ -540,11 +583,55 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const { tx, ty, scale } = viewRef.current;
 
   return (
-    <div className="mx-auto max-w-sm px-4 h-full select-none" style={{overflow:'hidden', touchAction:'none'}}>
-      <div className="mt-4 text-center text-sm text-white/80">Emoji Constellations</div>
-      <div className="text-center text-xs text-white/50">Tap an emoji to highlight connections</div>
-      {/* Animated canvas wrapper only */}
-  <div key={yearKey} className="relative mx-auto mt-3 rounded-xl border border-white/5 bg-black/30 p-3 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
+    <div
+      className="mx-auto flex h-full w-full max-w-sm flex-col items-center gap-5 px-4 select-none"
+      style={{overflow:'hidden', touchAction:'none'}}
+    >
+      <div className="text-center text-sm text-white/80">Emoji constellations</div>
+      <div
+        id={instructionsId}
+        className="text-center text-xs text-white/55"
+      >
+        Tap stars to highlight connections. Drag the window header to reposition.
+      </div>
+      <div className="flex w-full justify-center">
+        <div
+          key={yearKey}
+          ref={windowRef}
+          className={`fd-constellation-window animate-fadeSwap${windowDragging ? ' is-dragging' : ''}`}
+          style={{ touchAction:'none' }}
+        >
+          <div className="fd-constellation-window__chrome">
+            <div
+              className="fd-constellation-window__drag"
+              {...windowDragHandlers}
+              tabIndex={0}
+              role="button"
+              aria-labelledby={`${windowTitleId} ${instructionsId}`}
+              aria-describedby={instructionsId}
+              data-dragging={windowDragging ? 'true' : 'false'}
+              onKeyDown={handleWindowKeyDown}
+              onDoubleClick={resetWindow}
+            >
+              <div className="fd-constellation-window__grab" aria-hidden />
+              <div className="min-w-0">
+                <div id={windowTitleId} className="fd-constellation-window__title">
+                  Constellation window
+                </div>
+                <div className="fd-constellation-window__subtitle">
+                  Drag to move. Double-tap or press Enter to center.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="fd-constellation-window__reset"
+              onClick={resetWindow}
+            >
+              Center window
+            </button>
+          </div>
+          <div className="fd-constellation-window__canvas">
         <svg
           viewBox={`0 0 ${worldWidth} ${worldHeight}`}
           width={renderWidth}
@@ -617,26 +704,23 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       </g>
         </svg>
         {nodes.length===0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-label="No data yet">
+          <div className="fd-constellation-window__empty" aria-label="No data yet">
             <div className="font-poster text-white/18" style={{ fontSize: 170, lineHeight: 1 }}>?</div>
           </div>
         )}
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-xs font-medium select-none" style={{minHeight:'14px'}}>
-          {focus ? (
-            <span className="inline-flex items-center justify-center rounded-full bg-black/40 px-2 py-0.5 text-white/80 backdrop-blur-sm border border-white/10">
-              <span className="mr-1">{focus}</span>
-              <span>×{freq.get(focus) || 0}</span>
-            </span>
-          ) : (
-            // Invisible placeholder to keep height stable
-            <span className="opacity-0">placeholder</span>
-          )}
-        </div>
-      </div>
-
-      {/* Zoom Controls */}
-  <ConstellationControls width={renderWidth} onAction={(action)=>{
+          </div>
+          <div className="fd-constellation-window__footer">
+            <div className="fd-constellation-window__focus">
+              {focus ? (
+                <span className="fd-constellation-window__focusBadge">
+                  <span>{focus}</span>
+                  <span>×{freq.get(focus) || 0}</span>
+                </span>
+              ) : (
+                <span className="fd-constellation-window__focusBadge fd-constellation-window__focusPlaceholder">placeholder</span>
+              )}
+            </div>
+            <ConstellationControls onAction={(action)=>{
         const v = viewRef.current;
         const svg = svgElRef.current;
         if (!svg) return;
@@ -659,27 +743,35 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   v.targetTx = (centerScreenX - rect.left) - worldCx * targetScale;
   v.targetTy = (centerScreenY - rect.top) - worldCy * targetScale;
   triggerRender();
-      }} />
+      }} size="sm" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ConstellationControls({ width, onAction }: { width: number; onAction: (a:'in'|'out'|'reset')=>void }) {
-  // Buttons sized to 1/3 of provided canvas width
-  const btnStyle: React.CSSProperties = { height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+function ConstellationControls({ onAction, size = 'md' }: { onAction: (a:'in'|'out'|'reset')=>void; size?: 'sm' | 'md' }) {
   return (
-    <div className="mt-3 flex justify-center text-white select-none">
-      <div style={{ width }} className="flex gap-3">
-        <button aria-label="Zoom out" onClick={()=>onAction('out')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M5 11V13H19V11H5Z"/></svg>
-        </button>
-        <button aria-label="Reset view" onClick={()=>onAction('reset')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM15.4462 9.96803L9.96803 15.4462C9.38559 15.102 8.89798 14.6144 8.55382 14.032L14.032 8.55382C14.6144 8.89798 15.102 9.38559 15.4462 9.96803Z"/></svg>
-        </button>
-        <button aria-label="Zoom in" onClick={()=>onAction('in')} className="flex-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition" style={btnStyle}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>
-        </button>
-      </div>
+    <div className="fd-constellation-controls" data-size={size}>
+      <button type="button" aria-label="Zoom out" onClick={() => onAction('out')}>
+        <span className="sr-only">Zoom out</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M5 11V13H19V11H5Z" />
+        </svg>
+      </button>
+      <button type="button" aria-label="Reset view" onClick={() => onAction('reset')}>
+        <span className="sr-only">Reset view</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm0-2c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8Zm3.446-10.032L9.968 15.446c-.582-.344-1.07-.832-1.414-1.414L14.032 8.554c.582.344 1.07.832 1.414 1.414Z" />
+        </svg>
+      </button>
+      <button type="button" aria-label="Zoom in" onClick={() => onAction('in')}>
+        <span className="sr-only">Zoom in</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" />
+        </svg>
+      </button>
     </div>
   );
 }
