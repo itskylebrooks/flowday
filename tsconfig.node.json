@@ -12,6 +12,12 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@app/*": ["app/*"],
+      "@shared/*": ["shared/*"],
+      "@platforms/*": ["platforms/*"]
+    },
 
     /* Linting */
     "strict": true,
