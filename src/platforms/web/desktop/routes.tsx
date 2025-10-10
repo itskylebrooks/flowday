@@ -9,20 +9,20 @@ export interface AppTabConfig {
 
 export const APP_TABS: AppTabConfig[] = [
   {
-    id: APP_ROUTES.FLOWS,
-    label: 'Flows',
-    icon: (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-        <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>
-      </svg>
-    ),
-  },
-  {
     id: APP_ROUTES.TODAY,
     label: 'Today',
     icon: (
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
         <path d="M21 20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.48907C3 9.18048 3.14247 8.88917 3.38606 8.69972L11.3861 2.47749C11.7472 2.19663 12.2528 2.19663 12.6139 2.47749L20.6139 8.69972C20.8575 8.88917 21 9.18048 21 9.48907V20ZM19 19V9.97815L12 4.53371L5 9.97815V19H19ZM7 15H17V17H7V15Z"></path>
+      </svg>
+    ),
+  },
+  {
+    id: APP_ROUTES.FLOWS,
+    label: 'Flows',
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+        <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>
       </svg>
     ),
   },

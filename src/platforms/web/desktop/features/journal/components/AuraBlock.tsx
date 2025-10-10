@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { auraBackground } from '@shared/lib/utils';
 
 export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: number }) {
-  const size = 224, cx = size/2, cy = size/2, R = 70;
+  const size = 260, cx = size/2, cy = size/2, R = 92;
 
   const positions = useMemo(() => {
     const n = Math.max(1, Math.min(3, emojis.length));
@@ -21,7 +21,7 @@ export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: numb
 
   return (
     <div className="mx-auto mt-2 flex flex-col items-center">
-      <div className="relative h-56 w-56 rounded-full ring-1 ring-white/10" style={auraBackground(hue)}>
+      <div className="relative h-64 w-64 rounded-full ring-1 ring-white/10" style={auraBackground(hue)}>
         {/* key ensures the rotating container remounts when emojis change, so animation starts from 0 */}
         <motion.div
           key={`${emojis.join(',')}`}
@@ -51,7 +51,6 @@ export default function AuraBlock({ emojis, hue }: { emojis: string[]; hue: numb
           ))}
         </motion.div>
       </div>
-      <div className="mt-2 text-xs text-white/60">Tap aura to edit emojis</div>
     </div>
   );
 }

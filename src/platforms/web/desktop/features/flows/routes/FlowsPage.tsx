@@ -84,15 +84,15 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
   }
 
   return (
-  <div className="mx-auto flex h-full max-w-sm flex-col px-4 pb-45 relative">
-      {/* Center block: labels always mounted for smooth transitions */}
-      <div className="flex flex-col flex-grow items-center justify-center select-none" ref={posterRef}>
-        <div className={(posterMode ? 'active ' : '') + 'poster-meta mb-2'}>
-          <div className="text-center poster-label text-[26px] leading-[1.05] text-white/95">{formatToday()}</div>
+    <div className="flex h-full flex-col gap-8">
+      <div className="text-sm uppercase tracking-[0.4em] text-white/45">Flow posters</div>
+      <div className="flex flex-col items-center gap-6 select-none" ref={posterRef}>
+        <div className={(posterMode ? 'active ' : '') + 'poster-meta mb-1'}>
+          <div className="text-center poster-label text-[30px] leading-[1.05] text-white/95">{formatToday()}</div>
           <div className="mt-1 text-center poster-sub text-white/70 tracking-wider">My flowday</div>
         </div>
-        <div className="relative">
-          <div key={animKey + '-' + mode} className="flow-anim w-full flex items-center justify-center">
+        <div className="relative w-full max-w-xl">
+          <div key={animKey + '-' + mode} className="flow-anim flex items-center justify-center">
             {mode === 'week' ? (
               <WeekTimeline entries={recent7} />
             ) : (
@@ -101,24 +101,23 @@ export default function FlowsPage({ recent7, monthHues, monthEmpty, mode, onTogg
           </div>
         </div>
         <div className={(posterMode ? 'active ' : '') + 'poster-meta'}>
-          <div className={(mode==='week' ? 'mt-6' : 'mt-2') + ' text-center poster-label text-[20px] leading-[1.05] text-white/80'}>
+          <div className={(mode==='week' ? 'mt-6' : 'mt-2') + ' text-center poster-label text-[22px] leading-[1.05] text-white/80'}>
             @{user.username}
           </div>
         </div>
       </div>
 
-      {/* Bottom actions */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="grid w-full gap-3 sm:grid-cols-2">
         <button
           onClick={onToggleMode}
-          className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition"
+          className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-medium text-white/90 transition hover:border-white/25 hover:bg-white/[0.12]"
         >
-          {mode === 'week' ? 'Switch to month' : 'Switch to week'}
+          {mode === 'week' ? 'Switch to month view' : 'Switch to week view'}
         </button>
         <button
           onClick={handlePosterButton}
           disabled={!isAndroidTelegram && exporting}
-          className="rounded-md px-3 py-2 text-sm text-white/90 bg-white/5 hover:bg-white/10 active:bg-white/15 ring-1 ring-white/10 transition disabled:opacity-40"
+          className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-medium text-white/90 transition hover:border-white/25 hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isAndroidTelegram
             ? (posterMode ? 'Hide poster text' : 'Show poster text')

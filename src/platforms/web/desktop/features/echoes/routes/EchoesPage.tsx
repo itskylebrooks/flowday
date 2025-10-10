@@ -91,9 +91,10 @@ export default function EchoesPage({ entries, yearOffset }: EchoesPageProps) {
   }
 
   return (
-    <div className="h-full flex flex-col">
-  {/* Audio handled via imported mp3 modules */}
-      <div key={"year-"+yearOffset} className="flex-1 overflow-y-auto px-4 pb-10 space-y-10 echoes-year-anim">
+    <div className="flex h-full flex-col gap-6">
+      {/* Audio handled via imported mp3 modules */}
+      <div className="text-sm uppercase tracking-[0.4em] text-white/45">Mixtape archive</div>
+      <div key={"year-"+yearOffset} className="flex-1 overflow-y-auto space-y-10 pb-10 echoes-year-anim">
         {byMonth.map(([ym, list]) => (
           <div key={ym} className="space-y-4">
             <div className="text-center text-sm text-white/70 font-medium">{monthLabel(ym)}</div>
