@@ -4,7 +4,7 @@ import { clearAllData, exportAllData, importAllData, loadUser, saveUser } from '
 import { emojiStats, hsl, monthlyStops, todayISO } from '@shared/lib/utils';
 import type { Entry } from '@shared/lib/types/global';
 
-export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG, onOpenPrivacy }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean; onOpenPrivacy?: () => void }) {
+export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const [username, setUsername] = useState(() => loadUser().username);
@@ -248,13 +248,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                     Delete all local data
                   </button>
                   </div>
-                  <div>
-                    {onOpenPrivacy && (
-                      <button type="button" onClick={() => { onOpenPrivacy(); }} className="text-xs text-white/60 hover:underline">
-                        Privacy Policy
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
             </form>
@@ -390,6 +383,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
 
           <div className="font-medium text-white/55">{APP_VERSION_LABEL}</div>
           <div className="mt-1">© {new Date().getFullYear()} Kyle Brooks. All rights reserved.</div>
+          <div className="mt-1 flex justify-center gap-3">
+            <a href="https://itskylebrooks.vercel.app/imprint" target="_blank" rel="noopener noreferrer" className="hover:underline">Imprint</a>
+            <a href="https://itskylebrooks.vercel.app/privacy" target="_blank" rel="noopener noreferrer" className="hover:underline">Privacy Policy</a>
+            <a href="https://itskylebrooks.vercel.app/license" target="_blank" rel="noopener noreferrer" className="hover:underline">License</a>
+          </div>
           <div className="mt-0.5">Icons by Remix Design.</div>
         </div>
       </div>
