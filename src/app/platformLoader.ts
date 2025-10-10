@@ -7,6 +7,15 @@ async function importPlatformBootstrap(platform: string): Promise<BootstrapModul
     case 'web-desktop':
     case 'web/desktop':
     case 'web':
+    case 'web-mobile':
+    case 'web/mobile':
+    case 'mobile':
+    case 'telegram':
+    case 'telegram-ios':
+    case 'telegram/ios':
+    case 'telegram-android':
+    case 'telegram/web':
+    case 'telegram-desktop':
     default:
       return import('@platforms/web/desktop/bootstrap');
   }
