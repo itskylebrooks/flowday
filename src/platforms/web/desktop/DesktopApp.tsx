@@ -319,9 +319,10 @@ export default function DesktopApp() {
   const timelineDayItems: TimelineRow[] = useMemo(() => {
     return timelineDays.map(({ date, entry }) => {
       const swatch = typeof entry?.hue === 'number' ? hsl(entry.hue, 80, 50) : null;
+      const shortDate = new Date(date + 'T00:00:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
       return {
         key: date,
-        title: timelineTitle(date),
+        title: page === TODAY ? shortDate : timelineTitle(date),
         caption: timelineCaption(date),
         detail: timelineEmojis(entry),
         secondary: timelineSong(entry),
@@ -330,7 +331,7 @@ export default function DesktopApp() {
         onSelect: () => setActiveDate(date),
       };
     });
-  }, [timelineDays, activeDate]);
+  }, [timelineDays, activeDate, page, TODAY]);
 
   const timelineWeekItems: TimelineRow[] = useMemo(() => {
     return buildOffsets(weekOffset, 6, 12).map((offset) => {
@@ -918,9 +919,8 @@ export default function DesktopApp() {
                     {item.swatch ? <span className="h-6 w-6 rounded-md" style={{ background: item.swatch }} /> : <span className="text-xs text-white/35">—</span>}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
                       <div className="text-sm font-semibold text-white">{item.title}</div>
-                      <div className="text-[11px] text-white/45">{item.caption}</div>
                     </div>
                     <div className="mt-1 truncate text-xs text-white/70">{item.detail}</div>
                     {item.secondary && (
