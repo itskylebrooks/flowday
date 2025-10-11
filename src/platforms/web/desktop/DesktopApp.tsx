@@ -756,7 +756,6 @@ export default function DesktopApp() {
               monthEmpty={monthEmpty}
               mode={flowsMode}
               animKey={flowsMode==='week' ? 'w'+weekOffset : 'm'+monthOffset}
-              onToggleMode={()=> setFlowsMode(m=> m==='week' ? 'month':'week')}
             />
           </div>
         </div>
