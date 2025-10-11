@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { Entry, Song } from '@shared/lib/types/global';
 import { APP_ROUTES, type AppPage } from '@shared/lib/constants/routes';
 import ConstellationsPage from '@platforms/web/desktop/features/constellations/routes/ConstellationsPage';
@@ -29,6 +30,9 @@ import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, s
 import { getRecents, loadEntries, pushRecent, saveEntries, upsertEntry } from '@shared/lib/services/storage';
 import { APP_TABS_DESKTOP } from './routes';
 
+const PAGE_EASE = [0.4, 0, 0.2, 1] as const;
+const PAGE_TRANSITION = { duration: 0.38, ease: PAGE_EASE } as const;
+
 export default function DesktopApp() {
   const [isTG, setIsTG] = useState<boolean>(false);
   const { TODAY, FLOWS, CONSTELLATIONS, ECHOES } = APP_ROUTES;
@@ -46,6 +50,9 @@ export default function DesktopApp() {
   const MAX_TITLE = 48;
   const MAX_ARTIST = 40;
   const [page, setPage] = useState<AppPage>(TODAY);
+  const tabOrder = useMemo(() => APP_TABS_DESKTOP.map((tab) => tab.id), []);
+  const [pageDirection, setPageDirection] = useState<1 | -1>(1);
+  const hasMounted = useRef(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(()=> {
     try { return localStorage.getItem('flowday_seen_guide_v1') ? false : true; } catch { return true; }
@@ -55,6 +62,9 @@ export default function DesktopApp() {
       try { localStorage.setItem('flowday_seen_guide_v1','1'); } catch { /* ignore */ }
     }
   }, [guideOpen]);
+  useEffect(() => {
+    hasMounted.current = true;
+  }, []);
   const [activeDate, setActiveDate] = useState<string>(todayISO());
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
@@ -421,8 +431,16 @@ export default function DesktopApp() {
   }
 
   function handleTabSelect(next: AppPage) {
+    if (next === page) return;
     if (next === TODAY) {
       setActiveDate(today);
+    }
+    const currentIndex = tabOrder.indexOf(page);
+    const nextIndex = tabOrder.indexOf(next);
+    if (currentIndex !== -1 && nextIndex !== -1) {
+      setPageDirection(nextIndex > currentIndex ? 1 : -1);
+    } else {
+      setPageDirection(1);
     }
     setPage(next);
   }
@@ -579,7 +597,13 @@ export default function DesktopApp() {
     if (page === TODAY) {
       return (
         <div className="flex h-full flex-col px-8 py-8 lg:px-12">
-          <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-white/10 pb-6">
+          <motion.div
+            key={activeDate}
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.36, ease: PAGE_EASE }}
+            className="flex flex-wrap items-baseline justify-between gap-4 border-b border-white/10 pb-6"
+          >
             <div>
               <p className="text-[11px] uppercase tracking-[0.4em] text-white/45">Daily journal</p>
               <h1 className="mt-2 text-4xl font-semibold text-white">{formatActiveDate()}</h1>
@@ -587,16 +611,7 @@ export default function DesktopApp() {
                 Choose up to three emotions and lock today&apos;s aura palette.
               </p>
             </div>
-            {activeDate !== today && (
-              <button
-                type="button"
-                onClick={() => setActiveDate(today)}
-                className="rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white/70 transition hover:text-white"
-              >
-                Jump to today
-              </button>
-            )}
-          </div>
+          </motion.div>
           <div className="flex flex-1 flex-col gap-8 overflow-hidden py-6 lg:flex-row">
             <div className="flex w-full max-w-[360px] flex-col items-center gap-5">
               <div
@@ -852,43 +867,76 @@ export default function DesktopApp() {
       <div className="flex flex-1">
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto">
-              {pageContent}
-            </div>
+            <AnimatePresence mode="wait" initial={false} custom={pageDirection}>
+              <motion.div
+                key={page}
+                custom={pageDirection}
+                variants={{
+                  enter: (direction: number) => ({ opacity: 0, x: direction * 26, filter: 'blur(8px)' }),
+                  center: { opacity: 1, x: 0, filter: 'blur(0px)' },
+                  exit: (direction: number) => ({ opacity: 0, x: direction * -26, filter: 'blur(8px)' }),
+                }}
+                initial={hasMounted.current ? 'enter' : 'center'}
+                animate="center"
+                exit="exit"
+                transition={PAGE_TRANSITION}
+                className="h-full overflow-y-auto"
+              >
+                {pageContent}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
         <div className="hidden lg:flex w-[260px] flex-col border-l border-white/10 px-6 py-8">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <motion.div
+              key={timelineScope}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, ease: PAGE_EASE }}
+            >
               <div className="text-[11px] uppercase tracking-[0.4em] text-white/40">{timelineScope}</div>
               <div className="mt-2 text-lg font-semibold text-white">Journal timeline</div>
-            </div>
-            {timelineResetLabel && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="flex h-9 w-9 items-center justify-center self-start rounded-full border border-white/12 text-white/65 transition hover:border-white/30 hover:text-white"
-              >
-                <span className="sr-only">{timelineResetLabel}</span>
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+            </motion.div>
+            <AnimatePresence>
+              {timelineResetLabel && (
+                <motion.button
+                  key="timeline-reset"
+                  type="button"
+                  onClick={handleReset}
+                  className="flex h-9 w-9 items-center justify-center self-start rounded-full border border-white/12 text-white/65 transition hover:border-white/30 hover:text-white"
+                  initial={{ opacity: 0, scale: 0.9, y: -6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -6 }}
+                  transition={{ duration: 0.24, ease: PAGE_EASE }}
                 >
-                  <path
-                    d="M6.75 4.5L2.5 8l4.25 3.5M2.5 8h11"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            )}
+                  <span className="sr-only">{timelineResetLabel}</span>
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M6.75 4.5L2.5 8l4.25 3.5M2.5 8h11"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
           {page === FLOWS && (
-            <div className="mt-5 flex gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/45">
+            <motion.div
+              key={`flows-mode-${flowsMode}`}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: PAGE_EASE }}
+              className="mt-5 flex gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/45"
+            >
               <button
                 type="button"
                 onClick={() => setFlowsMode('week')}
@@ -903,31 +951,41 @@ export default function DesktopApp() {
               >
                 Months
               </button>
-            </div>
+            </motion.div>
           )}
           <div className="mt-5 flex-1 overflow-y-auto pr-1">
-            <div className="space-y-1.5">
-              {activeTimelineItems.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={item.onSelect}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${item.active ? 'bg-white/[0.14] text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)]' : 'text-white/70 hover:bg-white/[0.08]'}`}
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02]">
-                    {item.swatch ? <span className="h-6 w-6 rounded-md" style={{ background: item.swatch }} /> : <span className="text-xs text-white/35">—</span>}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-semibold text-white">{item.title}</div>
-                    </div>
-                    <div className="mt-1 truncate text-xs text-white/70">{item.detail}</div>
-                    {item.secondary && (
-                      <div className="mt-0.5 truncate text-[11px] text-white/45">{item.secondary}</div>
-                    )}
-                  </div>
-                </button>
-              ))}
+            <div className="flex flex-col gap-1.5">
+              <AnimatePresence mode="popLayout">
+                {activeTimelineItems.map((item, index) => (
+                  <motion.div
+                    key={item.key}
+                    layout
+                    initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -16, scale: 0.96 }}
+                    transition={{ duration: 0.28, ease: PAGE_EASE, delay: Math.min(index * 0.025, 0.15) }}
+                  >
+                    <button
+                      type="button"
+                      onClick={item.onSelect}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${item.active ? 'bg-white/[0.14] text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)]' : 'text-white/70 hover:bg-white/[0.08]'}`}
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02]">
+                        {item.swatch ? <span className="h-6 w-6 rounded-md" style={{ background: item.swatch }} /> : <span className="text-xs text-white/35">—</span>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-white">{item.title}</div>
+                        </div>
+                        <div className="mt-1 truncate text-xs text-white/70">{item.detail}</div>
+                        {item.secondary && (
+                          <div className="mt-0.5 truncate text-[11px] text-white/45">{item.secondary}</div>
+                        )}
+                      </div>
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
         </div>
