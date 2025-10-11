@@ -114,10 +114,8 @@ Always under **20 seconds** to capture.
 PRs welcome — keep UI minimal, add tests for changes, avoid heavy deps.  
 If adding features, prefer platform‑specific folders (`components/tg`, `components/web`) over runtime `if/else`.
 
-## License
+## License  
 
-This code is for **personal viewing and inspiration only**.  
-All rights reserved © 2025 Kyle Brooks.  
-No commercial use or redistribution without permission.
+The source code in this repository is licensed under the MIT License (see `LICENSE`).
 
 > Flowday is a daily glance inward — memory carried forward in color.

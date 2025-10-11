@@ -1,0 +1,18 @@
+**Flowday — Truly mood tracker**
+Copyright © 2025 [Kyle Brooks](https://itskylebrooks.vercel.app)
+
+This project’s **source code** is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+
+
+**Attribution:**
+This project was created and maintained by [Kyle Brooks](https://itskylebrooks.vercel.app).
+Website: [enso-kb.vercel.app](https://flowday-kb.vercel.app)
+Repository: [github.com/itskylebrooks/enso](https://github.com/itskylebrooks/flowday)
+
+**Acknowledgments:**
+
+* Built with [React](https://react.dev), [TypeScript](https://www.typescriptlang.org), [Tailwind CSS](https://tailwindcss.com), and [Vite](https://vitejs.dev)
+* Hosted on [Vercel](https://vercel.com)
+
+This NOTICE file provides attribution and credit information for *Flowday*.
+It does not modify the license terms of the [MIT License](https://opensource.org/licenses/MIT).
