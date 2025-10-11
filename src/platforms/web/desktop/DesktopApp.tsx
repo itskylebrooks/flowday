@@ -859,7 +859,7 @@ export default function DesktopApp() {
               </div>
             </div>
           </div>
-          <div className="mt-4 text-xs text-white/35">v{APP_VERSION}</div>
+          {/* version label removed for desktop menu bar */}
         </div>
       </aside>
       <div className="flex flex-1">
