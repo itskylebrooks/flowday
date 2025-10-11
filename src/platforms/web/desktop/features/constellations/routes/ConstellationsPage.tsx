@@ -136,9 +136,10 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       const rect = container.getBoundingClientRect();
       const rawWidth = Math.max(0, rect.width - 32); // subtract horizontal padding (p-4)
       const viewportHeight = window.innerHeight || rect.height;
-      const rawHeight = Math.max(0, viewportHeight - rect.top - 140); // leave room for footer/controls
+  // leave more room below the canvas so zoom controls fit on smaller screens
+  const rawHeight = Math.max(0, viewportHeight - rect.top - 160);
       const verticalBound = rawHeight > 0 ? rawHeight : rawWidth;
-      let candidate = Math.min(rawWidth, verticalBound, 960);
+      let candidate = Math.min(rawWidth, verticalBound, 840);
       if (candidate < 320) {
         const widthLimited = Math.min(rawWidth, 960);
         const heightLimited = Math.min(verticalBound, 960);
