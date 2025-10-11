@@ -780,7 +780,7 @@ export default function DesktopApp() {
           >
             Settings
           </button>
-          <div className="text-xs text-white/35">v{APP_VERSION}</div>
+          {/* version label intentionally removed for web desktop */}
         </div>
       </aside>
       <div className="flex flex-1">
