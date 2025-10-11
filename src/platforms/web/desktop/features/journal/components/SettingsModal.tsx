@@ -201,156 +201,189 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
         </div>
 
         <div className="space-y-4">
-          {/* Account card */}
-          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
-            <div className="flex items-start justify-between">
+          <div className="rounded-2xl bg-white/4 p-4 sm:p-5 ring-1 ring-white/6 shadow-sm text-sm space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold mb-0.5">Account</div>
-
-                
-              </div>
-            </div>
-            <hr className="border-t border-white/6 my-3" />
-            <form onSubmit={handleSave} className="mt-1 space-y-3">
-              <div>
-                <label className="block text-[10px] uppercase tracking-wide text-white/45 mb-2">Username</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    value={username}
-                    onChange={handleChange}
-                    maxLength={24}
-                    className="flex-1 rounded-md bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30"
-                    placeholder="user"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!dirty || saving || !username.trim()}
-                    className="rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/6 text-white/90 ring-1 ring-white/10 hover:bg-white/10"
-                  >
-                    {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
-                  </button>
+                  <div className="text-[10px] uppercase tracking-wide text-white/45">Profile</div>
+                  <div className="mt-1 text-sm font-semibold text-white/90">This device</div>
                 </div>
-                <p className="mt-2 text-[11px] text-white/40">Lowercase, 24 chars max. Stored on this device.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
+                    clearAllData();
+                    alert('Local data cleared. App will reload.');
+                    window.location.reload();
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 transition"
+                >
+                  Delete data
+                </button>
               </div>
-              <div className="mt-1">
-                <div className="flex items-center justify-between">
-                  <div>
+              <form onSubmit={handleSave} className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-wide text-white/45">Username</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      value={username}
+                      onChange={handleChange}
+                      maxLength={24}
+                      className="flex-1 rounded-md bg-white/5 px-3 py-2 text-sm outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30"
+                      placeholder="user"
+                    />
                     <button
-                    type="button"
-                    onClick={() => {
-                      if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
-                      clearAllData();
-                      alert('Local data cleared. App will reload.');
-                      window.location.reload();
-                    }}
-                    className="text-xs text-red-400 hover:underline"
-                  >
-                    Delete all local data
-                  </button>
+                      type="submit"
+                      disabled={!dirty || saving || !username.trim()}
+                      className="rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/6 text-white/90 ring-1 ring-white/10 hover:bg-white/10"
+                    >
+                      {saving ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
+                    </button>
                   </div>
+                  <p className="text-[11px] text-white/40">Lowercase, 24 chars max. Stored locally only.</p>
                 </div>
-              </div>
-            </form>
-          </div>
-          {/* Data transfer card (Export / Import) - web-only */}
-          {!isTG && (
-          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-sm font-semibold mb-0.5">Data transfer</div>
-                <hr className="border-t border-white/6 my-3" />
-                <div className="text-[11px] text-center text-white/40 mt-1">This is a local import/export only feature for the web build. Use JSON files to move data between devices.</div>
-              </div>
+              </form>
             </div>
-            <div className="w-full">
-              <div className="w-full grid gap-2 mt-2">
-                <button onClick={handleExport} disabled={exporting}
-                  className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                  {exporting ? 'Exporting…' : 'Export all data (JSON)'}
-                </button>
 
-                <div className="flex gap-2">
-                  <button type="button" onClick={triggerFilePick}
-                    className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                    {importing ? 'Importing…' : 'Import from file'}
-                  </button>
-                  <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
-                </div>
+            <div className="h-px bg-white/10" />
 
-                <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
-                  <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
-                    <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
-                    <span>Merge (keep newest per day)</span>
-                  </label>
-                  <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
-                    <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
-                    <span>Replace local</span>
-                  </label>
-                </div>
-
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-white/45">Data transfer</div>
+                <p className="mt-2 text-[11px] text-white/45">
+                  {!isTG
+                    ? 'Export a JSON backup or import one from another device.'
+                    : 'Copy your journal as JSON or paste an export from another device.'}
+                </p>
               </div>
-              {preview && (
-                <details className="mt-2 text-left text-[11px] text-white/40">
-                  <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
-                  <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
-                </details>
+
+              <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
+
+              {!isTG && (
+                <>
+                  <div className="grid gap-2">
+                    <button
+                      onClick={handleExport}
+                      disabled={exporting}
+                      className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/75 hover:bg-white/8"
+                    >
+                      {exporting ? 'Exporting…' : 'Export all data (JSON)'}
+                    </button>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={triggerFilePick}
+                        className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/75 hover:bg-white/8"
+                      >
+                        {importing ? 'Importing…' : 'Import from file'}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 text-[11px] text-white/50">
+                      <label
+                        onClick={() => setMode('merge')}
+                        className={
+                          'px-2 py-1 rounded-md ring-1 cursor-pointer select-none ' +
+                          (mode === 'merge' ? 'ring-emerald-500/35 bg-emerald-600/10' : 'ring-white/10')
+                        }
+                      >
+                        <input aria-hidden className="sr-only" type="radio" checked={mode === 'merge'} readOnly />
+                        <span>Merge (keep newest per day)</span>
+                      </label>
+                      <label
+                        onClick={() => setMode('replace')}
+                        className={
+                          'px-2 py-1 rounded-md ring-1 cursor-pointer select-none ' +
+                          (mode === 'replace' ? 'ring-red-400/30 bg-red-600/10' : 'ring-white/10')
+                        }
+                      >
+                        <input aria-hidden className="sr-only" type="radio" checked={mode === 'replace'} readOnly />
+                        <span>Replace local</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {preview && (
+                    <details className="text-left text-[11px] text-white/40">
+                      <summary className="cursor-pointer">Preview exported JSON</summary>
+                      <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
+                    </details>
+                  )}
+                </>
+              )}
+
+              {isTG && (
+                <>
+                  <div className="grid gap-2">
+                    <button
+                      onClick={handleCopyExport}
+                      disabled={exporting}
+                      className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/75 hover:bg-white/8"
+                    >
+                      {exporting ? 'Exporting…' : 'Copy export JSON to clipboard'}
+                    </button>
+
+                    <textarea
+                      ref={pasteRef}
+                      value={pasteInput}
+                      onChange={(e) => setPasteInput(e.target.value)}
+                      placeholder="Paste exported JSON here to import"
+                      rows={6}
+                      className="w-full rounded-md bg-white/5 px-3 py-2 text-xs outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30"
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePasteImport}
+                        className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/75 hover:bg-white/8"
+                      >
+                        {importing ? 'Importing…' : 'Import pasted JSON'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={triggerFilePick}
+                        className="rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/75 hover:bg-white/8"
+                      >
+                        From file
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 text-[11px] text-white/50">
+                      <label
+                        onClick={() => setMode('merge')}
+                        className={
+                          'px-2 py-1 rounded-md ring-1 cursor-pointer select-none ' +
+                          (mode === 'merge' ? 'ring-emerald-500/35 bg-emerald-600/10' : 'ring-white/10')
+                        }
+                      >
+                        <input aria-hidden className="sr-only" type="radio" checked={mode === 'merge'} readOnly />
+                        <span>Merge (keep newest per day)</span>
+                      </label>
+                      <label
+                        onClick={() => setMode('replace')}
+                        className={
+                          'px-2 py-1 rounded-md ring-1 cursor-pointer select-none ' +
+                          (mode === 'replace' ? 'ring-red-400/30 bg-red-600/10' : 'ring-white/10')
+                        }
+                      >
+                        <input aria-hidden className="sr-only" type="radio" checked={mode === 'replace'} readOnly />
+                        <span>Replace local</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {preview && (
+                    <details className="text-left text-[11px] text-white/40">
+                      <summary className="cursor-pointer">Preview exported JSON</summary>
+                      <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
+                    </details>
+                  )}
+                </>
               )}
             </div>
           </div>
-          )}
-
-          {/* Telegram-only: Data transfer */}
-          {isTG && (
-          <div className="bg-white/4 p-4 sm:p-5 rounded-2xl ring-1 ring-white/6 shadow-sm text-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-sm font-semibold mb-0.5">Data transfer</div>
-                <hr className="border-t border-white/6 my-3" />
-                <div className="text-[11px] text-center text-white/40 mt-1">Use JSON to move data between devices. Copy or paste JSON in Telegram.</div>
-              </div>
-            </div>
-            <div className="w-full mt-2">
-              <div className="grid gap-2">
-                <button onClick={handleCopyExport} disabled={exporting}
-                  className="w-full rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                  {exporting ? 'Exporting…' : 'Copy export JSON to clipboard'}
-                </button>
-
-                <textarea ref={pasteRef} value={pasteInput} onChange={(e)=>setPasteInput(e.target.value)} placeholder="Paste exported JSON here to import" rows={6}
-                  className="w-full rounded-md bg-white/5 px-3 py-2 text-xs outline-none ring-1 ring-white/12 focus:ring-2 focus:ring-emerald-500 placeholder:text-white/30" />
-
-                <div className="flex gap-2">
-                  <button type="button" onClick={handlePasteImport}
-                    className="flex-1 rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                    {importing ? 'Importing…' : 'Import pasted JSON'}
-                  </button>
-                  <button type="button" onClick={triggerFilePick}
-                    className="rounded-md bg-white/6 px-3 py-1.5 text-xs font-medium ring-1 ring-white/10 text-white/70 hover:bg-white/8">
-                    From file
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-center gap-2 text-[11px] text-white/45">
-                  <label onClick={() => setMode('merge')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='merge' ? 'ring-emerald-500/30 bg-emerald-600/8' : 'ring-white/8') }>
-                    <input aria-hidden className="sr-only" type="radio" checked={mode==='merge'} readOnly />
-                    <span>Merge (keep newest per day)</span>
-                  </label>
-                  <label onClick={() => setMode('replace')} className={"px-2 py-1 rounded-md ring-1 cursor-pointer select-none " + (mode==='replace' ? 'ring-red-400/25 bg-red-600/6' : 'ring-white/8') }>
-                    <input aria-hidden className="sr-only" type="radio" checked={mode==='replace'} readOnly />
-                    <span>Replace local</span>
-                  </label>
-                </div>
-
-              </div>
-              {preview && (
-                <details className="mt-2 text-left text-[11px] text-white/40">
-                  <summary className="cursor-pointer">Preview exported JSON (click to expand)</summary>
-                  <pre className="mt-2 max-h-60 overflow-auto text-[11px] text-white/60 p-2 bg-black/20 rounded">{preview}</pre>
-                </details>
-              )}
-            </div>
-          </div>
-          )}
 
           {/* Language selection removed */}
     </div>
