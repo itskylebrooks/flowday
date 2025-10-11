@@ -11,7 +11,20 @@ import AuraBlock from '@platforms/web/desktop/features/journal/components/AuraBl
 import EmojiTriangle from '@platforms/web/desktop/features/journal/components/EmojiTriangle';
 import { EmojiPickerModal } from '@shared/ui';
 import { APP_VERSION } from '@shared/lib/constants/version';
-import { todayISO, addDays, canEdit, clamp, rainbowGradientCSS, last7, monthlyTop3, isToday, isYesterday, hsl } from '@shared/lib/utils';
+import {
+  todayISO,
+  addDays,
+  canEdit,
+  clamp,
+  rainbowGradientCSS,
+  last7,
+  monthlyTop3,
+  isToday,
+  isYesterday,
+  hsl,
+  emojiStats,
+  monthlyStops,
+} from '@shared/lib/utils';
 import { disableVerticalSwipes, enableVerticalSwipes, hapticLight, isTelegram, setBackButton } from '@shared/lib/services/telegram';
 import { getRecents, loadEntries, pushRecent, saveEntries, upsertEntry } from '@shared/lib/services/storage';
 import { APP_TABS_DESKTOP } from './routes';
@@ -46,6 +59,42 @@ export default function DesktopApp() {
 
   const [entries, setEntries] = useState<Entry[]>(loadEntries());
   useEffect(() => { saveEntries(entries); }, [entries]);
+
+  const { avatarEmoji, avatarGradient } = useMemo(() => {
+    const monthKey = today.slice(0, 7);
+    const monthEntries = entries.filter((e) => e.date.startsWith(monthKey));
+    if (!monthEntries.length) {
+      return {
+        avatarEmoji: '🙂',
+        avatarGradient: 'radial-gradient(circle at 50% 50%, hsl(220 10% 28%) 0%, hsl(220 10% 18%) 75%)',
+      } as const;
+    }
+    const { freq } = emojiStats(monthEntries);
+    let top = '🙂';
+    let count = -1;
+    for (const [emoji, c] of freq.entries()) {
+      if (c > count) {
+        top = emoji;
+        count = c;
+      }
+    }
+    const rawStops = monthlyStops(monthEntries).slice(0, 3);
+    const stops = rawStops.length ? rawStops : [220, 300, 40];
+    let gradient: string;
+    if (stops.length === 1) {
+      const [h0] = stops;
+      gradient = `radial-gradient(circle at 45% 40%, ${hsl(h0, 75, 60)} 0%, ${hsl(h0, 70, 45)} 55%, ${hsl(h0, 65, 28)} 100%)`;
+    } else if (stops.length === 2) {
+      const [h1, h2] = stops;
+      gradient = `linear-gradient(135deg, ${hsl(h1, 80, 58)} 0%, ${hsl(h2, 75, 48)} 100%)`;
+      gradient += `, radial-gradient(circle at 50% 60%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 70%)`;
+    } else {
+      const [h1, h2, h3] = stops;
+      gradient = `linear-gradient(135deg, ${hsl(h1, 85, 60)} 0%, ${hsl(h1, 80, 55)} 15%, ${hsl(h2, 80, 55)} 50%, ${hsl(h3, 78, 52)} 85%, ${hsl(h3, 72, 45)} 100%)`;
+      gradient += `, radial-gradient(circle at 50% 55%, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.45) 75%)`;
+    }
+    return { avatarEmoji: top, avatarGradient: gradient } as const;
+  }, [entries, today]);
 
   const entry = useMemo<Entry>(() => {
     const found = entries.find(e => e.date === activeDate);
@@ -293,10 +342,13 @@ export default function DesktopApp() {
       const end = new Date(dates[dates.length - 1] + 'T00:00:00');
       const hueEntry = periodEntries.find((e) => typeof e.hue === 'number');
       const swatch = hueEntry ? hsl(hueEntry.hue!, 80, 50) : null;
+      const range = `${start.toLocaleDateString('en', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en', { month: 'short', day: 'numeric' })}`;
+      const relative = relativeLabel('week', offset);
+      const special = offset === 0 || offset === 1;
       return {
         key: `week-${offset}`,
-        title: offset === 0 ? 'This week' : relativeLabel('week', offset),
-        caption: `${start.toLocaleDateString('en', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en', { month: 'short', day: 'numeric' })}`,
+        title: special ? relative : range,
+        caption: special ? range : relative,
         detail: summariseEmojis(periodEntries),
         swatch,
         active: flowsMode === 'week' && offset === weekOffset,
@@ -318,10 +370,13 @@ export default function DesktopApp() {
       const monthEntries = entriesByMonth.get(ym) ?? [];
       const hueEntry = monthEntries.find((e) => typeof e.hue === 'number');
       const swatch = hueEntry ? hsl(hueEntry.hue!, 80, 50) : null;
+      const monthLabel = cursor.toLocaleDateString('en', { month: 'long', year: 'numeric' });
+      const relative = relativeLabel('month', offset);
+      const special = offset === 0 || offset === 1;
       return {
         key: `month-${ym}`,
-        title: offset === 0 ? 'This month' : relativeLabel('month', offset),
-        caption: cursor.toLocaleDateString('en', { month: 'long', year: 'numeric' }),
+        title: special ? relative : monthLabel,
+        caption: special ? monthLabel : relative,
         detail: summariseEmojis(monthEntries),
         swatch,
         active: flowsMode === 'month' && offset === monthOffset,
@@ -340,10 +395,13 @@ export default function DesktopApp() {
       const yearEntries = entriesByYear.get(year) ?? [];
       const hueEntry = yearEntries.find((e) => typeof e.hue === 'number');
       const swatch = hueEntry ? hsl(hueEntry.hue!, 80, 50) : null;
+      const yearLabel = String(year);
+      const relative = relativeLabel('year', offset);
+      const special = offset === 0 || offset === 1;
       return {
         key: `year-${year}`,
-        title: offset === 0 ? 'This year' : relativeLabel('year', offset),
-        caption: String(year),
+        title: special ? relative : yearLabel,
+        caption: special ? yearLabel : relative,
         detail: summariseEmojis(yearEntries),
         swatch,
         active: offset === yearOffset,
@@ -485,13 +543,15 @@ export default function DesktopApp() {
   function timelineTitle(date: string): string {
     if (isToday(date)) return 'Today';
     if (isYesterday(date)) return 'Yesterday';
-    const d = new Date(date + 'T00:00:00');
-    return d.toLocaleDateString('en', { weekday: 'long' });
+    return timelineCaption(date);
   }
 
   function timelineCaption(date: string): string {
     const d = new Date(date + 'T00:00:00');
-    return d.toLocaleDateString('en', { month: 'short', day: '2-digit', year: 'numeric' });
+    if (isToday(date) || isYesterday(date)) {
+      return d.toLocaleDateString('en', { month: 'short', day: '2-digit', year: 'numeric' });
+    }
+    return d.toLocaleDateString('en', { weekday: 'long' });
   }
 
   function timelineEmojis(entry?: Entry): string {
@@ -765,22 +825,41 @@ export default function DesktopApp() {
             );
           })}
         </nav>
-        <div className="mt-auto space-y-3 pt-8">
-          <button
-            type="button"
-            onClick={() => setGuideOpen(true)}
-            className="w-full rounded-xl border border-white/12 px-4 py-3 text-left text-sm font-medium text-white/80 transition hover:text-white"
-          >
-            Product tour
-          </button>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="w-full rounded-xl border border-white/12 px-4 py-3 text-left text-sm font-medium text-white/80 transition hover:text-white"
-          >
-            Settings
-          </button>
-          {/* version label intentionally removed for web desktop */}
+        <div className="mt-auto pt-8">
+          <div className="flex items-end justify-between">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04] text-white/70 transition hover:text-white hover:bg-white/[0.08]"
+            >
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M9.53 16.715c.427.13.874.198 1.341.198.466 0 .913-.068 1.34-.198l.149-.045a1.724 1.724 0 0 1 1.26.125l.139.07a1.724 1.724 0 0 0 2.348-1.236l.03-.154a1.724 1.724 0 0 1 1.026-1.228l.137-.057a1.724 1.724 0 0 0 .995-2.003l-.045-.148a1.724 1.724 0 0 1 .198-1.34l.09-.135a1.724 1.724 0 0 0-.62-2.385l-.13-.075a1.724 1.724 0 0 1-.836-1.107l-.04-.152a1.724 1.724 0 0 0-1.992-1.264l-.155.03a1.724 1.724 0 0 1-1.31-.219l-.127-.085a1.724 1.724 0 0 0-2.011 0l-.126.085a1.724 1.724 0 0 1-1.311.219l-.154-.03a1.724 1.724 0 0 0-1.993 1.264l-.04.152a1.724 1.724 0 0 1-.835 1.107l-.131.075a1.724 1.724 0 0 0-.619 2.385l.09.135c.26.391.35.875.198 1.34l-.045.149a1.724 1.724 0 0 0 .995 2.003l.137.057c.464.192.82.593.994 1.09l.05.148a1.724 1.724 0 0 0 2.348 1.236l.138-.07c.401-.204.866-.252 1.26-.125l.149.045Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <div className="group relative h-12 w-12" title="Your month">
+              <div
+                className="flex h-full w-full items-center justify-center rounded-2xl ring-1 ring-white/15 shadow-inner transition"
+                style={{ backgroundImage: avatarGradient, backgroundSize: 'cover', backgroundPosition: 'center' }}
+              >
+                <span className="text-xl drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{avatarEmoji}</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 text-xs text-white/35">v{APP_VERSION}</div>
         </div>
       </aside>
       <div className="flex flex-1">
