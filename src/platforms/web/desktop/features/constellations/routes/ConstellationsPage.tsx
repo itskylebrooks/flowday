@@ -136,19 +136,23 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       const rect = container.getBoundingClientRect();
       const rawWidth = Math.max(0, rect.width - 32); // subtract horizontal padding (p-4)
       const viewportHeight = window.innerHeight || rect.height;
-  // leave more room below the canvas so zoom controls fit on smaller screens
-  const rawHeight = Math.max(0, viewportHeight - rect.top - 160);
+      // leave more room below the canvas so zoom controls fit on smaller screens
+      const rawHeight = Math.max(0, viewportHeight - rect.top - 160);
       const verticalBound = rawHeight > 0 ? rawHeight : rawWidth;
-      let candidate = Math.min(rawWidth, verticalBound, 840);
-      if (candidate < 320) {
+      // Height candidate remains constrained to keep controls visible
+      let candidateH = Math.min(rawWidth, verticalBound, 840);
+      if (candidateH < 240) {
         const widthLimited = Math.min(rawWidth, 960);
         const heightLimited = Math.min(verticalBound, 960);
-        candidate = Math.max(candidate, Math.min(320, widthLimited, heightLimited));
+        candidateH = Math.max(candidateH, Math.min(240, widthLimited, heightLimited));
       }
-      const nextSize = Math.max(240, Math.round(candidate || DEFAULT_RENDER_SIZE));
+      const nextHeight = Math.max(200, Math.round(candidateH || DEFAULT_RENDER_SIZE));
+      // Width should fill the inner width of the frame so canvas uses full available space
+      const maxWidth = 1200;
+      const nextWidth = Math.max(320, Math.round(Math.min(rawWidth, maxWidth)));
       setRenderSize((prev) => {
-        if (prev.width === nextSize && prev.height === nextSize) return prev;
-        return { width: nextSize, height: nextSize };
+        if (prev.width === nextWidth && prev.height === nextHeight) return prev;
+        return { width: nextWidth, height: nextHeight };
       });
     };
 
@@ -625,11 +629,11 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
       >
         <svg
           viewBox={`0 0 ${worldWidth} ${worldHeight}`}
-          width={renderWidth}
+          width="100%"
           height={renderHeight}
           shapeRendering="geometricPrecision"
           textRendering="geometricPrecision"
-          style={{ userSelect:'none', touchAction:'none', cursor: panDragRef.current? 'grabbing':'grab' }}
+          style={{ userSelect:'none', touchAction:'none', cursor: panDragRef.current? 'grabbing':'grab', maxWidth: '100%' }}
           onWheel={onWheel}
           onPointerDown={onBgPointerDown}
           onPointerMove={onBgPointerMove}
