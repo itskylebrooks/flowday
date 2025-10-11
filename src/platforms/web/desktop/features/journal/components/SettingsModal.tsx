@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { clearAllData, exportAllData, importAllData, loadUser, saveUser } from '@shared/lib/services/storage';
 import { emojiStats, hsl, monthlyStops, todayISO } from '@shared/lib/utils';
 import type { Entry } from '@shared/lib/types/global';
+import { APP_NAME, APP_VERSION } from '../../../../../../shared/lib/constants/version';
 
 export default function SettingsModal({ open, onClose, entries, onShowGuide, isTG }: { open: boolean; onClose: () => void; entries: Entry[]; onShowGuide?: () => void; isTG?: boolean }) {
   const [closing, setClosing] = useState(false);
@@ -202,29 +203,15 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
         <div className="space-y-4">
           <div className="rounded-2xl bg-white/4 p-4 sm:p-5 ring-1 ring-white/6 shadow-sm text-sm space-y-6">
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm font-semibold text-white/90">Profile</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
-                    clearAllData();
-                    alert('Local data cleared. App will reload.');
-                    window.location.reload();
-                  }}
-                  className="text-xs text-red-400 hover:text-red-300 transition"
-                >
-                  Delete data
-                </button>
-              </div>
               <form onSubmit={handleSave} className="space-y-3">
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-wide text-white/45">Username</label>
+                  <label htmlFor="settings-username" className="block text-sm font-semibold text-white/90">
+                    Username
+                  </label>
                   <p className="text-[11px] text-white/40">Lowercase, 24 chars max. Stored locally only.</p>
                   <div className="flex items-center gap-3">
                     <input
+                      id="settings-username"
                       value={username}
                       onChange={handleChange}
                       maxLength={24}
@@ -246,13 +233,27 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             <div className="h-px bg-white/10" />
 
             <div className="space-y-4">
-              <div>
-                <div className="text-[10px] uppercase tracking-wide text-white/45">Data transfer</div>
-                <p className="mt-2 text-[11px] text-white/45">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold text-white/90">Data transfer</div>
+                  <p className="mt-2 text-[11px] text-white/45">
                   {!isTG
                     ? 'Export a JSON backup or import one from another device.'
                     : 'Copy your journal as JSON or paste an export from another device.'}
-                </p>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm('Delete all Flowday local data? This cannot be undone.')) return;
+                    clearAllData();
+                    alert('Local data cleared. App will reload.');
+                    window.location.reload();
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 transition"
+                >
+                  Delete all data
+                </button>
               </div>
 
               <input ref={fileRef} type="file" accept="application/json" onChange={handleFileChosen} className="hidden" />
@@ -287,7 +288,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                         }
                       >
                         <input aria-hidden className="sr-only" type="radio" checked={mode === 'merge'} readOnly />
-                        <span>Merge (keep newest per day)</span>
+                        <span>Merge → Newest</span>
                       </label>
                       <label
                         onClick={() => setMode('replace')}
@@ -357,7 +358,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
                         }
                       >
                         <input aria-hidden className="sr-only" type="radio" checked={mode === 'merge'} readOnly />
-                        <span>Merge (keep newest per day)</span>
+                        <span>Merge → Newest</span>
                       </label>
                       <label
                         onClick={() => setMode('replace')}
@@ -412,7 +413,11 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="rgba(255,255,255,1)" width="18" height="18"><path d="M12.001 2C6.47598 2 2.00098 6.475 2.00098 12C2.00098 16.425 4.86348 20.1625 8.83848 21.4875C9.33848 21.575 9.52598 21.275 9.52598 21.0125C9.52598 20.775 9.51348 19.9875 9.51348 19.15C7.00098 19.6125 6.35098 18.5375 6.15098 17.975C6.03848 17.6875 5.55098 16.8 5.12598 16.5625C4.77598 16.375 4.27598 15.9125 5.11348 15.9C5.90098 15.8875 6.46348 16.625 6.65098 16.925C7.55098 18.4375 8.98848 18.0125 9.56348 17.75C9.65098 17.1 9.91348 16.6625 10.201 16.4125C7.97598 16.1625 5.65098 15.3 5.65098 11.475C5.65098 10.3875 6.03848 9.4875 6.67598 8.7875C6.57598 8.5375 6.22598 7.5125 6.77598 6.1375C6.77598 6.1375 7.61348 5.875 9.52598 7.1625C10.326 6.9375 11.176 6.825 12.026 6.825C12.876 6.825 13.726 6.9375 14.526 7.1625C16.4385 5.8625 17.276 6.1375 17.276 6.1375C17.826 7.5125 17.476 8.5375 17.376 8.7875C18.0135 9.4875 18.401 10.375 18.401 11.475C18.401 15.3125 16.0635 16.1625 13.8385 16.4125C14.201 16.725 14.5135 17.325 14.5135 18.2625C14.5135 19.6 14.501 20.675 14.501 21.0125C14.501 21.275 14.6885 21.5875 15.1885 21.4875C19.259 20.1133 21.9999 16.2963 22.001 12C22.001 6.475 17.526 2 12.001 2Z"></path></svg>
           </a>
 
-          <div className="font-medium text-white/55">Kyle Brooks</div>
+          <div className="font-medium text-white/55">
+            {APP_NAME} {APP_VERSION}
+            <span className="px-1 text-white/35">·</span>
+            Kyle Brooks.
+          </div>
           <div className="mt-1 flex justify-center gap-3">
             <a href="https://itskylebrooks.vercel.app/imprint" target="_blank" rel="noopener noreferrer" className="hover:underline">Imprint</a>
             <a href="https://itskylebrooks.vercel.app/privacy" target="_blank" rel="noopener noreferrer" className="hover:underline">Privacy Policy</a>
@@ -423,7 +428,6 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             <a href="https://remixicon.com/" target="_blank" rel="noopener noreferrer" className="underline">
               Remix Icon
             </a>
-            .
           </div>
         </div>
       </div>
