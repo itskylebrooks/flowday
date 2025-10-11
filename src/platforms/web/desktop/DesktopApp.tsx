@@ -765,7 +765,7 @@ export default function DesktopApp() {
     if (page === CONSTELLATIONS) {
       return (
         <div className="flex h-full flex-col px-8 py-8 lg:px-12">
-          <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-y-auto pr-1">
+          <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-y-auto pr-1">
             <ConstellationsPage entries={constellationEntries} yearKey={String(yearOffset)} />
           </div>
         </div>
