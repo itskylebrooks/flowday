@@ -21,9 +21,15 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   // Force-directed layout state (kept outside React state for perf)
   interface SimNode { emo: string; x: number; y: number; vx: number; vy: number; r: number; }
   interface SimEdge { a: number; b: number; w: number; }
-  // Rendered (visible) canvas size in px (must NOT change per UI constraint)
-  const RENDER_SIZE = 420;
-  const renderWidth = RENDER_SIZE, renderHeight = RENDER_SIZE;
+  // Rendered (visible) canvas size in px (responsive to available viewport space)
+  const DEFAULT_RENDER_SIZE = 420;
+  const canvasWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [renderSize, setRenderSize] = useState<{ width: number; height: number }>({
+    width: DEFAULT_RENDER_SIZE,
+    height: DEFAULT_RENDER_SIZE,
+  });
+  const renderWidth = renderSize.width;
+  const renderHeight = renderSize.height;
 
   // Internal world dimensions (much larger area where emojis can move).
   // This expands the draggable/physics area while the visible SVG remains the same.
@@ -120,6 +126,50 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
     v.targetTx = v.tx; v.targetTy = v.ty;
     momentumRef.current.active = false;
   }, [entries]);
+
+  // Resize handling for the canvas wrapper so the constellation map fills available space
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateSize = () => {
+      const container = canvasWrapperRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const rawWidth = Math.max(0, rect.width - 32); // subtract horizontal padding (p-4)
+      const viewportHeight = window.innerHeight || rect.height;
+      const rawHeight = Math.max(0, viewportHeight - rect.top - 140); // leave room for footer/controls
+      const verticalBound = rawHeight > 0 ? rawHeight : rawWidth;
+      let candidate = Math.min(rawWidth, verticalBound, 960);
+      if (candidate < 320) {
+        const widthLimited = Math.min(rawWidth, 960);
+        const heightLimited = Math.min(verticalBound, 960);
+        candidate = Math.max(candidate, Math.min(320, widthLimited, heightLimited));
+      }
+      const nextSize = Math.max(240, Math.round(candidate || DEFAULT_RENDER_SIZE));
+      setRenderSize((prev) => {
+        if (prev.width === nextSize && prev.height === nextSize) return prev;
+        return { width: nextSize, height: nextSize };
+      });
+    };
+
+    updateSize();
+    const handleResize = () => updateSize();
+    window.addEventListener('resize', handleResize);
+    let observer: ResizeObserver | undefined;
+    if ('ResizeObserver' in window) {
+      observer = new ResizeObserver(() => updateSize());
+      const container = canvasWrapperRef.current;
+      if (container) observer.observe(container);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (observer) {
+        const container = canvasWrapperRef.current;
+        if (container) observer.unobserve(container);
+        observer.disconnect();
+      }
+    };
+  }, []);
 
   // Drag handling
   const draggingRef = useRef<{ index: number; px: number; py: number; moved: boolean; group: {index:number; startX:number; startY:number}[] } | null>(null);
@@ -552,7 +602,7 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
   const { tx, ty, scale } = viewRef.current;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col items-center gap-4 select-none" style={{overflow:'hidden', touchAction:'none'}}>
       <div className="flex flex-col items-center gap-2 text-center">
         <div className="text-sm uppercase tracking-[0.4em] text-white/45">Emoji constellations</div>
         <div className="text-xs text-white/55">Drag to explore. Click an emoji to highlight its connections.</div>
@@ -566,7 +616,12 @@ export default function ConstellationsPage({ entries, yearKey }: { entries: Entr
         ))}
       </div>
       {/* Animated canvas wrapper only */}
-  <div key={yearKey} className="relative mx-auto mt-2 rounded-xl border border-white/5 bg-black/30 p-4 animate-fadeSwap fd-constellation-backdrop" style={{touchAction:'none'}}>
+  <div
+        key={yearKey}
+        ref={canvasWrapperRef}
+        className="relative mx-auto mt-2 w-full rounded-2xl border border-white/5 bg-black/30 p-4 sm:p-6 animate-fadeSwap fd-constellation-backdrop"
+        style={{touchAction:'none'}}
+      >
         <svg
           viewBox={`0 0 ${worldWidth} ${worldHeight}`}
           width={renderWidth}
