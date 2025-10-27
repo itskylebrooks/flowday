@@ -1,5 +1,6 @@
 import type { Entry, RemindersSettings, UserProfile } from '../types/global';
 import { clamp } from '../utils';
+import { todayISO } from '../utils/date';
 
 // ---------------- Versioned Entry Storage ----------------
 // Historical formats:
@@ -113,6 +114,21 @@ export function loadEntries(): Entry[] {
         return migrated;
       } catch { /* keep trying other keys */ }
     }
+  } catch { /* ignore */ }
+  // No entries found at all — seed with a friendly starter entry on first run.
+  try {
+    const today = todayISO();
+    const seed: Entry = {
+      date: today,
+      emojis: ['🧑‍💻', '🥳'],
+      hue: 140,
+      song: { title: 'Für Elise', artist: 'Ludwig van Beethoven' },
+      updatedAt: Date.now(),
+    } as Entry;
+    persist([seed]);
+    // Also seed recent emojis so emoji picker shows them
+    try { localStorage.setItem(RECENTS_KEY, JSON.stringify(seed.emojis)); } catch { /* ignore */ }
+    return [seed];
   } catch { /* ignore */ }
   return [];
 }
