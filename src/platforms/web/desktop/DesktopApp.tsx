@@ -630,7 +630,7 @@ export default function DesktopApp() {
                   <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} />
                 </div>
               </div>
-              <div className="text-xs text-white/50">Click the aura to return to the emoji selector.</div>
+              <div className="mt-3 text-xs text-white/50">Click the aura to return to the emoji selector.</div>
             </div>
             <div className="flex flex-1 flex-col gap-8 overflow-hidden">
               <div>
