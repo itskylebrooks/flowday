@@ -350,20 +350,22 @@ export default function LegacyApp() {
           <div className="mx-auto flex h-full max-w-sm flex-col px-4">
             {/* Fixed visual area so slider never jumps */}
             <div className="h-[320px] w-full flex items-center justify-center">
-              <div key={activeDate} className={"emoji-trans-container w-full flex items-center justify-center animate-emoji-day-swap " + (showAura ? 'aura-active':'')}
+                <div key={activeDate} className={"emoji-trans-container w-full flex items-center justify-center animate-emoji-day-swap " + (showAura ? 'aura-active':'')}
                 style={{maxWidth:280}}>
-                <div className="triangle-view flex items-center justify-center w-full" onClick={()=>{ if(entry.emojis.length>0 && editable){ /* maybe future */ }}}>
-                  <EmojiTriangle
-                    emojis={entry.emojis}
-                    onPick={(slot) => openPicker(slot)}
-                    onRemove={removeEmojiAt}
-                    editable={editable}
-                    variant="compact"
-                  />
-                </div>
-                <div className="aura-view cursor-pointer" onClick={() => setShowAura(false)}>
-                  <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} variant="compact" />
-                  <div className="mt-2 text-xs text-white/60 text-center">Tap aura to edit emojis</div>
+                <div className="flex flex-col items-center justify-center w-full" onClick={()=>{ if(entry.emojis.length>0 && editable){ /* maybe future */ }}}>
+                  <div className="triangle-view flex items-center justify-center w-full">
+                    <EmojiTriangle
+                      emojis={entry.emojis}
+                      onPick={(slot) => openPicker(slot)}
+                      onRemove={removeEmojiAt}
+                      editable={editable}
+                      variant="compact"
+                    />
+                  </div>
+                  <div className="mt-3 aura-view cursor-pointer flex flex-col items-center" onClick={() => setShowAura(false)}>
+                    <AuraBlock emojis={entry.emojis} hue={entry.hue ?? 200} variant="compact" />
+                    <div className="mt-2 text-xs text-white/60 text-center">Tap aura to edit emojis</div>
+                  </div>
                 </div>
               </div>
             </div>
