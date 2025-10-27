@@ -423,12 +423,7 @@ export default function SettingsModal({ open, onClose, entries, onShowGuide, isT
             <a href="https://itskylebrooks.vercel.app/privacy" target="_blank" rel="noopener noreferrer" className="hover:underline">Privacy Policy</a>
             <a href="https://itskylebrooks.vercel.app/license" target="_blank" rel="noopener noreferrer" className="hover:underline">License</a>
           </div>
-          <div className="mt-0.5">
-            Icons by{' '}
-            <a href="https://remixicon.com/" target="_blank" rel="noopener noreferrer" className="underline">
-              Remix Icon
-            </a>
-          </div>
+          {/* Icons attribution removed per design request */}
         </div>
       </div>
     </div>
