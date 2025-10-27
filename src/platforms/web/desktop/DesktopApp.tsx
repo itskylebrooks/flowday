@@ -887,13 +887,14 @@ export default function DesktopApp() {
             </AnimatePresence>
           </div>
         </div>
-        <div className="hidden lg:flex w-[260px] flex-col border-l border-white/10 px-6 py-8">
+          <div className="hidden lg:flex w-[260px] flex-col border-l border-white/10 px-6 py-8">
           <div className="flex items-start justify-between gap-3">
             <motion.div
               key={timelineScope}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, ease: PAGE_EASE }}
+              // Fade + blur matching page transitions; skip entrance motion on full reload.
+              initial={hasMounted.current ? { opacity: 0, filter: 'blur(8px)' } : { opacity: 1, filter: 'blur(0px)' }}
+              animate={{ opacity: 1, filter: 'blur(0px)' }}
+              transition={PAGE_TRANSITION}
             >
               <div className="text-[11px] uppercase tracking-[0.4em] text-white/40">{timelineScope}</div>
               <div className="mt-2 text-lg font-semibold text-white">Journal timeline</div>
@@ -905,10 +906,11 @@ export default function DesktopApp() {
                   type="button"
                   onClick={handleReset}
                   className="flex h-9 w-9 items-center justify-center self-start rounded-full border border-white/12 text-white/65 transition hover:border-white/30 hover:text-white"
-                  initial={{ opacity: 0, scale: 0.9, y: -6 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -6 }}
-                  transition={{ duration: 0.24, ease: PAGE_EASE }}
+                  // Fade + blur like pages; skip entrance animation on full reload.
+                  initial={hasMounted.current ? { opacity: 0, filter: 'blur(8px)' } : { opacity: 1, filter: 'blur(0px)' }}
+                  animate={{ opacity: 1, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, filter: 'blur(8px)' }}
+                  transition={PAGE_TRANSITION}
                 >
                   <span className="sr-only">{timelineResetLabel}</span>
                   <svg
@@ -932,9 +934,10 @@ export default function DesktopApp() {
           {page === FLOWS && (
             <motion.div
               key={`flows-mode-${flowsMode}`}
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: PAGE_EASE }}
+              // Fade + blur to match page transitions; no slide.
+              initial={hasMounted.current ? { opacity: 0, filter: 'blur(8px)' } : { opacity: 1, filter: 'blur(0px)' }}
+              animate={{ opacity: 1, filter: 'blur(0px)' }}
+              transition={PAGE_TRANSITION}
               className="mt-5 flex gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/45"
             >
               <button
@@ -956,14 +959,15 @@ export default function DesktopApp() {
           <div className="mt-5 flex-1 overflow-y-auto pr-1">
             <div className="flex flex-col gap-1.5">
               <AnimatePresence mode="popLayout">
-                {activeTimelineItems.map((item, index) => (
+                {activeTimelineItems.map((item) => (
                   <motion.div
                     key={item.key}
                     layout
-                    initial={{ opacity: 0, y: 16, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -16, scale: 0.96 }}
-                    transition={{ duration: 0.28, ease: PAGE_EASE, delay: Math.min(index * 0.025, 0.15) }}
+                    // Fade + blur to match page transitions; no stagger. Skip entrance on full reload.
+                    initial={hasMounted.current ? { opacity: 0, filter: 'blur(8px)' } : { opacity: 1, filter: 'blur(0px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(8px)' }}
+                    transition={PAGE_TRANSITION}
                   >
                     <button
                       type="button"
