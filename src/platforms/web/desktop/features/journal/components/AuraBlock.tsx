@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { motion } from 'motion/react';
 import { auraBackground } from '@shared/lib/utils';
 
 type AuraBlockVariant = 'compact' | 'expanded';
@@ -32,13 +31,10 @@ export default function AuraBlock({ emojis, hue, variant = 'expanded' }: { emoji
         style={auraBackground(hue)}
       >
         {/* key ensures the rotating container remounts when emojis change, so animation starts from 0 */}
-        <motion.div
+        <div
           key={`${emojis.join(',')}`}
-          className="absolute inset-0"
-          initial={{ rotate: 0 }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: ROTATE_DURATION, repeat: Infinity, ease: 'linear' }}
-          style={{ transformOrigin: '50% 50%' }}
+          className="absolute inset-0 animate-spin"
+          style={{ transformOrigin: '50% 50%', animationDuration: `${ROTATE_DURATION}s`, animationTimingFunction: 'linear' }}
         >
           {positions.map((p, i) => (
             <div
@@ -46,19 +42,16 @@ export default function AuraBlock({ emojis, hue, variant = 'expanded' }: { emoji
               className="absolute"
               style={{ left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}
             >
-              {/* Counter-rotate each emoji so it stays upright; initialize at 0 to avoid desync */}
-              <motion.div
-                initial={{ rotate: 0 }}
-                animate={{ rotate: -360 }}
-                transition={{ duration: ROTATE_DURATION, repeat: Infinity, ease: 'linear' }}
-                className="text-3xl drop-shadow-[0_0_6px_rgba(255,255,255,0.35)] select-none"
-                style={{ transformOrigin: '50% 50%' }}
+              {/* Counter-rotate each emoji so it stays upright */}
+              <div
+                style={{ transformOrigin: '50% 50%', animationDuration: `${ROTATE_DURATION}s`, animationTimingFunction: 'linear', animationDirection: 'reverse' }}
+                className="text-3xl drop-shadow-[0_0_6px_rgba(255,255,255,0.35)] select-none animate-spin"
               >
                 {emojis[i] || ''}
-              </motion.div>
+              </div>
             </div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </div>
   );
