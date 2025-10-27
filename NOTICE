@@ -13,6 +13,12 @@ Repository: [github.com/itskylebrooks/enso](https://github.com/itskylebrooks/flo
 
 * Built with [React](https://react.dev), [TypeScript](https://www.typescriptlang.org), [Tailwind CSS](https://tailwindcss.com), and [Vite](https://vitejs.dev)
 * Hosted on [Vercel](https://vercel.com)
+* Icons provided by [Remix Icon](https://remixicon.com/) (Apache License)
+
+# Trademark & Attribution Notice
+
+"Flowday” and the Flowday logo are trademarks of Kyle Brooks.  
+You may not use the name “Flowday” or present derivative works as the official project without explicit permission.
 
 This NOTICE file provides attribution and credit information for *Flowday*.
 It does not modify the license terms of the [MIT License](https://opensource.org/licenses/MIT).
